@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #292c27;
+  background: #ffffff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 280px;
+}
+
+main {
+  max-width: 900px;
+  margin: auto;
+  padding: max(64px, env(safe-area-inset-top))
+    max(28px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom))
+    max(28px, env(safe-area-inset-left));
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 48px 0 12px;
+  font-size: clamp(64px, 14vw, 112px);
+  font-weight: 500;
+  letter-spacing: -0.07em;
+  line-height: 1;
+}
+
+h1 span {
+  color: #727d57;
+}
+
+.intro {
+  font-size: clamp(18px, 4vw, 24px);
+  color: #64695e;
+}
+
+section {
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid #d9dbd2;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+section p {
+  max-width: 520px;
+  line-height: 1.7;
+  color: #64695e;
+}
+
+.status,
+footer {
+  font-size: 13px;
+}
+
+footer {
+  margin-top: 72px;
+  color: #64695e;
+}
