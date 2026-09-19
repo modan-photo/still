@@ -34,6 +34,39 @@ Still is currently in early development. The Tauri 2 + React + TypeScript founda
 
 The feature set, interface, and internal architecture may evolve as the project grows.
 
+## Getting Started
+
+To get started, run:
+
+```sh
+cd still
+npm install
+npm run tauri android init
+```
+
+For Desktop development, run:
+
+```sh
+npm run tauri dev
+```
+
+For Android development, run:
+
+```sh
+npm run tauri android dev
+```
+
+See the [Development Guide](./docs/DEVELOPMENT.md) for prerequisites, Android setup, and build commands.
+
+The app uses Tauri-generated icons stored in `src-tauri/icons/`. Run the following command if:
+
+- you update the master brand icon at `assets/branding/still-icon-master.png`
+- the Tauri app icons are missing, for example after a fresh clone or if `src-tauri/icons/` is empty
+
+```bash
+npm run tauri icon assets/branding/still-icon-master.png
+```
+
 ## Documentation
 
 - [Features](./FEATURES.md)
@@ -50,4 +83,4 @@ The name reflects the project's focus on photographs themselves: how they are re
 
 ## License
 
-License information will be added as the project matures.
+Licensed under the [MIT License](./LICENSE).
