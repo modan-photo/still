@@ -29,3 +29,6 @@ keystore.properties
 *.njsproj
 *.sln
 *.sw?
+
+# Customed config
+src-tauri/icons
