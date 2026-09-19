@@ -37,6 +37,7 @@ The feature set, interface, and internal architecture may evolve as the project 
 ## Documentation
 
 - [Features](./FEATURES.md)
+- [Design Language](./docs/DESIGN.md)
 - Architecture — coming soon
 - Development Guide — coming soon
 - Contributing Guide — coming soon
