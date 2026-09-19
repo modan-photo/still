@@ -30,7 +30,7 @@ Still is designed around a few principles:
 
 ## Status
 
-Still is currently in early development.
+Still is currently in early development. The Tauri 2 + React + TypeScript foundation is initialized, targeting Windows and Android. Photography features remain planned.
 
 The feature set, interface, and internal architecture may evolve as the project grows.
 
@@ -39,7 +39,7 @@ The feature set, interface, and internal architecture may evolve as the project 
 - [Features](./FEATURES.md)
 - [Design Language](./docs/DESIGN.md)
 - Architecture — coming soon
-- Development Guide — coming soon
+- [Development Guide](./docs/DEVELOPMENT.md)
 - Contributing Guide — coming soon
 
 ## Name
