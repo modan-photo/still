@@ -2,6 +2,36 @@
 
 Still uses Tauri 2, Rust, React, TypeScript, Vite, and Tailwind CSS. Windows and Android share the frontend and the Rust library entry point. Photo features in FEATURES.MD are planned, not implemented by this scaffold.
 
+## Recommended development toolchain
+
+Use the existing stack as the baseline. Versions below describe the major versions declared in the project; `package-lock.json` and `src-tauri/Cargo.lock` record resolved dependencies. Optional tools are recommendations, not installed or configured project features.
+
+| Area | Tooling | Project usage |
+| --- | --- | --- |
+| Application runtime | Tauri 2 + Rust | Native application shell and platform integration; share the Rust library between Windows and Android. |
+| Frontend | React 19 + TypeScript 6 | Components, UI state, and typed frontend code. |
+| Styling | Tailwind CSS 4 + CSS custom properties + SVG | Keep theme tokens in `src/App.css` and follow `docs/DESIGN.md`; reuse SVG primitives for Still's photography marks. |
+| Development and bundling | Vite 8 | Fast frontend iteration and production asset builds. |
+| JavaScript packages | Node.js + npm | Follow the versions in Prerequisites and use `npm ci` for reproducible installs. |
+| Rust toolchain | rustup + Cargo + rustfmt | Manage Rust, build native code, and check formatting using the commands below. |
+| Editor | VS Code + Tauri extension + rust-analyzer | The repository already recommends `tauri-apps.tauri-vscode` and `rust-lang.rust-analyzer` in `.vscode/extensions.json`. |
+| Windows native tooling | Visual Studio Build Tools + Windows SDK + WebView2 | Build and run the native Windows application with the MSVC toolchain. |
+| Android tooling | Android Studio + SDK + NDK + bundled JDK | Needed only for Android development; follow the setup section below. |
+| Source control | Git | Review changes and commit dependency lockfiles together with manifest changes. |
+
+### Debugging workflow
+
+Use `npm run dev` for layout, theme, and browser interaction work. Use `npm run desktop:dev` to verify native behavior; a browser preview cannot validate Tauri commands or platform permissions. For Rust breakpoints, configure VS Code using the official [Tauri debugging guide](https://v2.tauri.app/develop/debug/vscode/). On Windows, the Microsoft C/C++ extension is a supported debugger option; see [Rust in VS Code](https://code.visualstudio.com/docs/languages/rust).
+
+### Optional quality tools
+
+Adopt these when the project needs them, with committed configuration and scripts so local development and CI use the same checks:
+
+- **ESLint + typescript-eslint** for frontend code checks, and **Prettier** for TSX, CSS, and Markdown formatting. These are not configured yet. Use `eslint-config-prettier` to disable conflicting formatting rules when combining the tools; see the [Prettier installation guide](https://prettier.io/docs/install.html).
+- **Clippy** for additional Rust lint checks. After installing the component with `rustup component add clippy`, run `cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings`. This is an additional recommended check, not an existing npm script.
+- **Vitest** for frontend logic tests when functional behavior is added. It uses Vite's tooling; see the [Vitest guide](https://vitest.dev/guide/index.html). No frontend test runner is configured yet. Keep `npm run check` as a separate type-checking step.
+- **Cargo's built-in test runner** for Rust logic as native features are implemented: `cargo test --manifest-path src-tauri/Cargo.toml --locked`.
+
 ## Prerequisites
 
 - Node.js 22.12+ and npm 11.19.0 (the version in package.json).
