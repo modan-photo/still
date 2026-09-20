@@ -47,6 +47,7 @@ function App() {
   // 主题持久化、系统主题监听和根元素样式属性更新由 useTheme 负责。
   const { preference, resolvedTheme, setPreference, toggleResolvedTheme } = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
   // 引用同时包住设置按钮和浮层，点击这两者都属于“内部点击”。
   const settingsRef = useRef<HTMLDivElement>(null);
 
@@ -161,6 +162,19 @@ function App() {
             <Icon name="export" />
             <span>Export</span>
           </button>
+          <span className="toolbar-divider" aria-hidden="true" />
+          <button
+            className="icon-button tooltip"
+            type="button"
+            aria-label={inspectorOpen ? "Collapse inspector" : "Expand inspector"}
+            aria-expanded={inspectorOpen}
+            aria-controls="inspector"
+            aria-pressed={inspectorOpen}
+            data-tooltip={inspectorOpen ? "Collapse inspector" : "Expand inspector"}
+            onClick={() => setInspectorOpen((open) => !open)}
+          >
+            <Icon name="sidebar" />
+          </button>
         </div>
       </header>
 
@@ -187,7 +201,7 @@ function App() {
           <div className="canvas-footer"><span>No photograph loaded</span><span>Frame · Refine · Export</span></div>
         </main>
         {/* 属性设置封装在独立组件中，App 当前未向其传入照片数据。 */}
-        <Inspector />
+        <Inspector collapsed={!inspectorOpen} />
       </div>
     </div>
   );

@@ -373,7 +373,7 @@ button {
   color: var(--green-primary);
 }
 
-/* 属性侧栏：支持窄栏折叠，标题下方的设置内容独立滚动。 */
+/* 属性侧栏：由工具栏切换显隐，设置内容独立滚动。 */
 .inspector {
   width: var(--inspector-width);
   min-width: 0;
@@ -385,30 +385,7 @@ button {
   transition: width 160ms ease;
 }
 .inspector[data-collapsed="true"] {
-  width: 48px;
-}
-.inspector-header {
-  min-height: 86px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 20px 16px 20px 24px;
-  border-bottom: 1px solid var(--border);
-}
-.inspector[data-collapsed="true"] .inspector-header {
-  justify-content: center;
-  padding: 10px 6px;
-}
-.inspector-header h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.inspector-header p {
-  margin: 3px 0 0;
-  color: var(--text-tertiary);
-  font-size: 11px;
+  display: none;
 }
 .inspector-scroll {
   padding: 8px 0 24px;
@@ -793,9 +770,6 @@ button {
   }
   .slider-track {
     margin-left: 80px;
-  }
-  .inspector-header {
-    padding-left: 16px;
   }
 }
 /* 尊重系统减少动态效果偏好，将动画和过渡缩短至近乎即时。 */

@@ -40,18 +40,9 @@ function Slider({ label, value, suffix = "" }: { label: string; value: number; s
   );
 }
 
-export function Inspector() {
-  const [collapsed, setCollapsed] = useState(false);
+export function Inspector({ collapsed }: { collapsed: boolean }) {
   return (
-    <aside className="inspector" data-collapsed={collapsed} aria-label="Inspector">
-      <div className="inspector-header">
-        {!collapsed && <div><h2>Inspector</h2><p>No photo selected</p></div>}
-        <button className="icon-button tooltip" type="button" aria-label={collapsed ? "Expand inspector" : "Collapse inspector"} data-tooltip={collapsed ? "Expand inspector" : "Collapse inspector"} onClick={() => setCollapsed((value) => !value)}>
-          <Icon name={collapsed ? "sidebar" : "close"} />
-        </button>
-      </div>
-
-      {!collapsed && (
+    <aside id="inspector" className="inspector" data-collapsed={collapsed} hidden={collapsed} aria-label="Inspector">
         <div className="inspector-scroll">
           <InspectorSection title="Frame" icon="frame" defaultOpen>
             <Toggle label="Enable frame" />
@@ -79,7 +70,6 @@ export function Inspector() {
             <button className="button button-primary button-full" type="button" disabled>Export Photo</button>
           </InspectorSection>
         </div>
-      )}
     </aside>
   );
 }
