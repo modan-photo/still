@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Icon, type IconName } from "./Icons";
+import { SketchLine } from "./Sketch";
 
 type InspectorSectionProps = { title: string; icon: IconName; children: ReactNode; defaultOpen?: boolean };
 
@@ -10,6 +11,7 @@ function InspectorSection({ title, icon, children, defaultOpen = false }: Inspec
     <section className="inspector-section" data-open={open}>
       <button className="section-trigger" type="button" aria-expanded={open} aria-controls={sectionId} onClick={() => setOpen((value) => !value)}>
         <span className="section-title"><Icon name={icon} size={16} />{title}</span>
+        <SketchLine />
         <Icon name="chevron" size={16} />
       </button>
       {open && <div className="section-content" id={sectionId}>{children}</div>}
@@ -34,7 +36,7 @@ function Slider({ label, value, suffix = "" }: { label: string; value: number; s
     <label className="field-group slider-field">
       <span className="field-heading"><span>{label}</span><output>{currentValue}{suffix}</output></span>
       <span className="slider-track" style={{ "--range-progress": `${currentValue}%` } as CSSProperties}>
-        <input className="slider" type="range" min="0" max="100" value={currentValue} onChange={(event) => setCurrentValue(Number(event.target.value))} />
+        <input className="slider" type="range" aria-label={label} aria-valuetext={`${currentValue}${suffix}`} min="0" max="100" value={currentValue} onChange={(event) => setCurrentValue(Number(event.target.value))} />
       </span>
     </label>
   );

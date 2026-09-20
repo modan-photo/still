@@ -3,6 +3,7 @@ import "./App.css";
 import { Inspector } from "./components/Inspector";
 import { Icon, type IconName } from "./components/Icons";
 import { StillMark } from "./components/StillMark";
+import { CropCorners, SketchLine } from "./components/Sketch";
 import { useTheme, type ThemePreference } from "./hooks/useTheme";
 
 type IconButtonProps = {
@@ -30,6 +31,7 @@ function IconButton({ label, icon, onClick, pressed }: IconButtonProps) {
       onClick={onClick}
     >
       <Icon name={icon} />
+      {pressed && <SketchLine underline />}
     </button>
   );
 }
@@ -48,6 +50,7 @@ function App() {
   const { preference, resolvedTheme, setPreference, toggleResolvedTheme } = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [photoName, setPhotoName] = useState<string | null>(null);
   // 引用同时包住设置按钮和浮层，点击这两者都属于“内部点击”。
   const settingsRef = useRef<HTMLDivElement>(null);
 
@@ -88,16 +91,29 @@ function App() {
           </div>
           <span className="toolbar-divider" aria-hidden="true" />
           {/* 隐藏原生文件控件，通过按钮触发；accept 仅限定选择器的文件类型提示。 */}
-          <input id="photo-input" className="visually-hidden" type="file" accept="image/*" />
+          <input
+            id="photo-input"
+            className="visually-hidden"
+            type="file"
+            accept="image/*"
+            aria-label="Choose photograph"
+            tabIndex={-1}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) setPhotoName(file.name);
+            }}
+          />
           <button className="button button-ghost toolbar-open" type="button" aria-label="Open photograph" onClick={openPhoto}>
             <Icon name="open" />
             <span>Open</span>
           </button>
         </div>
 
-        {/* 当前为未加载照片的静态占位文案，尚未与文件选择结果关联。 */}
-        <div className="document-context" aria-label="Current document">
-          <span className="document-name">No photo open</span>
+        {/* 未选择照片时显示品牌标语；取消选择保留当前文件名。 */}
+        <div className="document-context" aria-label="Current document" aria-live="polite">
+          <span className="document-name" title={photoName ?? undefined}>
+            {photoName ?? "Still Photo, Still Photography"}
+          </span>
         </div>
 
         <div className="toolbar-actions">
@@ -174,6 +190,7 @@ function App() {
             onClick={() => setInspectorOpen((open) => !open)}
           >
             <Icon name="sidebar" />
+            {inspectorOpen && <SketchLine underline />}
           </button>
         </div>
       </header>
@@ -186,11 +203,12 @@ function App() {
           <div className="viewing-surface">
             <div className="empty-state">
               <div className="empty-mark" aria-hidden="true">
+                <CropCorners />
                 <StillMark size={28} />
               </div>
               <div className="empty-copy">
                 <h1>Open a photograph</h1>
-                <p>A quiet space for the finishing touches.</p>
+                <p>Choose a file to begin.</p>
               </div>
               <button className="button button-primary empty-action" type="button" onClick={openPhoto}>
                 <Icon name="open" />

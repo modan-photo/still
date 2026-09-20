@@ -8,7 +8,7 @@
   --surface-tertiary: #f0f2f0;
   --text-primary: #161916;
   --text-secondary: #666d67;
-  --text-tertiary: #707871;
+  --text-tertiary: #929992;
   --border: #e5e8e5;
   --border-strong: #d4d9d4;
   --green-primary: #2f7d4a;
@@ -17,15 +17,13 @@
   --green-soft: #edf6ef;
   --danger: #c54848;
   --warning: #a66a1f;
-  --canvas: #eceeee;
-  --workspace-edge: #dde1df;
+  --canvas: #f2f3f2;
   --control-radius: 4px;
   --inspector-width: 320px;
   --toolbar-height: 54px;
   --motion-fast: 150ms;
   --on-primary: #ffffff;
-  --focus-ring: rgba(47, 125, 74, 0.28);
-  --shadow-popover: 0 12px 32px rgba(22, 25, 22, 0.12), 0 2px 8px rgba(22, 25, 22, 0.06);
+  --shadow-popover: 0 3px 12px rgb(0 0 0 / 12%);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   color: var(--text-primary);
   background: var(--background);
@@ -36,26 +34,24 @@
 
 /* 深色主题覆盖颜色变量，组件继续复用同一套样式。 */
 :root[data-theme="dark"] {
-  --background: #151718;
-  --surface: #1c1f20;
-  --surface-secondary: #232728;
-  --surface-tertiary: #2b3031;
+  --background: #101210;
+  --surface: #171a17;
+  --surface-secondary: #1e221e;
+  --surface-tertiary: #252a25;
   --text-primary: #f3f5f3;
   --text-secondary: #a7aea7;
-  --text-tertiary: #89928d;
-  --border: #2a2e2f;
-  --border-strong: #424949;
-  --green-primary: #76b38b;
+  --text-tertiary: #747d75;
+  --border: #2c322c;
+  --border-strong: #3a423a;
+  --green-primary: #58b977;
   --green-hover: #69c889;
   --green-active: #79d497;
   --green-soft: #193322;
   --danger: #e06a6a;
   --warning: #d49a50;
-  --canvas: #111415;
-  --workspace-edge: #25292a;
+  --canvas: #090b09;
   --on-primary: #0e160f;
-  --focus-ring: rgba(88, 185, 119, 0.28);
-  --shadow-popover: 0 14px 36px rgba(0, 0, 0, 0.34), 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-popover: 0 3px 12px rgb(0 0 0 / 12%);
 }
 
 /* 基础布局与表单字体重置；页面滚动交由画布和侧栏各自处理。 */
@@ -165,18 +161,23 @@ button {
 .empty-state {
   position: relative;
   width: min(430px, 100%);
-  padding: 48px 40px 52px;
-  text-align: left;
+  padding: 36px 20px;
+  text-align: center;
 }
 .empty-mark {
-  margin-bottom: 24px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 80px;
+  margin: 0 auto 28px;
 }
 .empty-copy h1 {
   margin: 0;
-  font-size: clamp(20px, 2.2vw, 25px);
+  font-size: 22px;
   line-height: 1.2;
   font-weight: 500;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.025em;
 }
 .empty-copy p {
   margin: 10px 0 0;
@@ -264,7 +265,7 @@ button {
 .button:focus-visible, .icon-button:focus-visible, .section-trigger:focus-visible, .theme-option:focus-visible, .input:focus-visible, .select:focus-visible, .slider:focus-visible, .toggle-input:focus-visible + .toggle {
   outline: 1px solid var(--green-primary);
   outline-offset: 2px;
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: var(--green-primary);
 }
 
 /* 提示文字读取 data-tooltip，伪元素不拦截鼠标事件。 */
@@ -631,47 +632,7 @@ button {
   place-items: center;
   padding: 32px;
   background: var(--canvas);
-  box-shadow: inset 0 0 0 1px var(--workspace-edge);
-}
-.empty-state::before, .empty-state::after {
-  content: "";
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  border-color: var(--border-strong);
-  border-style: solid;
-  pointer-events: none;
-}
-.empty-state::before {
-  top: 0;
-  left: 0;
-  border-width: 1px 0 0 1px;
-}
-.empty-state::after {
-  bottom: 0;
-  right: 0;
-  border-width: 0 1px 1px 0;
-}
-/* 分区短分隔线与展开状态的左侧绿色标记。 */
-.inspector-section + .inspector-section::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 24px;
-  border-top: 1px solid var(--border-strong);
-}
-.inspector-section[data-open="true"]::after {
-  content: "";
-  position: absolute;
-  top: 26px;
-  left: -24px;
-  width: 2px;
-  height: 16px;
-  background: var(--green-primary);
-}
-.inspector-section[data-open="true"] .section-title .icon {
-  color: var(--green-primary);
+  border: 1px solid var(--border);
 }
 /* 滑块行预留右侧数值空间；标签覆盖层不接收鼠标事件，避免阻挡拖动。 */
 .slider-field {
@@ -707,6 +668,67 @@ button {
   width: var(--range-progress);
   background: var(--green-primary);
 }
+/* Local photographic marks, never a texture over the image. */
+.crop-corners {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--text-secondary);
+}
+.crop-corners path, .section-rule path, .sketch-underline path {
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.sketch-echo { opacity: 0.24; }
+.section-rule {
+  width: 64px;
+  height: 6px;
+  margin: 0 auto 0 16px;
+  color: var(--border-strong);
+}
+.sketch-underline {
+  position: absolute;
+  bottom: 2px;
+  left: 8px;
+  width: calc(100% - 16px);
+  height: 5px;
+  color: var(--green-primary);
+  pointer-events: none;
+}
+.field-heading output, .canvas-footer {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.section-title { font-size: 12px; letter-spacing: 0.06em; }
+.section-note { color: var(--text-secondary); }
+.canvas-caption { font-size: 11px; letter-spacing: 0.01em; text-transform: none; }
+.canvas-caption, .canvas-footer { color: var(--text-secondary); }
+.button { border-radius: 6px; }
+.settings-popover { border-radius: 8px; }
+.icon-button[aria-pressed="true"] { background: transparent; border-color: transparent; }
+.section-trigger:active, .button-ghost:active, .theme-option:active {
+  color: var(--green-active);
+  background: var(--green-soft);
+}
+.icon-button:active { transform: translateY(1px); }
+.toggle-input:hover + .toggle { border-color: var(--text-secondary); }
+.toggle-input:active + .toggle { opacity: 0.8; }
+.slider:hover::-webkit-slider-thumb, .slider:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px var(--green-primary);
+}
+.slider:hover::-moz-range-thumb, .slider:active::-moz-range-thumb {
+  box-shadow: 0 0 0 1px var(--green-primary);
+}
+.toolbar-actions > .tooltip:last-child::after {
+  left: auto;
+  right: 0;
+  transform: translateY(0);
+}
+
 /* 浮层与展开内容共用的淡入动效。 */
 @keyframes reveal {
   from {
@@ -758,9 +780,6 @@ button {
   }
   .inspector-section {
     margin-inline: 16px;
-  }
-  .inspector-section[data-open="true"]::after {
-    left: -16px;
   }
   .field-group {
     grid-template-columns: 70px minmax(0, 1fr);

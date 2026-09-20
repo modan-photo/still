@@ -491,13 +491,16 @@ The interface should disappear when the user focuses on the photograph.
 
 ## Workspace refinement
 
-The implemented workspace uses a tighter editorial scale within these principles:
+The workspace pairs neutral photographic surfaces with three recurring signatures:
 
-- A 54px toolbar groups identity and Open on the left, document context in the center, and appearance and Export on the right. Controls are 32–34px high with 4px corners.
-- The 320px inspector gives priority to the canvas. An inset viewing surface sits between quiet workspace captions; no filmstrip appears without images.
-- Inspector headings use 11px semibold uppercase type with 0.08em tracking. Labels and technical values use 12px type, aligned columns, and tabular numerals.
-- Section rhythm uses 12px between controls, larger breathing room around sections, and short 24px dividers. Panels have no individual card surfaces.
-- Still signatures are paired frame corners in the empty state, 2px green markers beside expanded tool sections, and short inspector dividers. These details remain quiet around the viewing surface.
-- Light mode retains white chrome with a cool-neutral canvas. Dark mode uses neutral charcoal chrome and a recessed `#111415` canvas, with muted `#76B38B` green. Readable secondary text takes priority over very faint metadata.
-- Shared CSS tokens define toolbar height, inspector width, control radius, workspace edge, and 150ms motion. Green slider fill tracks the selected value; neutral thumbs and squared compact switches keep controls precise.
-- Reduced-motion preferences disable transitions and reveal animations. The empty state describes only the scaffold's file-picker action until image import and drag-and-drop are implemented.
+- Lightly irregular crop corners around the small Still empty-state symbol.
+- Short SVG section rules beside inspector headings, with a faint secondary stroke.
+- Green sketch underlines beneath active toolbar controls.
+
+Reusable CropCorners and SketchLine components keep strokes deterministic and inherit theme colors. The existing InspectorSection provides aligned, collapsible tool groups without cards. Typography stays neutral, with monospace numeric values and quiet technical captions.
+
+The toolbar is 54px high and the inspector is 320px wide on desktop. Pure white light chrome surrounds the neutral #F2F3F2 canvas; dark chrome uses the original #101210 / #171A17 tokens around a #090B09 canvas. Brand and semantic colors follow the tables above. The neutral canvas takes precedence over the cyan example in the refinement brief so photo perception stays neutral.
+
+Controls retain native semantics, compact geometry, visible green keyboard outlines, and 100–160ms feedback. Reduced-motion preferences suppress transitions and reveal animations. Only menus and tooltips use a small shadow.
+
+This remains a UI scaffold: file selection opens the picker, but image import, drag-and-drop, processing, and export are not implemented. Empty-state copy describes only the existing file-picker action.
