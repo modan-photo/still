@@ -101,6 +101,12 @@ function App() {
         </div>
 
         <div className="toolbar-actions">
+          {/* 导出目前为禁用占位按钮，尚未接入照片状态或导出处理函数。 */}
+          <button className="button button-primary" type="button" disabled aria-label="Export; open a photo first">
+            <Icon name="export" />
+            <span>Export</span>
+          </button>
+          <span className="toolbar-divider" aria-hidden="true" />
           {/* 快捷切换按实际主题取反，并保存为明确的浅色或深色偏好。 */}
           <IconButton
             label={`Switch to ${resolvedTheme === "light" ? "dark" : "light"} theme`}
@@ -156,12 +162,6 @@ function App() {
             )}
           </div>
 
-          <span className="toolbar-divider" aria-hidden="true" />
-          {/* 导出目前为禁用占位按钮，尚未接入照片状态或导出处理函数。 */}
-          <button className="button button-primary" type="button" disabled aria-label="Export; open a photo first">
-            <Icon name="export" />
-            <span>Export</span>
-          </button>
           <span className="toolbar-divider" aria-hidden="true" />
           <button
             className="icon-button tooltip"
