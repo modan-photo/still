@@ -488,3 +488,16 @@ The interface should disappear when the user focuses on the photograph.
 ## Design Motto
 
 > Quiet interface, precise tools, photography first.
+
+## Workspace refinement
+
+The implemented workspace uses a tighter editorial scale within these principles:
+
+- A 54px toolbar groups identity and Open on the left, document context in the center, and appearance and Export on the right. Controls are 32–34px high with 4px corners.
+- The 320px inspector gives priority to the canvas. An inset viewing surface sits between quiet workspace captions; no filmstrip appears without images.
+- Inspector headings use 11px semibold uppercase type with 0.08em tracking. Labels and technical values use 12px type, aligned columns, and tabular numerals.
+- Section rhythm uses 12px between controls, larger breathing room around sections, and short 24px dividers. Panels have no individual card surfaces.
+- Still signatures are paired frame corners in the empty state, 2px green markers beside expanded tool sections, and short inspector dividers. These details remain quiet around the viewing surface.
+- Light mode retains white chrome with a cool-neutral canvas. Dark mode uses neutral charcoal chrome and a recessed `#111415` canvas, with muted `#76B38B` green. Readable secondary text takes priority over very faint metadata.
+- Shared CSS tokens define toolbar height, inspector width, control radius, workspace edge, and 150ms motion. Green slider fill tracks the selected value; neutral thumbs and squared compact switches keep controls precise.
+- Reduced-motion preferences disable transitions and reveal animations. The empty state describes only the scaffold's file-picker action until image import and drag-and-drop are implemented.
