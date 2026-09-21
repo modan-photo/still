@@ -48,16 +48,16 @@ Light and dark modes should share the same visual hierarchy rather than being si
 
 Both themes should feel intentional and suitable for photography work.
 
-# 2. Color System
+## Color System
 
-## Light Theme
+### Light Theme
 
 The light theme should feel bright, clean, and close to pure white.
 
 It should resemble a modern gallery or photography workspace rather than a tinted productivity application.
 
 | Token | Value | Usage |
-|---|---|---|
+| --- | --- | --- |
 | `background` | `#FFFFFF` | Main application background |
 | `surface` | `#FFFFFF` | Panels, cards, dialogs |
 | `surface-secondary` | `#F6F7F6` | Secondary panels and grouped content |
@@ -78,14 +78,14 @@ The main background should remain pure white whenever possible.
 
 Secondary gray surfaces should only be used to separate tools, grouped controls, and supporting content.
 
-## Dark Theme
+### Dark Theme
 
 The dark theme should feel closer to a professional editing workspace or digital darkroom.
 
 Avoid pure black for large application surfaces.
 
 | Token | Value | Usage |
-|---|---|---|
+| --- | --- | --- |
 | `background` | `#101210` | Main application background |
 | `surface` | `#171A17` | Panels and dialogs |
 | `surface-secondary` | `#1E221E` | Secondary panels |
@@ -102,7 +102,7 @@ Avoid pure black for large application surfaces.
 | `danger` | `#E06A6A` | Destructive actions |
 | `warning` | `#D49A50` | Warning state |
 
-# 3. Theme Behavior
+## Theme Behavior
 
 Still should support three theme preferences:
 
@@ -116,7 +116,7 @@ The selected preference should persist across sessions.
 
 Theme changes should apply immediately without requiring an application restart.
 
-# 4. Canvas
+## Canvas
 
 The photograph canvas should be visually separated from the application chrome.
 
@@ -125,7 +125,7 @@ The canvas background does not need to match the main application background.
 Recommended defaults:
 
 | Theme | Canvas |
-|---|---|
+| --- | --- |
 | Light | `#F2F3F2` |
 | Dark | `#090B09` |
 
@@ -147,7 +147,7 @@ Future versions may allow users to switch the canvas between:
 
 The canvas color should never alter the exported image.
 
-# 5. Typography
+## Typography
 
 Still should use modern, neutral sans-serif typography.
 
@@ -166,7 +166,7 @@ For Chinese text, prefer the platform system font.
 Suggested type scale:
 
 | Role | Size | Weight |
-|---|---:|---:|
+| --- | ---: | ---: |
 | Page title | 24–28px | 600 |
 | Section title | 16–18px | 600 |
 | Body | 14–16px | 400 |
@@ -178,7 +178,7 @@ Typography should remain compact and functional.
 
 Avoid oversized display typography inside the main application interface.
 
-# 6. Spacing
+## Spacing
 
 Use a consistent spacing system based primarily on multiples of `4px`.
 
@@ -207,14 +207,14 @@ Common usage:
 
 Prefer whitespace over decorative separators.
 
-# 7. Radius
+## Radius
 
 Still should use restrained corner rounding.
 
 Recommended values:
 
 | Component | Radius |
-|---|---:|
+| --- | ---: |
 | Small controls | 6px |
 | Buttons | 8px |
 | Inputs | 8px |
@@ -224,7 +224,7 @@ Recommended values:
 
 Avoid excessive pill-shaped controls except where the interaction naturally requires them, such as segmented selections or tags.
 
-# 8. Borders and Shadows
+## Borders and Shadows
 
 Borders should be preferred over shadows.
 
@@ -245,7 +245,7 @@ Shadows should remain soft and subtle.
 
 Do not use heavy card shadows throughout the interface.
 
-# 9. Icons
+## Icons
 
 Use a consistent line-based icon system.
 
@@ -262,9 +262,9 @@ Use green for icons only when representing an active or selected state.
 
 Avoid mixing unrelated icon styles.
 
-# 10. Buttons
+## Buttons
 
-## Primary Button
+### Primary Button
 
 Use the main green color.
 
@@ -291,15 +291,15 @@ Examples:
 - Save preset
 - Import
 
-## Secondary Button
+### Secondary Button
 
 Use a neutral surface with a subtle border.
 
-## Ghost Button
+### Ghost Button
 
 Use for toolbar actions and low-emphasis commands.
 
-## Destructive Button
+### Destructive Button
 
 Use the danger color only for destructive operations.
 
@@ -309,7 +309,7 @@ Examples:
 - Remove
 - Reset destructive changes
 
-# 11. Inputs and Controls
+## Inputs and Controls
 
 Inputs should remain simple and compact.
 
@@ -325,7 +325,7 @@ Controls should avoid unnecessary visual chrome.
 
 Sliders, toggles, checkboxes, and selected options may use the green accent.
 
-# 12. Layout
+## Layout
 
 Still should use a focused editing workspace rather than a permanent library-style layout.
 
@@ -335,7 +335,7 @@ A typical desktop structure may contain:
 ┌──────────────────────────────────────────────────────┐
 │ Toolbar                                              │
 ├───────────────────────────────────────┬──────────────┤
-│                                       │ Inspector    │
+│                                       │              │
 │                                       │              │
 │               Canvas                  │ Frame        │
 │                                       │ Watermark    │
@@ -359,7 +359,7 @@ An optional bottom filmstrip can appear when:
 
 It should not be shown when it is unnecessary.
 
-## Layout Priorities
+### Layout Priorities
 
 1. Photograph
 2. Active editing controls
@@ -368,7 +368,7 @@ It should not be shown when it is unnecessary.
 
 Permanent sidebars without an active purpose should be avoided.
 
-# 13. Navigation
+## Navigation
 
 Still should avoid traditional application navigation where possible.
 
@@ -390,7 +390,7 @@ should live inside the editing workspace rather than becoming separate applicati
 
 Secondary areas such as settings, presets, or future photo collections may be accessed from menus, dialogs, or dedicated views when needed.
 
-# 14. Photo Presentation
+## Photo Presentation
 
 Photographs should normally be displayed without decorative UI around them.
 
@@ -410,7 +410,7 @@ Avoid:
 
 When selected, a photograph may use a subtle green outline or indicator.
 
-# 15. Metadata Presentation
+## Metadata Presentation
 
 EXIF and technical information should be easy to scan.
 
@@ -431,7 +431,7 @@ Values should use primary text.
 
 Dense metadata should remain visually quiet.
 
-# 16. Motion
+## Motion
 
 Animation should be subtle and functional.
 
@@ -452,7 +452,7 @@ Appropriate uses include:
 
 Avoid decorative or prolonged animations.
 
-# 17. Accessibility
+## Accessibility
 
 Still should maintain sufficient contrast in both light and dark themes.
 
@@ -470,7 +470,7 @@ Keyboard focus should always remain visible.
 
 Text and controls should remain usable under system scaling.
 
-# 18. Visual Direction
+## Visual Direction
 
 The intended visual character of Still is:
 
@@ -485,11 +485,11 @@ The application should feel closer to a professional photographic workspace than
 
 The interface should disappear when the user focuses on the photograph.
 
-## Design Motto
+### Design Motto
 
 > Quiet interface, precise tools, photography first.
 
-## Workspace refinement
+### Workspace refinement
 
 The workspace pairs neutral photographic surfaces with three recurring signatures:
 
