@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
   | "check" | "chevron" | "sidebar" | "frame" | "watermark" | "info"
-  | "transform" | "rotate-left" | "rotate-right" | "minimize" | "maximize";
+  | "transform" | "rotate-left" | "rotate-right" | "minimize" | "maximize" | "plus";
 
 /** name 指定图标；size 同时控制 SVG 的显示宽高，省略时使用 18 像素。 */
 type IconProps = { name: IconName; size?: number };
@@ -25,6 +25,7 @@ const paths: Record<IconName, ReactNode> = {
   close: <path d="m6 6 12 12M18 6 6 18"/>,
   minimize: <path d="M6 12h12"/>,
   maximize: <rect x="5.5" y="5.5" width="13" height="13" rx="0.5"/>,
+  plus: <path d="M12 5v14M5 12h14"/>,
   // 选中状态、分区展开及侧栏布局图标；chevron 的默认方向朝下。
   check: <path d="m5 12.5 4.2 4.2L19 7"/>,
   chevron: <path d="m8 10 4 4 4-4"/>,

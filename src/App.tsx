@@ -1,13 +1,18 @@
 import { useState } from "react";
 import "./App.css";
 import { Icon } from "./components/Icons";
-import { Placeholder } from "./components/Placeholder";
 import { CropCorners } from "./components/Sketch";
 import { StillMark } from "./components/StillMark";
 import type { ThemeController } from "./hooks/useTheme";
 import { AppShell } from "./layout/AppShell";
 import { TitleBar } from "./layout/TitleBar";
 import { RightPanel } from "./layout/RightPanel";
+import { FilmStrip, type FilmStripItem } from "./layout/FilmStrip";
+
+const placeholderPhotos: FilmStripItem[] = Array.from({ length: 1000 }, (_, index) => ({
+  id: `photo-${index + 1}`,
+  label: String(index + 1).padStart(3, "0"),
+}));
 
 type AppProps = {
   theme: ThemeController;
@@ -80,7 +85,7 @@ function App({ theme }: AppProps) {
           onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)}
         />
       )}
-      filmStrip={<Placeholder label="Film strip" description="Photo thumbnails will appear here" />}
+      filmStrip={<FilmStrip items={placeholderPhotos} onImport={openPhoto} />}
     />
   );
 }

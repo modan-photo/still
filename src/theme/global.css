@@ -6,3 +6,14 @@
    CssBaseline remains the only global reset, while theme and utilities stay active. */
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+
+@layer utilities {
+  .filmstrip-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .filmstrip-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
