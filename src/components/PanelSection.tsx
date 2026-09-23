@@ -1,4 +1,5 @@
-import { Collapse, IconButton } from "@mui/material";
+import { Box, Collapse, useMediaQuery } from "@mui/material";
+import { motionTokens } from "../theme/tokens";
 import { useId, useState, type ReactNode } from "react";
 import { Icon } from "./Icons";
 import { Placeholder } from "./Placeholder";
@@ -12,6 +13,7 @@ type PanelSectionProps = {
 export function PanelSection({ title, children, defaultOpen = false }: PanelSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const contentId = useId();
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   return (
     <section className="border-b border-subtle px-4 py-4 last:border-b-0">
@@ -23,23 +25,23 @@ export function PanelSection({ title, children, defaultOpen = false }: PanelSect
         onClick={() => setOpen((value) => !value)}
       >
         <span className="text-sm font-semibold text-primary">{title}</span>
-        <IconButton
+        <Box
           component="span"
-          size="small"
-          tabIndex={-1}
           sx={{
             width: 28,
             height: 28,
+            display: "grid",
+            placeItems: "center",
             color: "text.secondary",
             transform: open ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform var(--motion-base) var(--motion-easing)",
           }}
         >
           <Icon name="chevron" size={15} />
-        </IconButton>
+        </Box>
       </button>
 
-      <Collapse in={open} timeout={200} easing="var(--motion-easing)" unmountOnExit>
+      <Collapse in={open} timeout={reducedMotion ? 0 : motionTokens.duration.base} easing="var(--motion-easing)">
         <div id={contentId} className="space-y-4 pt-4">
           <Placeholder label={title} className="space-y-4">{children}</Placeholder>
         </div>

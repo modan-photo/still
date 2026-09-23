@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 import { useMediaQuery, useTheme as useMuiTheme } from "@mui/material";
 import { isTauri } from "@tauri-apps/api/core";
 import { platform } from "@tauri-apps/plugin-os";
-import "./App.css";
 import type { ThemeController } from "./hooks/useTheme";
 import { AppShell } from "./layout/AppShell";
 import { TitleBar } from "./layout/TitleBar";

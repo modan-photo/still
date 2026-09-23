@@ -98,7 +98,7 @@ const windowButtonSx = {
   borderRadius: 0,
   color: "text.secondary",
   transition: "background-color var(--motion-fast) var(--motion-easing), color var(--motion-fast) var(--motion-easing)",
-  "&:hover": { bgcolor: "background.default", color: "text.primary" },
+  "&:hover": { bgcolor: "var(--color-bg-elevated)", color: "text.primary" },
 } as const;
 
 const titleBarActionSx = {

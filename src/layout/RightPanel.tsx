@@ -14,12 +14,15 @@ const MAX_WIDTH = 400;
 
 export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   const [width, setWidth] = useState(300);
+  const [resizing, setResizing] = useState(false);
   const dragStart = useRef({ x: 0, width: 300 });
   const theme = useTheme();
   const tablet = useMediaQuery(theme.breakpoints.between("md", "lg"));
   const effectiveWidth = tablet ? 260 : width;
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    setResizing(true);
     dragStart.current = { x: event.clientX, width };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -34,7 +37,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
     <aside
       id="right-panel"
       className="relative min-h-0 shrink-0 border-l border-subtle bg-app-surface transition-[width] duration-base ease-app"
-      style={{ width: collapsed ? 0 : effectiveWidth }}
+      style={{ width: collapsed ? 0 : effectiveWidth, transitionDuration: resizing ? "0ms" : undefined, borderLeftWidth: collapsed ? 0 : undefined }}
       aria-label="Inspector"
       data-collapsed={collapsed}
     >
@@ -50,6 +53,11 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
           tabIndex={0}
           onPointerDown={startResize}
           onPointerMove={resize}
+          onPointerUp={(event) => {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+            setResizing(false);
+          }}
+          onLostPointerCapture={() => setResizing(false)}
           onKeyDown={(event) => {
             if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
             event.preventDefault();
