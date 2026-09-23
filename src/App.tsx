@@ -4,7 +4,7 @@ import { Inspector } from "./components/Inspector";
 import { Icon, type IconName } from "./components/Icons";
 import { StillMark } from "./components/StillMark";
 import { CropCorners, SketchLine } from "./components/Sketch";
-import { useTheme, type ThemePreference } from "./hooks/useTheme";
+import type { ThemeController, ThemePreference } from "./hooks/useTheme";
 
 type IconButtonProps = {
   /** 同时用作无障碍名称和悬停提示，确保纯图标按钮的用途可被识别。 */
@@ -44,10 +44,14 @@ const themeLabels: Record<ThemePreference, string> = {
 };
 
 /** 应用主界面：组合顶部工具栏、照片工作区和属性侧栏，并管理外观设置浮层。 */
-function App() {
+type AppProps = {
+  theme: ThemeController;
+};
+
+function App({ theme }: AppProps) {
   // preference 是用户选择（含跟随系统），resolvedTheme 是当前实际生效的浅色或深色。
   // 主题持久化、系统主题监听和根元素样式属性更新由 useTheme 负责。
-  const { preference, resolvedTheme, setPreference, toggleResolvedTheme } = useTheme();
+  const { preference, resolvedTheme, setPreference, toggleResolvedTheme } = theme;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [photoName, setPhotoName] = useState<string | null>(null);

@@ -45,3 +45,5 @@ export function useTheme() {
 
   return { preference, resolvedTheme, setPreference, toggleResolvedTheme };
 }
+
+export type ThemeController = ReturnType<typeof useTheme>;
