@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     fs::{self, File},
-    io::{BufWriter, Write},
+    io::{BufWriter, Read, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -48,8 +48,14 @@ pub fn save_image_atomic(
     }
 
     let mut temporary = TemporaryOutput::new(destination);
-    let file = File::create(temporary.path())?;
-    let mut writer = BufWriter::new(file);
+    let file = File::options()
+        .write(true)
+        .create_new(true)
+        .open(temporary.path())?;
+    let mut writer = BufWriter::new(CancellableWriter {
+        file,
+        token: cancellation.clone(),
+    });
 
     match output.format {
         OutputFormat::Jpeg => encode_jpeg(image, &mut writer, output.quality)?,
@@ -59,19 +65,19 @@ pub fn save_image_atomic(
 
     writer.flush()?;
     let file = writer.into_inner().map_err(|error| error.into_error())?;
-    file.sync_all()?;
+    file.file.sync_all()?;
+    drop(file);
     ensure_not_cancelled(cancellation)?;
 
-    fs::rename(temporary.path(), destination)?;
+    // A hard link publishes the complete file without overwriting a destination
+    // created concurrently. Both names are on the same filesystem.
+    fs::hard_link(temporary.path(), destination)?;
+    let _ = fs::remove_file(temporary.path());
     temporary.disarm();
     Ok(())
 }
 
-fn encode_jpeg(
-    image: &DynamicImage,
-    writer: &mut BufWriter<File>,
-    quality: u8,
-) -> Result<(), AppError> {
+fn encode_jpeg(image: &DynamicImage, writer: &mut impl Write, quality: u8) -> Result<(), AppError> {
     let pixels: Cow<'_, RgbImage> = match image.as_rgb8() {
         Some(pixels) => Cow::Borrowed(pixels),
         None => Cow::Owned(image.to_rgb8()),
@@ -85,7 +91,7 @@ fn encode_jpeg(
     Ok(())
 }
 
-fn encode_png(image: &DynamicImage, writer: &mut BufWriter<File>) -> Result<(), AppError> {
+fn encode_png(image: &DynamicImage, writer: &mut impl Write) -> Result<(), AppError> {
     PngEncoder::new(writer).write_image(
         image.as_bytes(),
         image.width(),
@@ -95,7 +101,7 @@ fn encode_png(image: &DynamicImage, writer: &mut BufWriter<File>) -> Result<(), 
     Ok(())
 }
 
-fn encode_webp(image: &DynamicImage, writer: &mut BufWriter<File>) -> Result<(), AppError> {
+fn encode_webp(image: &DynamicImage, writer: &mut impl Write) -> Result<(), AppError> {
     let pixels: Cow<'_, RgbaImage> = match image.as_rgba8() {
         Some(pixels) => Cow::Borrowed(pixels),
         None => Cow::Owned(image.to_rgba8()),
@@ -120,6 +126,53 @@ fn ensure_not_cancelled(cancellation: &CancellationToken) -> Result<(), AppError
 struct TemporaryOutput {
     path: PathBuf,
     armed: bool,
+}
+
+struct CancellableWriter {
+    file: File,
+    token: CancellationToken,
+}
+impl Write for CancellableWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self.token.is_cancelled() {
+            return Err(std::io::Error::other("task cancelled"));
+        }
+        self.file.write(bytes)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
+}
+
+/// Byte-preserving export when no edits or encoding options were requested.
+pub fn copy_image_atomic(
+    source: &Path,
+    destination: &Path,
+    token: &CancellationToken,
+) -> Result<(), AppError> {
+    ensure_not_cancelled(token)?;
+    let mut input = File::open(source)?;
+    let mut temporary = TemporaryOutput::new(destination);
+    let mut output = File::options()
+        .write(true)
+        .create_new(true)
+        .open(temporary.path())?;
+    let mut buffer = vec![0; 256 * 1024];
+    loop {
+        ensure_not_cancelled(token)?;
+        let length = input.read(&mut buffer)?;
+        if length == 0 {
+            break;
+        }
+        output.write_all(&buffer[..length])?;
+    }
+    output.sync_all()?;
+    drop(output);
+    ensure_not_cancelled(token)?;
+    fs::hard_link(temporary.path(), destination)?;
+    let _ = fs::remove_file(temporary.path());
+    temporary.disarm();
+    Ok(())
 }
 
 impl TemporaryOutput {
@@ -163,6 +216,31 @@ mod tests {
     use crate::render::spec::{OutputFormat, OutputSpec};
 
     use super::save_image_atomic;
+
+    #[test]
+    fn empty_spec_copy_preserves_bytes_and_never_overwrites() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-copy-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let source = directory.join("source.jpg");
+        let target = directory.join("target.jpg");
+        let bytes = vec![123u8; 600_000];
+        fs::write(&source, &bytes).unwrap();
+        let token = CancellationToken::new();
+        super::copy_image_atomic(&source, &target, &token).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), bytes);
+        fs::write(&source, b"changed").unwrap();
+        assert!(super::copy_image_atomic(&source, &target, &token).is_err());
+        assert_eq!(fs::read(&target).unwrap(), bytes);
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 2);
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn cancelled_save_leaves_no_destination_or_partial_file() {

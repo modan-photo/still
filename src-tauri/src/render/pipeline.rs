@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use image::{DynamicImage, ImageReader};
+use image::DynamicImage;
 
 use crate::{error::AppError, render::spec::RenderSpec};
 
@@ -11,10 +11,5 @@ use crate::{error::AppError, render::spec::RenderSpec};
 pub fn apply_render_spec(path: &Path, spec: &RenderSpec) -> Result<DynamicImage, AppError> {
     spec.validate().map_err(AppError::InvalidInput)?;
 
-    let decoder = ImageReader::open(path)?
-        .with_guessed_format()?
-        .into_decoder()?;
-    let image = DynamicImage::from_decoder(decoder)?;
-
-    Ok(image)
+    crate::image_io::load::decode_image(path)
 }
