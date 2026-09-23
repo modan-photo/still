@@ -24,7 +24,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp", "tiff"] }
-fast_image_resize = "4"
+fast_image_resize = { version = "4", features = ["image"] }
 kamadak-exif = "0.6"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }

@@ -13,6 +13,9 @@ pub enum AppError {
     #[error("metadata error: {0}")]
     Exif(#[from] exif::Error),
 
+    #[error("resize error: {0}")]
+    Resize(String),
+
     #[error("invalid input: {0}")]
     InvalidInput(String),
 
@@ -29,6 +32,7 @@ impl AppError {
             Self::Io(_) => "io_error",
             Self::Image(_) => "image_error",
             Self::Exif(_) => "exif_error",
+            Self::Resize(_) => "resize_error",
             Self::InvalidInput(_) => "invalid_input",
             Self::Unsupported(_) => "unsupported",
             Self::Cancelled => "cancelled",

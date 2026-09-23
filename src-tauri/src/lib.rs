@@ -1,4 +1,5 @@
 mod error;
+mod image_io;
 mod render;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
