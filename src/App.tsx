@@ -4,7 +4,9 @@ import { Inspector } from "./components/Inspector";
 import { Icon, type IconName } from "./components/Icons";
 import { StillMark } from "./components/StillMark";
 import { CropCorners, SketchLine } from "./components/Sketch";
+import { Placeholder } from "./components/Placeholder";
 import type { ThemeController, ThemePreference } from "./hooks/useTheme";
+import { AppShell } from "./layout/AppShell";
 
 type IconButtonProps = {
   /** 同时用作无障碍名称和悬停提示，确保纯图标按钮的用途可被识别。 */
@@ -84,9 +86,10 @@ function App({ theme }: AppProps) {
     document.getElementById("photo-input")?.click();
   };
 
+  // AppShell 仅负责区域编排；各插槽继续持有原有 UI 和状态。
   return (
-    <div className="app-shell">
-      {/* 顶部工具栏分为品牌与打开入口、当前文档信息、主题与导出操作三部分。 */}
+    <AppShell
+      titleBar={(
       <header className="toolbar">
         <div className="toolbar-start">
           <div className="brand" aria-label="Still">
@@ -198,9 +201,8 @@ function App({ theme }: AppProps) {
           </button>
         </div>
       </header>
-
-      {/* 主工作区采用画布与属性侧栏的双栏布局，尺寸和滚动行为由 App.css 控制。 */}
-      <div className="workspace-layout">
+      )}
+      mainCanvas={(
         <main className="canvas" aria-label="Photo workspace">
           <div className="canvas-caption"><span>Workspace</span><span>Still / Photo studio</span></div>
           {/* 预览底板当前始终呈现空态引导；文件选择后仍需另行接入照片渲染。 */}
@@ -222,10 +224,10 @@ function App({ theme }: AppProps) {
           </div>
           <div className="canvas-footer"><span>No photograph loaded</span><span>Frame · Refine · Export</span></div>
         </main>
-        {/* 属性设置封装在独立组件中，App 当前未向其传入照片数据。 */}
-        <Inspector collapsed={!inspectorOpen} />
-      </div>
-    </div>
+      )}
+      rightPanel={<Inspector collapsed={!inspectorOpen} />}
+      filmStrip={<Placeholder label="Film strip" description="Photo thumbnails will appear here" />}
+    />
   );
 }
 

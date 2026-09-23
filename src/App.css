@@ -87,20 +87,14 @@ button {
 }
 
 /* 应用外壳：固定高度工具栏 + 占满剩余空间的工作区。 */
-.app-shell {
-  height: 100%;
-  display: grid;
-  grid-template-rows: var(--toolbar-height) minmax(0, 1fr);
-  background: var(--background);
-}
 .toolbar {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
   align-items: center;
   gap: 16px;
-  height: var(--toolbar-height);
+  height: 100%;
   padding: 0 12px 0 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
   background: var(--surface);
   z-index: 20;
 }
@@ -139,14 +133,8 @@ button {
 }
 
 /* 工作区分为可伸缩画布和侧栏；允许网格子项收缩以避免撑开页面。 */
-.workspace-layout {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-columns: minmax(0, 1fr) auto;
-  overflow: hidden;
-}
 .canvas {
+  height: 100%;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -374,12 +362,12 @@ button {
 
 /* 属性侧栏：由工具栏切换显隐，设置内容独立滚动。 */
 .inspector {
-  width: var(--inspector-width);
+  width: 100%;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
+  border-left: 0;
   background: var(--surface);
   transition: width 160ms ease;
 }
