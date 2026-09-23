@@ -1,13 +1,11 @@
 import { useState } from "react";
 import "./App.css";
-import { Icon } from "./components/Icons";
-import { CropCorners } from "./components/Sketch";
-import { StillMark } from "./components/StillMark";
 import type { ThemeController } from "./hooks/useTheme";
 import { AppShell } from "./layout/AppShell";
 import { TitleBar } from "./layout/TitleBar";
 import { RightPanel } from "./layout/RightPanel";
 import { FilmStrip, type FilmStripItem } from "./layout/FilmStrip";
+import { MainCanvas } from "./layout/MainCanvas";
 
 const placeholderPhotos: FilmStripItem[] = Array.from({ length: 1000 }, (_, index) => ({
   id: `photo-${index + 1}`,
@@ -55,29 +53,11 @@ function App({ theme }: AppProps) {
         </>
       )}
       mainCanvas={(
-        <main className="canvas" aria-label="Photo workspace">
-          <div className="canvas-caption"><span>Workspace</span><span>Still / Photo studio</span></div>
-          <div className="viewing-surface">
-            <div className="empty-state">
-              <div className="empty-mark" aria-hidden="true">
-                <CropCorners />
-                <StillMark size={28} />
-              </div>
-              <div className="empty-copy">
-                <h1>Open a photograph</h1>
-                <p>Choose a file to begin.</p>
-              </div>
-              <button className="button button-primary empty-action" type="button" onClick={openPhoto}>
-                <Icon name="open" />
-                <span>Open Photo</span>
-              </button>
-            </div>
-          </div>
-          <div className="canvas-footer">
-            <span>{photoName ?? "No photograph loaded"}</span>
-            <span>Frame · Refine · Export</span>
-          </div>
-        </main>
+        <MainCanvas
+          photoName={photoName}
+          onImport={openPhoto}
+          onFileDrop={(file) => setPhotoName(file.name)}
+        />
       )}
       rightPanel={(
         <RightPanel
