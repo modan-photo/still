@@ -7,6 +7,7 @@ import App from "./App";
 import { useTheme } from "./hooks/useTheme";
 import { createStillTheme } from "./theme/muiTheme";
 import { getCssVariables } from "./theme/tokens";
+import "./theme/global.css";
 
 function Root() {
   const themeController = useTheme();

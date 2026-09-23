@@ -1,0 +1,8 @@
+@config "../../tailwind.config.js";
+
+@layer theme, base, components, utilities;
+
+/* Tailwind v4 loads Preflight through preflight.css. Keep it excluded so MUI
+   CssBaseline remains the only global reset, while theme and utilities stay active. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
