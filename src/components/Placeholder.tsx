@@ -1,11 +1,17 @@
+import type { ReactNode } from "react";
+
 type PlaceholderProps = {
   label: string;
   description?: string;
   className?: string;
+  children?: ReactNode;
 };
 
 /** Visible boundary for a feature that will be connected in a later step. */
-export function Placeholder({ label, description, className = "" }: PlaceholderProps) {
+export function Placeholder({ label, description, className = "", children }: PlaceholderProps) {
+  if (children !== undefined) {
+    return <div className={className} data-placeholder={label}>{children}</div>;
+  }
   return (
     <div
       className={`flex h-full w-full items-center justify-center gap-2 text-secondary ${className}`}

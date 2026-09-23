@@ -1,6 +1,7 @@
 import { Collapse, IconButton } from "@mui/material";
 import { useId, useState, type ReactNode } from "react";
 import { Icon } from "./Icons";
+import { Placeholder } from "./Placeholder";
 
 type PanelSectionProps = {
   title: string;
@@ -40,7 +41,7 @@ export function PanelSection({ title, children, defaultOpen = false }: PanelSect
 
       <Collapse in={open} timeout={200} easing="var(--motion-easing)" unmountOnExit>
         <div id={contentId} className="space-y-4 pt-4">
-          {children}
+          <Placeholder label={title} className="space-y-4">{children}</Placeholder>
         </div>
       </Collapse>
     </section>

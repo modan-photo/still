@@ -69,6 +69,24 @@ export function createStillTheme(mode: ColorMode) {
       },
     },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          ":focus-visible": {
+            outline: `2px solid ${colors.accent}`,
+            outlineOffset: 2,
+          },
+        },
+      },
+      MuiButtonBase: {
+        styleOverrides: {
+          root: {
+            "&.Mui-focusVisible": {
+              outline: `2px solid ${colors.accent}`,
+              outlineOffset: 2,
+            },
+          },
+        },
+      },
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {

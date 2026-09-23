@@ -44,6 +44,13 @@ export function MainCanvas({ photoName, onImport, onFileDrop }: MainCanvasProps)
     <main
       className={`relative grid h-full min-h-0 place-items-center overflow-hidden bg-app-base p-2 transition-colors duration-fast md:p-4 lg:p-6 ${dragActive ? "bg-app-elevated" : ""}`}
       aria-label="Photo workspace"
+      aria-description="Press Tab to toggle the inspector. Shift+Tab moves focus to the previous control."
+      aria-keyshortcuts="Tab 1 2 3 4 5 ArrowLeft ArrowRight Control+o Meta+o"
+      tabIndex={0}
+      data-editor-shortcut-scope="canvas"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) event.currentTarget.focus();
+      }}
       onDragEnter={enterDropZone}
       onDragLeave={leaveDropZone}
       onDragOver={(event) => event.preventDefault()}

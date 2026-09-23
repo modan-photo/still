@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useMediaQuery, useTheme as useMuiTheme } from "@mui/material";
 import { isTauri } from "@tauri-apps/api/core";
 import { platform } from "@tauri-apps/plugin-os";
@@ -10,6 +10,7 @@ import { RightPanel } from "./layout/RightPanel";
 import { FilmStrip, type FilmStripItem } from "./layout/FilmStrip";
 import { MainCanvas } from "./layout/MainCanvas";
 import { MobileRightPanel } from "./layout/MobileRightPanel";
+import { useEditorShortcuts } from "./hooks/useEditorShortcuts";
 
 const placeholderPhotos: FilmStripItem[] = Array.from({ length: 1000 }, (_, index) => ({
   id: `photo-${index + 1}`,
@@ -28,6 +29,8 @@ function App({ theme }: AppProps) {
   const titleBarVisible = !(isTauri() && platform() === "android");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [photoName, setPhotoName] = useState<string | null>(null);
+  const toggleInspector = useCallback(() => setInspectorOpen((open) => !open), []);
+  useEditorShortcuts(toggleInspector);
 
   const openPhoto = () => {
     document.getElementById("photo-input")?.click();
@@ -53,7 +56,7 @@ function App({ theme }: AppProps) {
           <TitleBar
             onOpen={openPhoto}
             onOpenSettings={() => console.log("Open application settings")}
-            onTogglePanel={() => setInspectorOpen((open) => !open)}
+            onTogglePanel={toggleInspector}
             onToggleTheme={toggleResolvedTheme}
             panelOpen={inspectorOpen}
             themeMode={resolvedTheme}
