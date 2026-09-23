@@ -1,4 +1,4 @@
-import { IconButton, MenuItem, Select, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import { IconButton, MenuItem, Select, ToggleButton, ToggleButtonGroup, useMediaQuery, useTheme } from "@mui/material";
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon } from "../components/Icons";
 import { PanelSection } from "../components/PanelSection";
@@ -15,6 +15,9 @@ const MAX_WIDTH = 400;
 export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   const [width, setWidth] = useState(300);
   const dragStart = useRef({ x: 0, width: 300 });
+  const theme = useTheme();
+  const tablet = useMediaQuery(theme.breakpoints.between("md", "lg"));
+  const effectiveWidth = tablet ? 260 : width;
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragStart.current = { x: event.clientX, width };
@@ -31,11 +34,11 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
     <aside
       id="right-panel"
       className="relative min-h-0 shrink-0 border-l border-subtle bg-app-surface transition-[width] duration-base ease-app"
-      style={{ width: collapsed ? 0 : width }}
+      style={{ width: collapsed ? 0 : effectiveWidth }}
       aria-label="Inspector"
       data-collapsed={collapsed}
     >
-      {!collapsed && (
+      {!collapsed && !tablet && (
         <div
           className="absolute inset-y-0 left-0 z-20 w-1 -translate-x-1/2 cursor-col-resize touch-none outline-none transition-colors duration-fast hover:bg-accent focus-visible:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           role="separator"
@@ -80,16 +83,25 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
       </IconButton>
 
       <div
-        className="flex h-full min-w-[280px] flex-col"
-        style={{ display: collapsed ? "none" : undefined }}
+        className="flex h-full flex-col"
+        style={{ display: collapsed ? "none" : undefined, minWidth: effectiveWidth }}
         aria-hidden={collapsed}
       >
-        <div className="shrink-0 px-5 pb-3 pt-4">
-          <h2 className="m-0 text-sm font-semibold text-primary">Inspector</h2>
-          <p className="m-0 mt-1 text-xs text-secondary">Select a photo to adjust its appearance</p>
-        </div>
+        <InspectorContent />
+      </div>
+    </aside>
+  );
+}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+export function InspectorContent() {
+  return (
+    <>
+      <div className="shrink-0 px-5 pb-3 pt-4">
+        <h2 className="m-0 text-sm font-semibold text-primary">Inspector</h2>
+        <p className="m-0 mt-1 text-xs text-secondary">Select a photo to adjust its appearance</p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <PanelSection title="Frame" defaultOpen>
             <Field label="Style">
               <ToggleButtonGroup exclusive defaultValue="classic" size="small" fullWidth>
@@ -139,9 +151,8 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
               </button>
             </Field>
           </PanelSection>
-        </div>
       </div>
-    </aside>
+    </>
   );
 }
 

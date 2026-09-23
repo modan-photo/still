@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useMediaQuery, useTheme as useMuiTheme } from "@mui/material";
+import { isTauri } from "@tauri-apps/api/core";
+import { platform } from "@tauri-apps/plugin-os";
 import "./App.css";
 import type { ThemeController } from "./hooks/useTheme";
 import { AppShell } from "./layout/AppShell";
@@ -6,6 +9,7 @@ import { TitleBar } from "./layout/TitleBar";
 import { RightPanel } from "./layout/RightPanel";
 import { FilmStrip, type FilmStripItem } from "./layout/FilmStrip";
 import { MainCanvas } from "./layout/MainCanvas";
+import { MobileRightPanel } from "./layout/MobileRightPanel";
 
 const placeholderPhotos: FilmStripItem[] = Array.from({ length: 1000 }, (_, index) => ({
   id: `photo-${index + 1}`,
@@ -19,6 +23,9 @@ type AppProps = {
 /** Composes the editor shell while feature implementations remain isolated. */
 function App({ theme }: AppProps) {
   const { resolvedTheme, toggleResolvedTheme } = theme;
+  const muiTheme = useMuiTheme();
+  const mobileLayout = useMediaQuery(muiTheme.breakpoints.down("md"));
+  const titleBarVisible = !(isTauri() && platform() === "android");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [photoName, setPhotoName] = useState<string | null>(null);
 
@@ -28,6 +35,7 @@ function App({ theme }: AppProps) {
 
   return (
     <AppShell
+      titleBarVisible={titleBarVisible}
       titleBar={(
         <>
           <input
@@ -59,12 +67,14 @@ function App({ theme }: AppProps) {
           onFileDrop={(file) => setPhotoName(file.name)}
         />
       )}
-      rightPanel={(
-        <RightPanel
-          collapsed={!inspectorOpen}
-          onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)}
-        />
-      )}
+      rightPanel={mobileLayout ? (
+        <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
+      ) : (
+          <RightPanel
+            collapsed={!inspectorOpen}
+            onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)}
+          />
+        )}
       filmStrip={<FilmStrip items={placeholderPhotos} onImport={openPhoto} />}
     />
   );
