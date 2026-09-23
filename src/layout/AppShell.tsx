@@ -20,9 +20,7 @@ export function AppShell({ titleBar, mainCanvas, rightPanel, filmStrip }: AppShe
         <section className="min-h-0 min-w-0 flex-1 overflow-hidden" aria-label="Editor canvas">
           {mainCanvas}
         </section>
-        <aside className="min-h-0 w-[300px] shrink-0 border-l border-subtle bg-app-surface" aria-label="Editor parameters">
-          {rightPanel}
-        </aside>
+        {rightPanel}
       </div>
 
       <footer className="min-h-0 min-w-0 border-t border-subtle bg-app-surface" aria-label="Photo filmstrip">

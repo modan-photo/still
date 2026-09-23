@@ -1,13 +1,13 @@
 import { useState } from "react";
 import "./App.css";
 import { Icon } from "./components/Icons";
-import { Inspector } from "./components/Inspector";
 import { Placeholder } from "./components/Placeholder";
 import { CropCorners } from "./components/Sketch";
 import { StillMark } from "./components/StillMark";
 import type { ThemeController } from "./hooks/useTheme";
 import { AppShell } from "./layout/AppShell";
 import { TitleBar } from "./layout/TitleBar";
+import { RightPanel } from "./layout/RightPanel";
 
 type AppProps = {
   theme: ThemeController;
@@ -74,7 +74,12 @@ function App({ theme }: AppProps) {
           </div>
         </main>
       )}
-      rightPanel={<Inspector collapsed={!inspectorOpen} />}
+      rightPanel={(
+        <RightPanel
+          collapsed={!inspectorOpen}
+          onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)}
+        />
+      )}
       filmStrip={<Placeholder label="Film strip" description="Photo thumbnails will appear here" />}
     />
   );

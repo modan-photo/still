@@ -40,19 +40,19 @@ export function TitleBar({ onOpen, onOpenSettings, onTogglePanel, onToggleTheme,
         </div>
 
         <span className="mx-1 h-4 w-px bg-subtle" aria-hidden="true" />
-        <Tooltip title="导入照片 (Ctrl+O)" arrow>
-          <MuiIconButton aria-label="导入照片" onClick={onOpen} size="small" sx={titleBarActionSx}>
+        <Tooltip title="Import photos (Ctrl+O)" arrow>
+          <MuiIconButton aria-label="Import photos" onClick={onOpen} size="small" sx={titleBarActionSx}>
             <Icon name="open" size={16} />
           </MuiIconButton>
         </Tooltip>
-        <Tooltip title={`切换至${themeMode === "light" ? "深色" : "浅色"}主题`} arrow>
-          <MuiIconButton aria-label={`切换至${themeMode === "light" ? "深色" : "浅色"}主题`} onClick={onToggleTheme} size="small" sx={titleBarActionSx}>
+        <Tooltip title={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} arrow>
+          <MuiIconButton aria-label={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} onClick={onToggleTheme} size="small" sx={titleBarActionSx}>
             <Icon name={themeMode === "light" ? "moon" : "sun"} size={16} />
           </MuiIconButton>
         </Tooltip>
-        <Tooltip title={panelOpen ? "隐藏参数面板" : "显示参数面板"} arrow>
+        <Tooltip title={panelOpen ? "Hide inspector" : "Show inspector"} arrow>
           <MuiIconButton
-            aria-label={panelOpen ? "隐藏参数面板" : "显示参数面板"}
+            aria-label={panelOpen ? "Hide inspector" : "Show inspector"}
             aria-pressed={panelOpen}
             onClick={onTogglePanel}
             size="small"
@@ -62,8 +62,8 @@ export function TitleBar({ onOpen, onOpenSettings, onTogglePanel, onToggleTheme,
           </MuiIconButton>
         </Tooltip>
         <span className="mx-1 h-4 w-px bg-subtle" aria-hidden="true" />
-        <Tooltip title="应用设置" arrow>
-          <MuiIconButton aria-label="打开应用设置" onClick={onOpenSettings} size="small" sx={titleBarActionSx}>
+        <Tooltip title="Application settings" arrow>
+          <MuiIconButton aria-label="Open application settings" onClick={onOpenSettings} size="small" sx={titleBarActionSx}>
             <Icon name="settings" size={16} />
           </MuiIconButton>
         </Tooltip>
@@ -72,14 +72,14 @@ export function TitleBar({ onOpen, onOpenSettings, onTogglePanel, onToggleTheme,
       <div className="h-full min-w-8 flex-1" data-tauri-drag-region />
 
       <div className="flex h-full shrink-0 items-center">
-        <MuiIconButton aria-label="最小化窗口" disableRipple onClick={windowAction("minimize")} sx={windowButtonSx}>
+        <MuiIconButton aria-label="Minimize window" disableRipple onClick={windowAction("minimize")} sx={windowButtonSx}>
           <Icon name="minimize" size={16} />
         </MuiIconButton>
-        <MuiIconButton aria-label="最大化或还原窗口" disableRipple onClick={windowAction("maximize")} sx={windowButtonSx}>
+        <MuiIconButton aria-label="Maximize or restore window" disableRipple onClick={windowAction("maximize")} sx={windowButtonSx}>
           <Icon name="maximize" size={15} />
         </MuiIconButton>
         <MuiIconButton
-          aria-label="关闭窗口"
+          aria-label="Close window"
           disableRipple
           onClick={windowAction("close")}
           sx={{ ...windowButtonSx, "&:hover": { bgcolor: "error.main", color: "common.white" } }}
