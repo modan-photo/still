@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useUIStore } from '../stores/uiStore';
 
 export type ThemePreference = "system" | "light" | "dark";
 type ResolvedTheme = "light" | "dark";
@@ -17,7 +18,9 @@ function resolveTheme(preference: ThemePreference): ResolvedTheme {
 }
 
 export function useTheme() {
-  const [preference, setPreferenceState] = useState<ThemePreference>(getStoredPreference);
+  const preference = useUIStore((state) => state.theme);
+  const setPreferenceState = useUIStore((state) => state.setTheme);
+  useEffect(() => { setPreferenceState(getStoredPreference()); }, [setPreferenceState]);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveTheme(preference));
 
   useEffect(() => {
@@ -37,7 +40,7 @@ export function useTheme() {
   const setPreference = useCallback((nextPreference: ThemePreference) => {
     localStorage.setItem(STORAGE_KEY, nextPreference);
     setPreferenceState(nextPreference);
-  }, []);
+  }, [setPreferenceState]);
 
   const toggleResolvedTheme = useCallback(() => {
     setPreference(resolvedTheme === "light" ? "dark" : "light");

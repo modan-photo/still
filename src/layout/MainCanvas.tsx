@@ -1,152 +1,60 @@
-import { Button, ToggleButton, ToggleButtonGroup, Tooltip } from "@mui/material";
-import { useRef, useState, type DragEvent } from "react";
-import { Icon } from "../components/Icons";
-import { CropCorners } from "../components/Sketch";
-import { StillMark } from "../components/StillMark";
+import { Alert, Button, CircularProgress, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { useEffect, useRef } from 'react';
+import { useImagePreview } from '../hooks/useImagePreview';
+import { useProjectStore } from '../stores/projectStore';
+import { useUIStore } from '../stores/uiStore';
+import { cacheAssetUrl } from '../services/tauri/image';
+import { StillMark } from '../components/StillMark';
 
-type CanvasView = "single" | "grid";
-
-type MainCanvasProps = {
-  photoName: string | null;
-  onImport: () => void;
-  onFileDrop: (file: File) => void;
-};
-
-export function MainCanvas({ photoName, onImport, onFileDrop }: MainCanvasProps) {
-  const [view, setView] = useState<CanvasView>("single");
-  const [dragActive, setDragActive] = useState(false);
-  const dragDepth = useRef(0);
-
-  const enterDropZone = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    dragDepth.current += 1;
-    setDragActive(true);
-  };
-
-  const leaveDropZone = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    dragDepth.current -= 1;
-    if (dragDepth.current <= 0) {
-      dragDepth.current = 0;
-      setDragActive(false);
-    }
-  };
-
-  const dropFile = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    dragDepth.current = 0;
-    setDragActive(false);
-    const file = Array.from(event.dataTransfer.files).find((candidate) => candidate.type.startsWith("image/"));
-    if (file) onFileDrop(file);
-  };
-
-  return (
-    <main
-      className={`relative grid h-full min-h-0 place-items-center overflow-hidden bg-app-base p-2 transition-colors duration-fast md:p-4 lg:p-6 ${dragActive ? "bg-app-elevated" : ""}`}
-      aria-label="Photo workspace"
-      aria-description="Press Tab to toggle the inspector. Shift+Tab moves focus to the previous control."
-      aria-keyshortcuts="Tab 1 2 3 4 5 ArrowLeft ArrowRight Control+o Meta+o"
-      tabIndex={0}
-      data-editor-shortcut-scope="canvas"
-      onPointerDown={(event) => {
-        if (event.target === event.currentTarget) event.currentTarget.focus();
-      }}
-      onDragEnter={enterDropZone}
-      onDragLeave={leaveDropZone}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={dropFile}
-    >
-      <div className="absolute right-2 top-2 z-10 md:right-4 md:top-4 lg:right-6 lg:top-6">
-        <ToggleButtonGroup
-          exclusive
-          value={view}
-          onChange={(_, nextView: CanvasView | null) => {
-            if (nextView) setView(nextView);
-          }}
-          aria-label="Canvas view"
-          size="small"
-          sx={{
-            gap: 0.25,
-            p: 0.5,
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: "var(--radius-full)",
-            backgroundColor: "color-mix(in srgb, var(--color-bg-surface) 70%, transparent)",
-            backdropFilter: "var(--glass-backdrop)",
-            boxShadow: "var(--shadow-elev1)",
-            "& .MuiToggleButtonGroup-grouped": {
-              width: 32,
-              height: 32,
-              m: 0,
-              border: 0,
-              borderRadius: "var(--radius-full)",
-            },
-          }}
-        >
-          <ToggleButton value="grid" aria-label="Grid view">
-            <Tooltip title="Grid view" arrow><span className="grid place-items-center"><Icon name="grid" size={16} /></span></Tooltip>
-          </ToggleButton>
-          <ToggleButton value="single" aria-label="Single photo view">
-            <Tooltip title="Single photo view" arrow><span className="grid place-items-center"><Icon name="single" size={16} /></span></Tooltip>
-          </ToggleButton>
-        </ToggleButtonGroup>
-      </div>
-
-      {dragActive ? (
-        <div className="pointer-events-none absolute inset-3 z-20 grid place-items-center rounded-lg border-2 border-dashed border-accent bg-app-surface/70 backdrop-blur-xl">
-          <div className="text-center">
-            <Icon name="open" size={28} />
-            <p className="mb-0 mt-3 text-sm font-semibold text-primary">Drop photos to import</p>
-          </div>
-        </div>
-      ) : photoName ? (
-        view === "single" ? <PhotoPlaceholder name={photoName} /> : <GridPlaceholder name={photoName} />
-      ) : (
-        <EmptyCanvas onImport={onImport} />
-      )}
-    </main>
-  );
+type MainCanvasProps = { onImport: () => void; dragActive: boolean; onExport: () => void; exporting: boolean };
+export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCanvasProps) {
+  const photos = useProjectStore((state) => state.photos);
+  const selectedId = useProjectStore((state) => state.selectedId);
+  const selectPhoto = useProjectStore((state) => state.selectPhoto);
+  const view = useUIStore((state) => state.viewMode);
+  const setView = useUIStore((state) => state.setViewMode);
+  const photo = photos.find((entry) => entry.id === selectedId);
+  return <main className="relative flex h-full min-h-0 flex-col bg-app-base p-3" aria-label="Photo workspace" tabIndex={0}
+    data-editor-shortcut-scope="canvas" onDragOver={(event) => event.preventDefault()} onDrop={(event) => event.preventDefault()}>
+    <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
+      <Button size="small" onClick={onImport}>Import photos</Button>
+      <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next: 'single' | 'grid' | null) => { if (next) setView(next); }}>
+        <ToggleButton value="single">Single</ToggleButton><ToggleButton value="grid">Grid</ToggleButton>
+      </ToggleButtonGroup>
+      <Button size="small" disabled={!photo || exporting} onClick={onExport}>{exporting ? 'Exporting…' : 'Export'}</Button>
+    </div>
+    {!photo ? <div className="grid min-h-0 flex-1 place-items-center text-center"><div>
+      <StillMark size={36} /><h1 className="text-xl">Start with a photograph</h1>
+      <p className="text-sm text-secondary">Drop photos here or choose files to import.</p>
+      <Button variant="contained" onClick={onImport}>Import photos</Button>
+    </div></div> : view === 'single' ? <Preview key={photo.id} path={photo.path} />
+      : <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto md:grid-cols-3">
+        {photos.map((entry) => <button key={entry.id} type="button" aria-label={`Select ${entry.path}`} aria-pressed={selectedId === entry.id}
+          className={`aspect-[4/3] overflow-hidden rounded-md border-2 ${selectedId === entry.id ? 'border-accent' : 'border-transparent'}`}
+          onClick={() => { selectPhoto(entry.id); setView('single'); }}>
+          <img src={cacheAssetUrl(entry.thumbUrl)} alt={entry.path.split(/[\\/]/).pop()} loading="lazy" decoding="async" className="h-full w-full object-contain" />
+        </button>)}
+      </div>}
+    {photo && <div className="mt-2 truncate text-center text-xs text-secondary" title={photo.path}>{photo.path.split(/[\\/]/).pop()} · {photo.width} × {photo.height}</div>}
+    {dragActive && <div className="pointer-events-none absolute inset-2 z-20 grid place-items-center rounded-lg border-2 border-dashed border-accent bg-app-surface/90">Drop photos to import</div>}
+  </main>;
 }
 
-function EmptyCanvas({ onImport }: { onImport: () => void }) {
-  return (
-    <div className="w-full max-w-md px-6 text-center text-secondary">
-      <div className="relative mx-auto mb-6 grid h-20 w-24 place-items-center" aria-hidden="true">
-        <CropCorners />
-        <StillMark size={28} />
-      </div>
-      <h1 className="m-0 text-xl font-semibold tracking-[-0.02em] text-primary">Start with a photograph</h1>
-      <p className="mb-0 mt-2 text-sm leading-6">Drag photos here or click to import.</p>
-      <Button variant="contained" startIcon={<Icon name="open" size={17} />} onClick={onImport} sx={{ mt: 3 }}>
-        Import photos
-      </Button>
-    </div>
-  );
-}
-
-function PhotoPlaceholder({ name }: { name: string }) {
-  return (
-    <div className="grid h-[min(68vh,680px)] w-[min(72vw,960px)] max-h-[90%] max-w-[90%] place-items-center overflow-hidden rounded-lg border border-subtle bg-app-surface shadow-elev2">
-      <div className="max-w-[80%] text-center">
-        <StillMark size={36} />
-        <p className="mb-0 mt-4 truncate text-sm font-medium text-primary" title={name}>{name}</p>
-        <p className="mb-0 mt-1 text-xs text-secondary">Photo preview placeholder</p>
-      </div>
-    </div>
-  );
-}
-
-function GridPlaceholder({ name }: { name: string }) {
-  return (
-    <div className="grid h-full max-h-[90%] w-full max-w-[90%] grid-cols-2 content-center gap-3 md:grid-cols-3">
-      {Array.from({ length: 6 }, (_, index) => (
-        <div key={index} className="grid aspect-[4/3] place-items-center overflow-hidden rounded-lg border border-subtle bg-app-surface shadow-elev1">
-          <div className="max-w-[80%] text-center">
-            <StillMark size={24} />
-            <p className="mb-0 mt-2 truncate text-xs text-secondary">{index === 0 ? name : `Photo ${index + 1}`}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+function Preview({ path }: { path: string }) {
+  const { image, loading, error } = useImagePreview(path);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const target = canvas.current;
+    if (!target || !image) return;
+    target.width = image.naturalWidth;
+    target.height = image.naturalHeight;
+    target.getContext('2d')?.drawImage(image, 0, 0);
+    return () => { target.width = 0; target.height = 0; };
+  }, [image]);
+  return <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
+    {loading && <CircularProgress size={28} aria-label="Loading preview" />}
+    {error && <Alert severity="error">{error.message}</Alert>}
+    <canvas ref={canvas} aria-label="Photo preview" data-preview-long-edge={image ? Math.max(image.naturalWidth, image.naturalHeight) : undefined}
+      style={{ display: image ? 'block' : 'none', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+  </div>;
 }

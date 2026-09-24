@@ -1,7 +1,8 @@
 import { useEffect } from "react";
+import { useProjectStore } from '../stores/projectStore';
 
 /** Register shell shortcuts without connecting photo-editing operations. */
-export function useEditorShortcuts(onTogglePanel: () => void) {
+export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => void) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.repeat) return;
@@ -13,7 +14,7 @@ export function useEditorShortcuts(onTogglePanel: () => void) {
 
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "o") {
         event.preventDefault();
-        console.log("[Editor shortcut] Import photos (placeholder)");
+        onImport();
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
@@ -26,11 +27,14 @@ export function useEditorShortcuts(onTogglePanel: () => void) {
         console.log(`[Editor shortcut] Rate photo: ${event.key} (placeholder)`);
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
-        console.log(`[Editor shortcut] ${event.key === "ArrowLeft" ? "Previous" : "Next"} photo (placeholder)`);
+        const { photos, selectedId, selectPhoto } = useProjectStore.getState();
+        const index = photos.findIndex((photo) => photo.id === selectedId);
+        const next = photos[index + (event.key === 'ArrowLeft' ? -1 : 1)];
+        if (next) selectPhoto(next.id);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onTogglePanel]);
+  }, [onTogglePanel, onImport]);
 }

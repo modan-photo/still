@@ -1,10 +1,12 @@
+import { cacheAssetUrl } from '../services/tauri/image';
 type ThumbnailItemProps = {
+  thumbPath: string;
   label: string;
   selected: boolean;
   onSelect: () => void;
 };
 
-export function ThumbnailItem({ label, selected, onSelect }: ThumbnailItemProps) {
+export function ThumbnailItem({ label, selected, onSelect, thumbPath }: ThumbnailItemProps) {
   return (
     <button
       type="button"
@@ -13,14 +15,7 @@ export function ThumbnailItem({ label, selected, onSelect }: ThumbnailItemProps)
       aria-pressed={selected}
       onClick={onSelect}
     >
-      <span
-        className="absolute inset-1 rounded-sm border border-subtle opacity-70"
-        style={{ background: "linear-gradient(145deg, var(--color-bg-elevated), var(--color-bg-base))" }}
-        aria-hidden="true"
-      />
-      <span className="relative text-[10px] font-semibold tabular-nums opacity-75 transition-opacity duration-fast group-hover:opacity-100">
-        {label}
-      </span>
+      <img src={cacheAssetUrl(thumbPath)} alt={label} loading="lazy" decoding="async" className="h-full w-full object-contain" />
     </button>
   );
 }

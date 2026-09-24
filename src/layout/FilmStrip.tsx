@@ -1,24 +1,26 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { IconButton, Tooltip, useMediaQuery, useTheme } from "@mui/material";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "../components/Icons";
 import { ThumbnailItem } from "../components/ThumbnailItem";
 
 export type FilmStripItem = {
   id: string;
   label: string;
+  thumbPath: string;
 };
 
 type FilmStripProps = {
   items: FilmStripItem[];
   onImport: () => void;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 };
 
-export function FilmStrip({ items, onImport }: FilmStripProps) {
+export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down("md"));
-  const [selectedId, setSelectedId] = useState(items[0]?.id ?? null);
   const itemPitch = compact ? 64 : 80;
 
   const virtualizer = useVirtualizer({
@@ -27,11 +29,17 @@ export function FilmStrip({ items, onImport }: FilmStripProps) {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => itemPitch,
     overscan: 6,
+    getItemKey: (index) => items[index].id,
   });
 
   useEffect(() => {
     virtualizer.measure();
   }, [itemPitch, virtualizer]);
+
+  useEffect(() => {
+    const index = items.findIndex((item) => item.id === selectedId);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'auto' });
+  }, [selectedId, items.length, virtualizer]);
 
   return (
     <div className="flex h-full min-w-0 bg-app-surface">
@@ -52,8 +60,9 @@ export function FilmStrip({ items, onImport }: FilmStripProps) {
               >
                 <ThumbnailItem
                   label={item.label}
+                  thumbPath={item.thumbPath}
                   selected={selectedId === item.id}
-                  onSelect={() => setSelectedId(item.id)}
+                  onSelect={() => onSelect(item.id)}
                 />
               </div>
             );
