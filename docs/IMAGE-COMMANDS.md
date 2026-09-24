@@ -25,9 +25,11 @@ Terminal events are emitted before removing tasks from the active registry.
 
 An empty editing spec means version/source with no effects or output. This path
 copies bytes unchanged, preserving metadata. With output configured, export
-normalizes EXIF orientation and encodes JPEG/PNG/lossless WebP. Existing paths
-are never overwritten. Effects must use the stub commands until implemented;
-export rejects effects rather than silently discarding edits.
+normalizes EXIF orientation and encodes JPEG/PNG/lossless WebP. A border also
+activates the render pipeline; when output is omitted its format is inferred
+from the destination extension. Existing paths are never overwritten.
+Watermark and adjustment effects remain unsupported and are rejected rather
+than silently discarded.
 
 Cancellation is cooperative: copy checks each 256 KiB chunk; encoders check on
 writes and before publication. A codec's internal decoding/computation cannot

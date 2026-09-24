@@ -5,6 +5,8 @@ import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { cacheAssetUrl } from '../services/tauri/image';
 import { StillMark } from '../components/StillMark';
+import { renderBorderPreview } from '../render/border';
+import type { BorderSpec } from '../types/renderSpec';
 
 type MainCanvasProps = { onImport: () => void; dragActive: boolean; onExport: () => void; exporting: boolean };
 export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCanvasProps) {
@@ -27,7 +29,7 @@ export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCa
       <StillMark size={36} /><h1 className="text-xl">Start with a photograph</h1>
       <p className="text-sm text-secondary">Drop photos here or choose files to import.</p>
       <Button variant="contained" onClick={onImport}>Import photos</Button>
-    </div></div> : view === 'single' ? <Preview key={photo.id} path={photo.path} />
+    </div></div> : view === 'single' ? <Preview key={photo.id} path={photo.path} border={photo.spec.border} originalWidth={photo.width} originalHeight={photo.height} />
       : <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto md:grid-cols-3">
         {photos.map((entry) => <button key={entry.id} type="button" aria-label={`Select ${entry.path}`} aria-pressed={selectedId === entry.id}
           className={`aspect-[4/3] overflow-hidden rounded-md border-2 ${selectedId === entry.id ? 'border-accent' : 'border-transparent'}`}
@@ -40,17 +42,26 @@ export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCa
   </main>;
 }
 
-function Preview({ path }: { path: string }) {
+function Preview({ path, border, originalWidth, originalHeight }: { path: string; border?: BorderSpec; originalWidth: number; originalHeight: number }) {
   const { image, loading, error } = useImagePreview(path);
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const target = canvas.current;
     if (!target || !image) return;
-    target.width = image.naturalWidth;
-    target.height = image.naturalHeight;
-    target.getContext('2d')?.drawImage(image, 0, 0);
-    return () => { target.width = 0; target.height = 0; };
-  }, [image]);
+    const timer = window.setTimeout(() => {
+      if (border) {
+        renderBorderPreview(target, image, border, originalWidth, originalHeight);
+      } else {
+        target.width = image.naturalWidth;
+        target.height = image.naturalHeight;
+        target.getContext('2d')?.drawImage(image, 0, 0);
+      }
+    }, 16);
+    return () => window.clearTimeout(timer);
+  }, [border, image, originalHeight, originalWidth]);
+  useEffect(() => () => {
+    if (canvas.current) { canvas.current.width = 0; canvas.current.height = 0; }
+  }, []);
   return <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
     {loading && <CircularProgress size={28} aria-label="Loading preview" />}
     {error && <Alert severity="error">{error.message}</Alert>}

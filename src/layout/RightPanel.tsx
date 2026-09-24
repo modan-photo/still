@@ -3,6 +3,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNod
 import { Icon } from "../components/Icons";
 import { PanelSection } from "../components/PanelSection";
 import { ParamSlider } from "../components/ParamSlider";
+import { BorderControls } from "../components/BorderControls";
 
 type RightPanelProps = {
   collapsed: boolean;
@@ -110,20 +111,8 @@ export function InspectorContent() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <PanelSection title="Frame" defaultOpen>
-            <Field label="Style">
-              <ToggleButtonGroup exclusive defaultValue="classic" size="small" fullWidth>
-                <ToggleButton value="classic">Classic</ToggleButton>
-                <ToggleButton value="film">Film</ToggleButton>
-                <ToggleButton value="none">None</ToggleButton>
-              </ToggleButtonGroup>
-            </Field>
-            <ParamSlider label="Width" defaultValue={12} suffix="%" />
-            <Field label="Color">
-              <button className="flex h-8 w-full items-center gap-2 rounded-md border border-subtle bg-app-elevated px-2 text-xs text-primary" type="button">
-                <span className="h-4 w-4 rounded-full border border-subtle bg-app-base" />White
-              </button>
-            </Field>
+          <PanelSection title="Border" defaultOpen>
+            <BorderControls />
           </PanelSection>
 
           <PanelSection title="Watermark">

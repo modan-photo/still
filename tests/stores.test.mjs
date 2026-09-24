@@ -17,6 +17,11 @@ test('deduplicates imports, isolates photo edits, and preserves edits during exp
   assert.equal(store.getState().photos[1].spec.output, undefined);
   store.getState().markClean('a.jpg', store.getState().photos[0].spec);
   assert.equal(store.getState().photos[0].dirty, false);
+  const border = { style: 'film', width: 18, unit: 'px', color: '#FFFFFF', radius: 2, colors: ['#FFFFFF', '#000000'], angle: 0, caption: false };
+  store.getState().applyBorderToAll(border);
+  assert.deepEqual(store.getState().photos[0].spec.border, border);
+  assert.deepEqual(store.getState().photos[1].spec.border, border);
+  assert.notEqual(store.getState().photos[0].spec.border, store.getState().photos[1].spec.border);
   store.getState().removePhoto('a.jpg');
   assert.equal(store.getState().selectedId, 'b.jpg');
 });

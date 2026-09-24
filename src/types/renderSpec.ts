@@ -8,8 +8,29 @@ export interface RenderSpec {
   output?: OutputSpec;
 }
 export interface SourceSpec { path: string; width: number; height: number }
-export type BorderStyle = 'solid' | 'gradient' | 'shadow' | 'polaroid' | 'film';
-export interface BorderSpec { style: BorderStyle; width: number; color: string; radius: number }
+export type BorderStyle = 'solid' | 'gradient' | 'polaroid' | 'film';
+export type BorderUnit = 'px' | 'percent';
+export interface BorderSpec {
+  style: BorderStyle;
+  width: number;
+  unit: BorderUnit;
+  color: string;
+  radius: number;
+  colors: string[];
+  angle: number;
+  caption: boolean;
+}
+
+export const DEFAULT_BORDER: BorderSpec = {
+  style: 'solid',
+  width: 24,
+  unit: 'px',
+  color: '#FFFFFF',
+  radius: 0,
+  colors: ['#FFFFFF', '#D8E7DE'],
+  angle: 0,
+  caption: true,
+};
 export type Anchor = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
 export type WatermarkType = 'text' | 'image';
 export interface WatermarkSpec {

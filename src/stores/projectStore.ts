@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ImageMeta } from '../types/image';
-import type { RenderSpec } from '../types/renderSpec';
+import type { BorderSpec, RenderSpec } from '../types/renderSpec';
 
 export interface ProjectPhoto extends ImageMeta { id: string; spec: RenderSpec; dirty: boolean }
 export type SpecPatch = Partial<Omit<RenderSpec, 'version' | 'source'>>;
@@ -10,6 +10,7 @@ interface ProjectState {
   addPhotos: (photos: ImageMeta[]) => void;
   selectPhoto: (id: string) => void;
   updateSpec: (id: string, patch: SpecPatch) => void;
+  applyBorderToAll: (border: BorderSpec) => void;
   markClean: (id: string, exportedSpec: RenderSpec) => void;
   removePhoto: (id: string) => void;
   clear: () => void;
@@ -29,6 +30,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
   selectPhoto: (id) => set((state) => state.photos.some((p) => p.id === id) ? { selectedId: id } : state),
   updateSpec: (id, patch) => set((state) => ({ photos: state.photos.map((photo) => photo.id === id
     ? { ...photo, spec: { ...photo.spec, ...structuredClone(patch) }, dirty: true } : photo) })),
+  applyBorderToAll: (border) => set((state) => ({ photos: state.photos.map((photo) => ({
+    ...photo,
+    spec: { ...photo.spec, border: structuredClone(border) },
+    dirty: true,
+  })) })),
   // Export completion must not clear edits made while the export was running.
   markClean: (id, exportedSpec) => set((state) => ({ photos: state.photos.map((photo) =>
     photo.id === id && JSON.stringify(photo.spec) === JSON.stringify(exportedSpec) ? { ...photo, dirty: false } : photo) })),
