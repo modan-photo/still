@@ -79,6 +79,7 @@ pub fn get_or_create_cached(
 
     match save_image_atomic(&resized, &destination, &output, cancellation) {
         Ok(()) => cached_result(destination, false),
+        Err(_) if cancellation.is_cancelled() => Err(AppError::Cancelled),
         Err(_) if destination.is_file() => cached_result(destination, true),
         Err(error) => Err(error),
     }
@@ -202,5 +203,46 @@ mod tests {
         assert_eq!(generated.path, cached.path);
 
         fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn fifty_jpegs_reuse_cache_and_preview_is_bounded() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-batch-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("source.jpg");
+        image::RgbImage::from_fn(2304, 768, |x, y| {
+            image::Rgb([(x % 251) as u8, (y % 251) as u8, 90])
+        })
+        .save(&source)
+        .unwrap();
+        let paths: Vec<_> = (0..50)
+            .map(|index| {
+                let path = directory.join(format!("photo-{index}.jpg"));
+                fs::copy(&source, &path).unwrap();
+                path
+            })
+            .collect();
+        let token = CancellationToken::new();
+        let cache = directory.join("cache");
+        let first = super::get_or_create_cached_batch(&paths, &cache, CacheKind::Thumbnail, &token);
+        assert!(first.iter().all(|result| result
+            .as_ref()
+            .is_ok_and(|image| !image.cache_hit && image.width == 512)));
+        let second =
+            super::get_or_create_cached_batch(&paths, &cache, CacheKind::Thumbnail, &token);
+        assert!(second
+            .iter()
+            .all(|result| result.as_ref().is_ok_and(|image| image.cache_hit)));
+        assert_eq!(fs::read_dir(cache.join("thumbs")).unwrap().count(), 50);
+        let preview = get_or_create_cached(&source, &cache, CacheKind::Preview, &token).unwrap();
+        assert_eq!((preview.width, preview.height), (2048, 683));
+        fs::remove_dir_all(directory).unwrap();
     }
 }

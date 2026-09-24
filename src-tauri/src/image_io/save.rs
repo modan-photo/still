@@ -218,6 +218,41 @@ mod tests {
     use super::save_image_atomic;
 
     #[test]
+    fn cancellation_after_first_write_rejects_more_bytes_and_cleans_partial() {
+        use std::io::Write;
+        let directory = std::env::temp_dir().join(format!(
+            "still-midwrite-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let destination = directory.join("image.png");
+        let token = CancellationToken::new();
+        {
+            let temporary = super::TemporaryOutput::new(&destination);
+            let file = fs::File::options()
+                .write(true)
+                .create_new(true)
+                .open(temporary.path())
+                .unwrap();
+            let mut writer = super::CancellableWriter {
+                file,
+                token: token.clone(),
+            };
+            writer.write_all(b"partial encoded data").unwrap();
+            token.cancel();
+            assert!(writer.write_all(b"must not be written").is_err());
+            drop(writer);
+        }
+        assert!(!destination.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn empty_spec_copy_preserves_bytes_and_never_overwrites() {
         let directory = std::env::temp_dir().join(format!(
             "still-copy-{}-{}",
