@@ -108,9 +108,9 @@ pub async fn image_export(
         "image_export",
         move |token, report| {
             spec.validate().map_err(AppError::InvalidInput)?;
-            if spec.watermark.is_some() || spec.adjustments.is_some() {
+            if spec.adjustments.is_some() {
                 return Err(AppError::Unsupported(
-                    "watermark and adjustment effects are not implemented yet".into(),
+                    "adjustment effects are not implemented yet".into(),
                 ));
             }
             let source = PathBuf::from(&spec.source.path);

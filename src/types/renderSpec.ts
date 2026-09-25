@@ -43,9 +43,49 @@ export interface WatermarkSpec {
   opacity: number;
   rotation: number;
   scale: number;
+  tiled: boolean;
+  tileGap: number;
+  freePosition?: { x: number; y: number };
   font?: FontSpec;
 }
-export interface FontSpec { family: string; size: number; weight: number; italic: boolean; color: string }
+export type FontSizeUnit = 'px' | 'percent';
+export interface TextShadow { color: string; blur: number; offsetX: number; offsetY: number }
+export interface FontSpec {
+  family: string;
+  path?: string;
+  size: number;
+  sizeUnit: FontSizeUnit;
+  weight: number;
+  italic: boolean;
+  color: string;
+  strokeColor: string;
+  strokeWidth: number;
+  shadow: TextShadow;
+}
+
+export const DEFAULT_WATERMARK: WatermarkSpec = {
+  type: 'text',
+  content: '© Photographer',
+  position: 'bottomRight',
+  offsetX: 32,
+  offsetY: 32,
+  opacity: 0.72,
+  rotation: 0,
+  scale: 1,
+  tiled: false,
+  tileGap: 96,
+  font: {
+    family: 'Noto Sans SC',
+    size: 32,
+    sizeUnit: 'px',
+    weight: 500,
+    italic: false,
+    color: '#FFFFFF',
+    strokeColor: '#000000',
+    strokeWidth: 0,
+    shadow: { color: '#00000080', blur: 4, offsetX: 0, offsetY: 2 },
+  },
+};
 export interface AdjustmentsSpec { exposure: number; contrast: number; saturation: number }
 export type OutputFormat = 'jpeg' | 'png' | 'webp';
 export interface OutputSpec { format: OutputFormat; quality: number }

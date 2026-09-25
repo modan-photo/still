@@ -1,9 +1,9 @@
-import { IconButton, MenuItem, Select, ToggleButton, ToggleButtonGroup, useMediaQuery, useTheme } from "@mui/material";
+import { IconButton, MenuItem, Select, useMediaQuery, useTheme } from "@mui/material";
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon } from "../components/Icons";
 import { PanelSection } from "../components/PanelSection";
-import { ParamSlider } from "../components/ParamSlider";
 import { BorderControls } from "../components/BorderControls";
+import { WatermarkControls } from "../components/WatermarkControls";
 
 type RightPanelProps = {
   collapsed: boolean;
@@ -116,15 +116,7 @@ export function InspectorContent() {
           </PanelSection>
 
           <PanelSection title="Watermark">
-            <Field label="Type">
-              <ToggleButtonGroup exclusive defaultValue="text" size="small" fullWidth>
-                <ToggleButton value="text">Text</ToggleButton>
-                <ToggleButton value="image">Image</ToggleButton>
-              </ToggleButtonGroup>
-            </Field>
-            <Field label="Position"><CompactSelect value="bottom-right" options={["Top left", "Center", "Bottom right"]} /></Field>
-            <ParamSlider label="Opacity" defaultValue={72} suffix="%" />
-            <ParamSlider label="Rotation" defaultValue={0} min={-180} max={180} suffix="°" />
+            <WatermarkControls />
           </PanelSection>
 
           <PanelSection title="EXIF">
@@ -141,7 +133,6 @@ export function InspectorContent() {
               <Field label="Rows"><CompactSelect value="2" options={["1", "2", "3", "4"]} /></Field>
               <Field label="Columns"><CompactSelect value="2" options={["1", "2", "3", "4"]} /></Field>
             </div>
-            <ParamSlider label="Gap" defaultValue={8} max={32} suffix="px" />
             <Field label="Background">
               <button className="flex h-8 w-full items-center gap-2 rounded-md border border-subtle bg-app-elevated px-2 text-xs text-primary" type="button">
                 <span className="h-4 w-4 rounded-full border border-subtle bg-app-base" />Canvas color

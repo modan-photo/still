@@ -34,6 +34,9 @@ impl RenderSpec {
         if let Some(border) = &self.border {
             border.validate()?;
         }
+        if let Some(watermark) = &self.watermark {
+            watermark.validate()?;
+        }
         Ok(())
     }
 }
@@ -109,8 +112,67 @@ pub struct WatermarkSpec {
     pub opacity: f32,
     pub rotation: f32,
     pub scale: f32,
+    #[serde(default)]
+    pub tiled: bool,
+    #[serde(default = "default_tile_gap")]
+    pub tile_gap: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub free_position: Option<NormalizedPoint>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<FontSpec>,
+}
+
+fn default_tile_gap() -> f32 {
+    96.0
+}
+
+impl WatermarkSpec {
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        for (name, value, min, max) in [
+            ("opacity", self.opacity, 0.0, 1.0),
+            ("rotation", self.rotation, -180.0, 180.0),
+            ("scale", self.scale, 0.01, 20.0),
+            ("tileGap", self.tile_gap, 0.0, 10_000.0),
+            ("offsetX", self.offset_x, -100_000.0, 100_000.0),
+            ("offsetY", self.offset_y, -100_000.0, 100_000.0),
+        ] {
+            if !value.is_finite() || !(min..=max).contains(&value) {
+                return Err(format!(
+                    "watermark.{name} must be finite and in {min}..={max}"
+                ));
+            }
+        }
+        if self.kind == WatermarkType::Text && self.content.trim().is_empty() {
+            return Err("text watermark content must not be empty".into());
+        }
+        if self.kind == WatermarkType::Text && self.font.is_none() {
+            return Err("text watermark font must not be empty".into());
+        }
+        if self.kind == WatermarkType::Image && self.path.as_deref().unwrap_or("").trim().is_empty()
+        {
+            return Err("image watermark path must not be empty".into());
+        }
+        if let Some(point) = self.free_position {
+            if !point.x.is_finite()
+                || !point.y.is_finite()
+                || !(0.0..=1.0).contains(&point.x)
+                || !(0.0..=1.0).contains(&point.y)
+            {
+                return Err("watermark.freePosition must be normalized to 0..=1".into());
+            }
+        }
+        if let Some(font) = &self.font {
+            font.validate()?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NormalizedPoint {
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -138,10 +200,83 @@ pub enum Anchor {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FontSpec {
     pub family: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     pub size: f32,
+    #[serde(default)]
+    pub size_unit: FontSizeUnit,
     pub weight: u16,
     pub italic: bool,
     pub color: String,
+    #[serde(default = "default_stroke_color")]
+    pub stroke_color: String,
+    #[serde(default)]
+    pub stroke_width: f32,
+    #[serde(default)]
+    pub shadow: TextShadow,
+}
+
+fn default_stroke_color() -> String {
+    "#000000".into()
+}
+
+impl FontSpec {
+    fn validate(&self) -> Result<(), String> {
+        if !self.size.is_finite() || !(1.0..=2_000.0).contains(&self.size) {
+            return Err("watermark.font.size must be in 1..=2000".into());
+        }
+        if !self.stroke_width.is_finite() || !(0.0..=100.0).contains(&self.stroke_width) {
+            return Err("watermark.font.strokeWidth must be in 0..=100".into());
+        }
+        self.shadow.validate()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum FontSizeUnit {
+    #[default]
+    Px,
+    Percent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextShadow {
+    #[serde(default = "default_shadow_color")]
+    pub color: String,
+    #[serde(default)]
+    pub blur: f32,
+    #[serde(default)]
+    pub offset_x: f32,
+    #[serde(default)]
+    pub offset_y: f32,
+}
+
+fn default_shadow_color() -> String {
+    "#00000080".into()
+}
+
+impl Default for TextShadow {
+    fn default() -> Self {
+        Self {
+            color: default_shadow_color(),
+            blur: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        }
+    }
+}
+
+impl TextShadow {
+    fn validate(&self) -> Result<(), String> {
+        for value in [self.blur, self.offset_x, self.offset_y] {
+            if !value.is_finite() || !(-1_000.0..=1_000.0).contains(&value) {
+                return Err("watermark font shadow values are out of range".into());
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

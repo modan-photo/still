@@ -13,6 +13,10 @@ pub fn run() {
             commands::image::thumb_get,
             commands::image::image_apply_border,
             commands::image::image_apply_watermark,
+            commands::watermark::watermark_fonts,
+            commands::watermark::watermark_presets_list,
+            commands::watermark::watermark_preset_save,
+            commands::watermark::watermark_preset_delete,
             commands::task::task_cancel,
             commands::task::task_list,
         ])

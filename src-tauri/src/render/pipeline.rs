@@ -4,7 +4,7 @@ use image::DynamicImage;
 
 use crate::{
     error::AppError,
-    render::{border::apply_border, spec::RenderSpec},
+    render::{border::apply_border, spec::RenderSpec, watermark::apply_watermark},
 };
 
 /// Decodes the source image and establishes the shared rendering entry point.
@@ -14,6 +14,15 @@ pub fn apply_render_spec(path: &Path, spec: &RenderSpec) -> Result<DynamicImage,
     let mut image = crate::image_io::load::decode_image(path)?;
     if let Some(border) = &spec.border {
         image = DynamicImage::ImageRgba8(apply_border(&image.to_rgba8(), border));
+    }
+    if let Some(watermark) = &spec.watermark {
+        let mut rgba = image.to_rgba8();
+        apply_watermark(
+            &mut rgba,
+            watermark,
+            spec.source.width.max(spec.source.height),
+        )?;
+        image = DynamicImage::ImageRgba8(rgba);
     }
     Ok(image)
 }
@@ -31,12 +40,72 @@ mod tests {
     use crate::{
         image_io::save::save_image_atomic,
         render::spec::{
-            BorderConfig, BorderStyle, BorderUnit, OutputFormat, OutputSpec, RenderSpec,
-            SourceSpec, RENDER_SPEC_VERSION,
+            Anchor, BorderConfig, BorderStyle, BorderUnit, FontSizeUnit, FontSpec, OutputFormat,
+            OutputSpec, RenderSpec, SourceSpec, TextShadow, WatermarkSpec, WatermarkType,
+            RENDER_SPEC_VERSION,
         },
     };
 
     use super::apply_render_spec;
+
+    #[test]
+    fn renders_multiline_chinese_and_emoji_watermark_through_pipeline() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-watermark-pipeline-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("source.png");
+        image::RgbaImage::from_pixel(400, 300, image::Rgba([0, 0, 0, 255]))
+            .save(&source)
+            .unwrap();
+        let font_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/fonts/NotoSansSC-VF.ttf");
+        let spec = RenderSpec {
+            version: RENDER_SPEC_VERSION,
+            source: SourceSpec {
+                path: source.to_string_lossy().into(),
+                width: 400,
+                height: 300,
+            },
+            border: None,
+            watermark: Some(WatermarkSpec {
+                kind: WatermarkType::Text,
+                content: "中文水印\nMade with 😀".into(),
+                path: None,
+                position: Anchor::Center,
+                offset_x: 0.0,
+                offset_y: 0.0,
+                opacity: 1.0,
+                rotation: -12.0,
+                scale: 1.0,
+                tiled: false,
+                tile_gap: 96.0,
+                free_position: None,
+                font: Some(FontSpec {
+                    family: "Noto Sans SC".into(),
+                    path: Some(font_path.to_string_lossy().into()),
+                    size: 8.0,
+                    size_unit: FontSizeUnit::Percent,
+                    weight: 500,
+                    italic: false,
+                    color: "#FFFFFFFF".into(),
+                    stroke_color: "#000000".into(),
+                    stroke_width: 1.0,
+                    shadow: TextShadow::default(),
+                }),
+            }),
+            adjustments: None,
+            output: None,
+        };
+        let rendered = apply_render_spec(&source, &spec).unwrap().to_rgba8();
+        assert!(rendered.pixels().any(|pixel| pixel[0] > 0));
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     /// Full decode/render/encode acceptance benchmark; ignored in debug runs.
     #[test]

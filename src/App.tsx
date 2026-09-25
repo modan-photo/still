@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, useMediaQuery, useTheme as useMuiTheme } from '@mui/material';
 import { isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
@@ -16,8 +16,10 @@ import { useProjectStore } from './stores/projectStore';
 import { useUIStore } from './stores/uiStore';
 import { exportImage, normalizeError } from './services/tauri/image';
 import { TaskProgressBar } from './components/TaskProgressBar';
+import { listWatermarkFonts } from './services/tauri/watermark';
 
 function App({ theme }: { theme: ThemeController }) {
+  useEffect(() => { void listWatermarkFonts(); }, []);
   const muiTheme = useMuiTheme();
   const mobileLayout = useMediaQuery(muiTheme.breakpoints.down('md'));
   const inspectorOpen = useUIStore((state) => state.inspectorOpen);
