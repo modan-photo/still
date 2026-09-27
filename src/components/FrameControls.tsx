@@ -27,36 +27,36 @@ const STYLES: { value: BorderStyle; label: string }[] = [
 ];
 const PRESET_COLORS = ['#FFFFFF', '#F5F0E8', '#D8E7DE', '#BEDBE7', '#F3C6C2', '#F0D28C', '#D8C6E8', '#A8A8A8', '#555555', '#171717', '#B64236', '#2E6450'];
 
-export function BorderControls() {
+export function FrameControls() {
   const { spec, update } = useRenderSpec();
   const selectedId = useProjectStore((state) => state.selectedId);
   const photo = useProjectStore((state) => state.photos.find((entry) => entry.id === state.selectedId));
   const photoCount = useProjectStore((state) => state.photos.length);
   const applyBorderToAll = useProjectStore((state) => state.applyBorderToAll);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const borderApplied = Boolean(spec?.border);
-  const border = spec?.border ?? DEFAULT_BORDER;
-  const change = (patch: Partial<BorderSpec>) => update({ border: { ...border, ...patch } });
-  const dimensionValue = border.width;
+  const frameApplied = Boolean(spec?.border);
+  const frame = spec?.border ?? DEFAULT_BORDER;
+  const change = (patch: Partial<BorderSpec>) => update({ border: { ...frame, ...patch } });
+  const dimensionValue = frame.width;
 
   if (!selectedId || !photo) {
-    return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a border.</p>;
+    return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a frame.</p>;
   }
 
   return <div className="space-y-4">
     <div>
       <span className="mb-2 block text-xs font-medium text-secondary">Style</span>
-      {!borderApplied && <span className="mb-2 block text-[10px] text-secondary">Choose a style to enable the border.</span>}
-      <div className="filmstrip-scroll flex gap-2 overflow-x-auto pb-1" role="radiogroup" aria-label="Border style">
+      {!frameApplied && <span className="mb-2 block text-[10px] text-secondary">Choose a style to enable the frame.</span>}
+      <div className="filmstrip-scroll flex gap-2 overflow-x-auto pb-1" role="radiogroup" aria-label="Frame style">
         {STYLES.map(({ value, label }) => <button
           type="button"
           role="radio"
-          aria-checked={borderApplied && border.style === value}
-          className={`min-w-[62px] rounded-lg border p-1.5 text-[10px] transition-colors ${borderApplied && border.style === value ? 'border-accent bg-app-elevated text-primary' : 'border-subtle text-secondary hover:text-primary'}`}
+          aria-checked={frameApplied && frame.style === value}
+          className={`min-w-[62px] rounded-lg border p-1.5 text-[10px] transition-colors ${frameApplied && frame.style === value ? 'border-accent bg-app-elevated text-primary' : 'border-subtle text-secondary hover:text-primary'}`}
           key={value}
           onClick={() => change({ style: value })}
         >
-          <StylePreview src={photo.thumbUrl} config={{ ...border, style: value }} originalWidth={photo.width} originalHeight={photo.height} />
+          <StylePreview src={photo.thumbUrl} config={{ ...frame, style: value }} originalWidth={photo.width} originalHeight={photo.height} />
           <span className="mt-1 block truncate">{label}</span>
         </button>)}
       </div>
@@ -68,43 +68,43 @@ export function BorderControls() {
       min={0}
       max={200}
       onChange={(value) => change({ width: value })}
-      suffix={border.unit === 'px' ? 'px' : '%'}
+      suffix={frame.unit === 'px' ? 'px' : '%'}
       after={<ToggleButtonGroup
         exclusive
         size="small"
-        value={border.unit}
+        value={frame.unit}
         onChange={(_, unit: BorderSpec['unit'] | null) => {
-          if (!unit || unit === border.unit) return;
+          if (!unit || unit === frame.unit) return;
           const longEdge = Math.max(photo.width, photo.height);
           const converted = unit === 'percent'
             ? Math.round(dimensionValue / longEdge * 1_000) / 10
             : Math.round(dimensionValue / 100 * longEdge);
           change({ unit, width: clamp(converted, 0, 200) });
         }}
-        aria-label="Border width unit"
+        aria-label="Frame width unit"
         sx={{ height: 28, '& .MuiToggleButton-root': { px: 1, fontSize: 10 } }}
       ><ToggleButton value="px">px</ToggleButton><ToggleButton value="percent">%</ToggleButton></ToggleButtonGroup>}
     />
 
-    {border.style === 'gradient' ? <GradientStops border={border} onChange={change} />
-      : border.style !== 'film' && border.style !== 'polaroid' ? <ColorPicker label="Color" color={border.color} onChange={(color) => change({ color })} /> : null}
+    {frame.style === 'gradient' ? <GradientStops frame={frame} onChange={change} />
+      : frame.style !== 'film' && frame.style !== 'polaroid' ? <ColorPicker label="Color" color={frame.color} onChange={(color) => change({ color })} /> : null}
 
-    {border.style === 'gradient' && <NumberSlider label="Angle" value={border.angle} min={-180} max={180} onChange={(angle) => change({ angle })} suffix="°" />}
-    <NumberSlider label="Corner radius" value={border.radius} min={0} max={100} onChange={(radius) => change({ radius })} suffix="px" />
-    {border.style === 'polaroid' && <label className="flex items-center justify-between text-xs text-secondary">
+    {frame.style === 'gradient' && <NumberSlider label="Angle" value={frame.angle} min={-180} max={180} onChange={(angle) => change({ angle })} suffix="°" />}
+    <NumberSlider label="Corner radius" value={frame.radius} min={0} max={100} onChange={(radius) => change({ radius })} suffix="px" />
+    {frame.style === 'polaroid' && <label className="flex items-center justify-between text-xs text-secondary">
       Reserve caption area
-      <Switch size="small" checked={border.caption} onChange={(event) => change({ caption: event.target.checked })} />
+      <Switch size="small" checked={frame.caption} onChange={(event) => change({ caption: event.target.checked })} />
     </label>}
 
-    <Button fullWidth variant="outlined" size="small" disabled={photoCount < 2 || !borderApplied} onClick={() => setConfirmOpen(true)}>
+    <Button fullWidth variant="outlined" size="small" disabled={photoCount < 2 || !frameApplied} onClick={() => setConfirmOpen(true)}>
       Apply to all photos
     </Button>
-    <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} aria-labelledby="apply-border-title">
-      <DialogTitle id="apply-border-title">Apply border to all photos?</DialogTitle>
-      <DialogContent>This replaces the border settings on all {photoCount} photos. Other edits stay unchanged.</DialogContent>
+    <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} aria-labelledby="apply-frame-title">
+      <DialogTitle id="apply-frame-title">Apply frame to all photos?</DialogTitle>
+      <DialogContent>This replaces the frame settings on all {photoCount} photos. Other edits stay unchanged.</DialogContent>
       <DialogActions>
         <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
-        <Button variant="contained" onClick={() => { applyBorderToAll(border); setConfirmOpen(false); }}>Apply</Button>
+        <Button variant="contained" onClick={() => { applyBorderToAll(frame); setConfirmOpen(false); }}>Apply</Button>
       </DialogActions>
     </Dialog>
   </div>;
@@ -189,13 +189,13 @@ function ColorPicker({ label, color, onChange }: { label: string; color: string;
   </div>;
 }
 
-function GradientStops({ border, onChange }: { border: BorderSpec; onChange: (patch: Partial<BorderSpec>) => void }) {
+function GradientStops({ frame, onChange }: { frame: BorderSpec; onChange: (patch: Partial<BorderSpec>) => void }) {
   const dragging = useRef<number | null>(null);
   const move = (event: DragEvent, target: number) => {
     event.preventDefault();
     const from = dragging.current;
     if (from === null || from === target) return;
-    const colors = [...border.colors];
+    const colors = [...frame.colors];
     const [color] = colors.splice(from, 1);
     colors.splice(target, 0, color);
     dragging.current = target;
@@ -204,10 +204,10 @@ function GradientStops({ border, onChange }: { border: BorderSpec; onChange: (pa
   return <div>
     <div className="mb-1.5 flex items-center justify-between">
       <span className="text-xs font-medium text-secondary">Gradient stops</span>
-      <Button size="small" disabled={border.colors.length >= 6} onClick={() => onChange({ colors: [...border.colors, '#FFFFFF'] })}>Add</Button>
+      <Button size="small" disabled={frame.colors.length >= 6} onClick={() => onChange({ colors: [...frame.colors, '#FFFFFF'] })}>Add</Button>
     </div>
     <div className="space-y-2">
-      {border.colors.map((color, index) => <div
+      {frame.colors.map((color, index) => <div
         className="flex items-center gap-2 rounded-md border border-subtle p-1.5"
         draggable
         key={`${color}-${index}`}
@@ -217,9 +217,9 @@ function GradientStops({ border, onChange }: { border: BorderSpec; onChange: (pa
       >
         <span className="cursor-grab text-xs text-secondary" aria-hidden="true">⠿</span>
         <div className="min-w-0 flex-1"><ColorPicker label={`Stop ${index + 1}`} color={color} onChange={(next) => {
-          const colors = [...border.colors]; colors[index] = next; onChange({ colors });
+          const colors = [...frame.colors]; colors[index] = next; onChange({ colors });
         }} /></div>
-        <IconButton size="small" aria-label={`Remove stop ${index + 1}`} disabled={border.colors.length <= 2} onClick={() => onChange({ colors: border.colors.filter((_, item) => item !== index) })}>×</IconButton>
+        <IconButton size="small" aria-label={`Remove stop ${index + 1}`} disabled={frame.colors.length <= 2} onClick={() => onChange({ colors: frame.colors.filter((_, item) => item !== index) })}>×</IconButton>
       </div>)}
     </div>
   </div>;

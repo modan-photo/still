@@ -1,5 +1,7 @@
 import { useEffect } from "react";
+import { RIGHT_PANEL_TABS } from '../layout/rightPanelTabs';
 import { useProjectStore } from '../stores/projectStore';
+import { useUIStore } from '../stores/uiStore';
 
 /** Register shell shortcuts without connecting photo-editing operations. */
 export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => void) {
@@ -15,6 +17,14 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "o") {
         event.preventDefault();
         onImport();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && /^[1-4]$/.test(event.key)) {
+        const tab = RIGHT_PANEL_TABS[Number(event.key) - 1];
+        if (tab) {
+          event.preventDefault();
+          useUIStore.getState().setActiveRightTab(tab.id);
+        }
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;

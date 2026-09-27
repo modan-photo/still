@@ -3,12 +3,12 @@ import type { ReactNode } from "react";
 /** 可用图标名称的联合类型，供按钮和设置分区等调用方约束图标参数。 */
 export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
-  | "check" | "chevron" | "sidebar" | "frame" | "watermark" | "info"
+  | "check" | "chevron" | "sidebar" | "frame" | "stamp" | "info"
   | "transform" | "rotate-left" | "rotate-right" | "minimize" | "maximize" | "plus"
   | "grid" | "single";
 
 /** name 指定图标；size 同时控制 SVG 的显示宽高，省略时使用 18 像素。 */
-type IconProps = { name: IconName; size?: number };
+type IconProps = { name: IconName; size?: number; strokeWidth?: number };
 
 /**
  * 图标名称到 SVG 图形节点的映射，所有图形使用统一的 24 × 24 坐标系。
@@ -35,7 +35,7 @@ const paths: Record<IconName, ReactNode> = {
   sidebar: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></>,
   // 照片属性分区与旋转操作图标。
   frame: <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>,
-  watermark: <><path d="M4 18V8l4-3 4 3v10"/><path d="M12 18V8l4-3 4 3v10M2 18h20"/></>,
+  stamp: <><path d="M4 18V8l4-3 4 3v10"/><path d="M12 18V8l4-3 4 3v10M2 18h20"/></>,
   info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></>,
   transform: <><path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5"/><rect x="7" y="7" width="10" height="10" rx="1"/></>,
   "rotate-left": <><path d="M4 8V3m0 0h5M4 3l4 4"/><path d="M5.2 11a7 7 0 1 0 2-4"/></>,
@@ -47,9 +47,9 @@ const paths: Record<IconName, ReactNode> = {
  * 无填充、圆形端点和圆角连接保持描边风格一致，.icon 类供调用方调整样式。
  * SVG 作为装饰元素对辅助技术隐藏；操作含义应由外层按钮的文字或 aria-label 提供。
  */
-export function Icon({ name, size = 18 }: IconProps) {
+export function Icon({ name, size = 18, strokeWidth = 1.7 }: IconProps) {
   return (
-    <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {paths[name]}
     </svg>
   );

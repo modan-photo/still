@@ -51,8 +51,8 @@ export function Inspector({ collapsed }: { collapsed: boolean }) {
             <Slider label="Width" value={12} suffix="%" />
             <label className="field-group"><span className="control-label">Background</span><select className="select" defaultValue="white"><option value="white">White</option><option value="black">Black</option><option value="custom">Custom…</option></select></label>
           </InspectorSection>
-          <InspectorSection title="Watermark" icon="watermark">
-            <Toggle label="Show watermark" />
+          <InspectorSection title="Stamp" icon="stamp">
+            <Toggle label="Show stamp" />
             <label className="field-group"><span className="control-label">Text</span><input className="input" type="text" placeholder="Photographer name" /></label>
             <Slider label="Opacity" value={72} suffix="%" />
           </InspectorSection>

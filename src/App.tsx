@@ -28,13 +28,13 @@ function App({ theme }: { theme: ThemeController }) {
       if (!fallback) return;
       const project = useProjectStore.getState();
       for (const photo of project.photos) {
-        const watermark = photo.spec.watermark;
-        const font = watermark?.font;
-        if (!watermark || !font) continue;
+        const stamp = photo.spec.watermark;
+        const font = stamp?.font;
+        if (!stamp || !font) continue;
         const bundled = fonts.find((entry) => entry.builtin && entry.family === font.family);
         const allowed = bundled ?? fallback;
         if (font.family !== allowed.family || font.path !== allowed.path) {
-          project.updateSpec(photo.id, { watermark: { ...watermark, font: { ...font, family: allowed.family, path: allowed.path } } });
+          project.updateSpec(photo.id, { watermark: { ...stamp, font: { ...font, family: allowed.family, path: allowed.path } } });
         }
       }
     });

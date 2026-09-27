@@ -32,7 +32,7 @@ export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCa
       <StillMark size={36} /><h1 className="text-xl">Start with a photograph</h1>
       <p className="text-sm text-secondary">Drop photos here or choose files to import.</p>
       <Button variant="contained" onClick={onImport}>Import photos</Button>
-    </div></div> : view === 'single' ? <Preview key={photo.id} photoId={photo.id} path={photo.path} border={photo.spec.border} watermark={photo.spec.watermark} originalWidth={photo.width} originalHeight={photo.height} />
+    </div></div> : view === 'single' ? <Preview key={photo.id} photoId={photo.id} path={photo.path} frame={photo.spec.border} stamp={photo.spec.watermark} originalWidth={photo.width} originalHeight={photo.height} />
       : <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto md:grid-cols-3">
         {photos.map((entry) => <button key={entry.id} type="button" aria-label={`Select ${entry.path}`} aria-pressed={selectedId === entry.id}
           className={`aspect-[4/3] overflow-hidden rounded-md border-2 ${selectedId === entry.id ? 'border-accent' : 'border-transparent'}`}
@@ -45,7 +45,7 @@ export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCa
   </main>;
 }
 
-function Preview({ photoId, path, border, watermark, originalWidth, originalHeight }: { photoId: string; path: string; border?: BorderSpec; watermark?: WatermarkSpec; originalWidth: number; originalHeight: number }) {
+function Preview({ photoId, path, frame, stamp, originalWidth, originalHeight }: { photoId: string; path: string; frame?: BorderSpec; stamp?: WatermarkSpec; originalWidth: number; originalHeight: number }) {
   const { image, loading, error } = useImagePreview(path);
   const canvas = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
@@ -57,28 +57,28 @@ function Preview({ photoId, path, border, watermark, originalWidth, originalHeig
     if (!target || !image) return;
     let cancelled = false;
     const timer = window.setTimeout(() => { void (async () => {
-      if (border) {
-        renderBorderPreview(target, image, border, originalWidth, originalHeight);
+      if (frame) {
+        renderBorderPreview(target, image, frame, originalWidth, originalHeight);
       } else {
         target.width = image.naturalWidth;
         target.height = image.naturalHeight;
         target.getContext('2d')?.drawImage(image, 0, 0);
       }
-      if (watermark) {
+      if (stamp) {
         await listWatermarkFonts();
         if (!cancelled) {
-          const bounds = await renderWatermarkPreview(target, watermark, Math.max(originalWidth, originalHeight));
+          const bounds = await renderWatermarkPreview(target, stamp, Math.max(originalWidth, originalHeight));
           markSize.current = bounds ? { width: bounds.width, height: bounds.height } : null;
         }
       }
     })(); }, 16);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [border, image, originalHeight, originalWidth, watermark]);
+  }, [frame, image, originalHeight, originalWidth, stamp]);
   useEffect(() => () => {
     if (canvas.current) { canvas.current.width = 0; canvas.current.height = 0; }
   }, []);
   const move = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!dragging.current || !watermark?.freePosition || watermark.tiled) return;
+    if (!dragging.current || !stamp?.freePosition || stamp.tiled) return;
     const rect = event.currentTarget.getBoundingClientRect();
     let x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     let y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
@@ -96,18 +96,18 @@ function Preview({ photoId, path, border, watermark, originalWidth, originalHeig
     if (snapX !== undefined) x = snapX;
     if (snapY !== undefined) y = snapY;
     setGuides({ x: snapX, y: snapY });
-    updateSpec(photoId, { watermark: { ...watermark, offsetX: 0, offsetY: 0, freePosition: { x, y } } });
+    updateSpec(photoId, { watermark: { ...stamp, offsetX: 0, offsetY: 0, freePosition: { x, y } } });
   };
   return <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
     {loading && <CircularProgress size={28} aria-label="Loading preview" />}
     {error && <Alert severity="error">{error.message}</Alert>}
     <div className="relative inline-flex max-h-full max-w-full">
       <canvas ref={canvas} aria-label="Photo preview" data-preview-long-edge={image ? Math.max(image.naturalWidth, image.naturalHeight) : undefined}
-        onPointerDown={(event) => { if (!watermark?.freePosition || watermark.tiled) return; dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); move(event); }}
+        onPointerDown={(event) => { if (!stamp?.freePosition || stamp.tiled) return; dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); move(event); }}
         onPointerMove={move}
         onPointerUp={(event) => { dragging.current = false; setGuides({}); event.currentTarget.releasePointerCapture(event.pointerId); }}
         onLostPointerCapture={() => { dragging.current = false; setGuides({}); }}
-        style={{ display: image ? 'block' : 'none', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', touchAction: watermark?.freePosition ? 'none' : undefined, cursor: watermark?.freePosition && !watermark.tiled ? 'grab' : undefined }} />
+        style={{ display: image ? 'block' : 'none', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', touchAction: stamp?.freePosition ? 'none' : undefined, cursor: stamp?.freePosition && !stamp.tiled ? 'grab' : undefined }} />
       {guides.x !== undefined && <span className="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent shadow-[0_0_5px_var(--color-accent)]" style={{ left: `${guides.x * 100}%` }} />}
       {guides.y !== undefined && <span className="pointer-events-none absolute inset-x-0 z-10 h-px bg-accent shadow-[0_0_5px_var(--color-accent)]" style={{ top: `${guides.y * 100}%` }} />}
     </div>

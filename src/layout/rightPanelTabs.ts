@@ -1,0 +1,20 @@
+import type { IconName } from "../components/Icons";
+
+export const RIGHT_PANEL_TABS = [
+  { id: "frame", label: "Frame", icon: "frame" },
+  { id: "stamp", label: "Stamp", icon: "stamp" },
+  { id: "exif", label: "EXIF", icon: "info" },
+  { id: "collage", label: "Collage", icon: "grid" },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  label: string;
+  icon: IconName;
+}>;
+
+export type RightPanelTabId = (typeof RIGHT_PANEL_TABS)[number]["id"];
+
+export const DEFAULT_RIGHT_PANEL_TAB: RightPanelTabId = "frame";
+
+export function isRightPanelTabId(value: unknown): value is RightPanelTabId {
+  return RIGHT_PANEL_TABS.some((tab) => tab.id === value);
+}

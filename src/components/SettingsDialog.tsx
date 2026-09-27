@@ -18,7 +18,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         <div className="flex items-start justify-between gap-5">
           <div>
             <h3 id="font-settings-heading" className="m-0 text-sm font-semibold text-primary">Use system fonts</h3>
-            <p className="mb-0 mt-1 text-xs leading-5 text-secondary">Allow watermark fonts installed on this device. Keep this off for portable presets and identical rendering across computers.</p>
+            <p className="mb-0 mt-1 text-xs leading-5 text-secondary">Allow stamp fonts installed on this device. Keep this off for portable presets and identical rendering across computers.</p>
           </div>
           <Switch inputProps={{ 'aria-label': 'Use system fonts' }} checked={systemFontsEnabled} onChange={(event) => setSystemFontsEnabled(event.target.checked)} />
         </div>

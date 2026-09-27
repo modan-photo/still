@@ -17,10 +17,10 @@ const ANCHORS: { value: Anchor; label: string }[] = [
   { value: 'bottomLeft', label: 'Bottom left' }, { value: 'bottomCenter', label: 'Bottom center' }, { value: 'bottomRight', label: 'Bottom right' },
 ];
 
-export function WatermarkControls() {
+export function StampControls() {
   const { spec, update } = useRenderSpec();
   const [draft, setDraft] = useState<WatermarkSpec>(() => structuredClone(DEFAULT_WATERMARK));
-  const watermark = spec?.watermark ?? draft;
+  const stamp = spec?.watermark ?? draft;
   const enabled = Boolean(spec?.watermark);
   const [fonts, setFonts] = useState<FontInfo[]>([]);
   const [presets, setPresets] = useState<WatermarkPreset[]>([]);
@@ -29,7 +29,7 @@ export function WatermarkControls() {
   const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
   useEffect(() => { void listWatermarkFonts(systemFontsEnabled).then((available) => {
     setFonts(available);
-    const current = watermark.font;
+    const current = stamp.font;
     const exact = available.find((font) => font.family === current?.family);
     if (current && !current.path && exact?.path) changeFont({ path: exact.path });
     else if (current && !exact) {
@@ -38,14 +38,14 @@ export function WatermarkControls() {
     }
   }).catch((error) => setMessage(String(error))); }, [systemFontsEnabled]); // Each source mode is cached for the app lifetime.
   useEffect(() => { void listWatermarkPresets().then(setPresets).catch((error) => setMessage(String(error))); }, []);
-  const selectedFont = useMemo(() => fonts.find((font) => font.family === watermark.font?.family), [fonts, watermark.font?.family]);
+  const selectedFont = useMemo(() => fonts.find((font) => font.family === stamp.font?.family), [fonts, stamp.font?.family]);
   const change = (patch: Partial<WatermarkSpec>) => {
-    const next = { ...watermark, ...patch };
+    const next = { ...stamp, ...patch };
     if (enabled) update({ watermark: next }); else setDraft(next);
   };
-  const changeFont = (patch: Partial<FontSpec>) => change({ font: { ...DEFAULT_WATERMARK.font!, ...watermark.font, ...patch } });
+  const changeFont = (patch: Partial<FontSpec>) => change({ font: { ...DEFAULT_WATERMARK.font!, ...stamp.font, ...patch } });
 
-  if (!spec) return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a watermark.</p>;
+  if (!spec) return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a stamp.</p>;
 
   const chooseImage = async () => {
     const path = await open({ multiple: false, filters: [{ name: 'PNG image', extensions: ['png'] }] });
@@ -54,31 +54,31 @@ export function WatermarkControls() {
   const savePreset = async () => {
     const name = presetName.trim();
     if (!name) { setMessage('Enter a preset name first.'); return; }
-    const preset = { id: crypto.randomUUID(), name, watermark: structuredClone(watermark) };
+    const preset = { id: crypto.randomUUID(), name, watermark: structuredClone(stamp) };
     try { setPresets(await saveWatermarkPreset(preset)); setPresetName(''); setMessage('Preset saved.'); }
     catch (error) { setMessage(String(error)); }
   };
 
   return <div className="space-y-4">
     <label className="flex items-center justify-between text-xs font-medium text-secondary">
-      Enable watermark
+      Enable stamp
       <Switch size="small" checked={enabled} onChange={(event) => {
-        if (event.target.checked) update({ watermark: structuredClone(watermark) });
-        else { setDraft(structuredClone(watermark)); update({ watermark: undefined }); }
+        if (event.target.checked) update({ watermark: structuredClone(stamp) });
+        else { setDraft(structuredClone(stamp)); update({ watermark: undefined }); }
       }} />
     </label>
-    <Tabs value={watermark.type} onChange={(_, value: WatermarkSpec['type']) => change({ type: value })} variant="fullWidth" sx={{ minHeight: 34, '& .MuiTab-root': { minHeight: 34, py: 0, fontSize: 11 } }}>
+    <Tabs value={stamp.type} onChange={(_, value: WatermarkSpec['type']) => change({ type: value })} variant="fullWidth" sx={{ minHeight: 34, '& .MuiTab-root': { minHeight: 34, py: 0, fontSize: 11 } }}>
       <Tab value="text" label="Text" /><Tab value="image" label="Image (PNG)" />
     </Tabs>
 
-    {watermark.type === 'text' ? <>
-      <TextField multiline minRows={2} fullWidth size="small" label="Watermark text" value={watermark.content}
+    {stamp.type === 'text' ? <>
+      <TextField multiline minRows={2} fullWidth size="small" label="Stamp text" value={stamp.content}
         onChange={(event) => change({ content: event.target.value })} />
       <Field label="Font">
-        <Select fullWidth size="small" value={watermark.font?.family ?? ''} onChange={(event) => {
+        <Select fullWidth size="small" value={stamp.font?.family ?? ''} onChange={(event) => {
           const font = fonts.find((entry) => entry.family === event.target.value);
           changeFont({ family: String(event.target.value), path: font?.path });
-        }} sx={{ height: 34, fontSize: 12, fontFamily: `"${watermark.font?.family}"` }}>
+        }} sx={{ height: 34, fontSize: 12, fontFamily: `"${stamp.font?.family}"` }}>
           <ListSubheader>Application fonts</ListSubheader>
           {fonts.filter((font) => font.builtin).map((font) => <MenuItem key={`${font.family}-${font.path}`} value={font.family} sx={{ fontFamily: `"${font.family}"` }}>{font.family}</MenuItem>)}
           {systemFontsEnabled && fonts.some((font) => !font.builtin) && <ListSubheader>System fonts</ListSubheader>}
@@ -87,48 +87,48 @@ export function WatermarkControls() {
       </Field>
       {selectedFont && <p className="-mt-2 m-0 truncate text-[10px] text-secondary">{selectedFont.builtin ? 'Bundled · exact preview/export match' : 'System font'}</p>}
       <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-        <NumberControl label="Font size" value={watermark.font?.size ?? 32} min={1} max={watermark.font?.sizeUnit === 'percent' ? 20 : 500} step={watermark.font?.sizeUnit === 'percent' ? 0.1 : 1} onChange={(size) => changeFont({ size })} />
-        <ToggleButtonGroup exclusive size="small" value={watermark.font?.sizeUnit ?? 'px'} onChange={(_, sizeUnit: FontSpec['sizeUnit'] | null) => sizeUnit && changeFont({ sizeUnit })} sx={{ height: 32 }}>
+        <NumberControl label="Font size" value={stamp.font?.size ?? 32} min={1} max={stamp.font?.sizeUnit === 'percent' ? 20 : 500} step={stamp.font?.sizeUnit === 'percent' ? 0.1 : 1} onChange={(size) => changeFont({ size })} />
+        <ToggleButtonGroup exclusive size="small" value={stamp.font?.sizeUnit ?? 'px'} onChange={(_, sizeUnit: FontSpec['sizeUnit'] | null) => sizeUnit && changeFont({ sizeUnit })} sx={{ height: 32 }}>
           <ToggleButton value="px">px</ToggleButton><ToggleButton value="percent">%</ToggleButton>
         </ToggleButtonGroup>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <ColorField label="Color" value={watermark.font?.color ?? '#FFFFFF'} onChange={(color) => changeFont({ color })} />
-        <ColorField label="Stroke" value={watermark.font?.strokeColor ?? '#000000'} onChange={(strokeColor) => changeFont({ strokeColor })} />
+        <ColorField label="Color" value={stamp.font?.color ?? '#FFFFFF'} onChange={(color) => changeFont({ color })} />
+        <ColorField label="Stroke" value={stamp.font?.strokeColor ?? '#000000'} onChange={(strokeColor) => changeFont({ strokeColor })} />
       </div>
-      <Range label="Stroke width" value={watermark.font?.strokeWidth ?? 0} min={0} max={12} step={0.5} suffix="px" onChange={(strokeWidth) => changeFont({ strokeWidth })} />
+      <Range label="Stroke width" value={stamp.font?.strokeWidth ?? 0} min={0} max={12} step={0.5} suffix="px" onChange={(strokeWidth) => changeFont({ strokeWidth })} />
       <div className="rounded-md border border-subtle p-3">
         <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-secondary">Shadow</span>
-        <ColorField label="Color" value={(watermark.font?.shadow.color ?? '#00000080').slice(0, 7)} onChange={(color) => changeFont({ shadow: { ...watermark.font!.shadow, color: `${color}80` } })} />
-        <Range label="Blur" value={watermark.font?.shadow.blur ?? 0} min={0} max={32} suffix="px" onChange={(blur) => changeFont({ shadow: { ...watermark.font!.shadow, blur } })} />
+        <ColorField label="Color" value={(stamp.font?.shadow.color ?? '#00000080').slice(0, 7)} onChange={(color) => changeFont({ shadow: { ...stamp.font!.shadow, color: `${color}80` } })} />
+        <Range label="Blur" value={stamp.font?.shadow.blur ?? 0} min={0} max={32} suffix="px" onChange={(blur) => changeFont({ shadow: { ...stamp.font!.shadow, blur } })} />
         <div className="grid grid-cols-2 gap-2">
-          <NumberControl label="Offset X" value={watermark.font?.shadow.offsetX ?? 0} min={-100} max={100} onChange={(offsetX) => changeFont({ shadow: { ...watermark.font!.shadow, offsetX } })} />
-          <NumberControl label="Offset Y" value={watermark.font?.shadow.offsetY ?? 0} min={-100} max={100} onChange={(offsetY) => changeFont({ shadow: { ...watermark.font!.shadow, offsetY } })} />
+          <NumberControl label="Offset X" value={stamp.font?.shadow.offsetX ?? 0} min={-100} max={100} onChange={(offsetX) => changeFont({ shadow: { ...stamp.font!.shadow, offsetX } })} />
+          <NumberControl label="Offset Y" value={stamp.font?.shadow.offsetY ?? 0} min={-100} max={100} onChange={(offsetY) => changeFont({ shadow: { ...stamp.font!.shadow, offsetY } })} />
         </div>
       </div>
     </> : <div className="space-y-2">
-      <Button fullWidth variant="outlined" onClick={() => void chooseImage()}>{watermark.path ? 'Replace PNG' : 'Choose transparent PNG'}</Button>
-      <p className="m-0 truncate text-[10px] text-secondary" title={watermark.path}>{watermark.path?.split(/[\\/]/).pop() ?? 'No image selected'}</p>
+      <Button fullWidth variant="outlined" onClick={() => void chooseImage()}>{stamp.path ? 'Replace PNG' : 'Choose transparent PNG'}</Button>
+      <p className="m-0 truncate text-[10px] text-secondary" title={stamp.path}>{stamp.path?.split(/[\\/]/).pop() ?? 'No image selected'}</p>
     </div>}
 
     <div>
       <div className="mb-2 flex items-center justify-between"><span className="text-xs font-medium text-secondary">Position</span>
-        <label className="flex items-center gap-1 text-[10px] text-secondary">Free positioning<Switch size="small" checked={Boolean(watermark.freePosition)} onChange={(event) => change({ freePosition: event.target.checked ? { x: 0.5, y: 0.5 } : undefined, ...(event.target.checked ? { offsetX: 0, offsetY: 0 } : {}) })} /></label>
+        <label className="flex items-center gap-1 text-[10px] text-secondary">Free positioning<Switch size="small" checked={Boolean(stamp.freePosition)} onChange={(event) => change({ freePosition: event.target.checked ? { x: 0.5, y: 0.5 } : undefined, ...(event.target.checked ? { offsetX: 0, offsetY: 0 } : {}) })} /></label>
       </div>
-      <div className="grid grid-cols-3 gap-1 rounded-lg border border-subtle bg-app-base p-1" role="radiogroup" aria-label="Watermark anchor">
-        {ANCHORS.map((anchor) => <button key={anchor.value} type="button" title={anchor.label} aria-label={anchor.label} aria-pressed={!watermark.freePosition && watermark.position === anchor.value}
-          className={`grid h-8 place-items-center rounded border transition-colors ${!watermark.freePosition && watermark.position === anchor.value ? 'border-accent bg-app-elevated' : 'border-transparent hover:border-subtle'}`}
+      <div className="grid grid-cols-3 gap-1 rounded-lg border border-subtle bg-app-base p-1" role="radiogroup" aria-label="Stamp anchor">
+        {ANCHORS.map((anchor) => <button key={anchor.value} type="button" title={anchor.label} aria-label={anchor.label} aria-pressed={!stamp.freePosition && stamp.position === anchor.value}
+          className={`grid h-8 place-items-center rounded border transition-colors ${!stamp.freePosition && stamp.position === anchor.value ? 'border-accent bg-app-elevated' : 'border-transparent hover:border-subtle'}`}
           onClick={() => change({ position: anchor.value, freePosition: undefined })}><span className="h-1.5 w-1.5 rounded-full bg-current" /></button>)}
       </div>
-      {watermark.freePosition && <p className="mb-0 mt-2 text-[10px] leading-4 text-secondary">Drag the watermark on the canvas. Green guides show anchor snapping.</p>}
+      {stamp.freePosition && <p className="mb-0 mt-2 text-[10px] leading-4 text-secondary">Drag the stamp on the canvas. Green guides show anchor snapping.</p>}
     </div>
 
-    <div className="grid grid-cols-2 gap-2"><NumberControl label="Offset X" value={watermark.offsetX} min={-2000} max={2000} onChange={(offsetX) => change({ offsetX })} /><NumberControl label="Offset Y" value={watermark.offsetY} min={-2000} max={2000} onChange={(offsetY) => change({ offsetY })} /></div>
-    <Range label="Opacity" value={watermark.opacity * 100} min={0} max={100} suffix="%" onChange={(opacity) => change({ opacity: opacity / 100 })} />
-    <Range label="Rotation" value={watermark.rotation} min={-180} max={180} suffix="°" onChange={(rotation) => change({ rotation })} />
-    <Range label="Scale" value={watermark.scale * 100} min={10} max={400} suffix="%" onChange={(scale) => change({ scale: scale / 100 })} />
-    <label className="flex items-center justify-between text-xs font-medium text-secondary">Tile across image<Switch size="small" checked={watermark.tiled} onChange={(event) => change({ tiled: event.target.checked })} /></label>
-    {watermark.tiled && <Range label="Tile gap" value={watermark.tileGap} min={0} max={500} suffix="px" onChange={(tileGap) => change({ tileGap })} />}
+    <div className="grid grid-cols-2 gap-2"><NumberControl label="Offset X" value={stamp.offsetX} min={-2000} max={2000} onChange={(offsetX) => change({ offsetX })} /><NumberControl label="Offset Y" value={stamp.offsetY} min={-2000} max={2000} onChange={(offsetY) => change({ offsetY })} /></div>
+    <Range label="Opacity" value={stamp.opacity * 100} min={0} max={100} suffix="%" onChange={(opacity) => change({ opacity: opacity / 100 })} />
+    <Range label="Rotation" value={stamp.rotation} min={-180} max={180} suffix="°" onChange={(rotation) => change({ rotation })} />
+    <Range label="Scale" value={stamp.scale * 100} min={10} max={400} suffix="%" onChange={(scale) => change({ scale: scale / 100 })} />
+    <label className="flex items-center justify-between text-xs font-medium text-secondary">Tile across image<Switch size="small" checked={stamp.tiled} onChange={(event) => change({ tiled: event.target.checked })} /></label>
+    {stamp.tiled && <Range label="Tile gap" value={stamp.tileGap} min={0} max={500} suffix="px" onChange={(tileGap) => change({ tileGap })} />}
 
     <div className="border-t border-subtle pt-3">
       <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-secondary">Presets</span>
@@ -156,8 +156,8 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   return <label className="flex items-center justify-between gap-2 text-xs text-secondary"><span>{label}</span><input type="color" className="h-8 w-12 cursor-pointer rounded border border-subtle bg-transparent p-0.5" value={value.slice(0, 7)} onChange={(event) => onChange(event.target.value.toUpperCase())} /></label>;
 }
 
-function withAllowedFont(watermark: WatermarkSpec, fonts: FontInfo[]): WatermarkSpec {
-  if (!watermark.font || fonts.some((font) => font.family === watermark.font?.family)) return watermark;
+function withAllowedFont(stamp: WatermarkSpec, fonts: FontInfo[]): WatermarkSpec {
+  if (!stamp.font || fonts.some((font) => font.family === stamp.font?.family)) return stamp;
   const fallback = fonts.find((font) => font.builtin && font.family === 'Noto Sans SC') ?? fonts.find((font) => font.builtin);
-  return fallback ? { ...watermark, font: { ...watermark.font, family: fallback.family, path: fallback.path } } : watermark;
+  return fallback ? { ...stamp, font: { ...stamp.font, family: fallback.family, path: fallback.path } } : stamp;
 }

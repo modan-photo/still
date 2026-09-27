@@ -10,7 +10,7 @@ type PanelSectionProps = {
   defaultOpen?: boolean;
 };
 
-export function PanelSection({ title, children, defaultOpen = false }: PanelSectionProps) {
+export function PanelSection({ title, children, defaultOpen = true }: PanelSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const contentId = useId();
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");

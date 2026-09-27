@@ -28,16 +28,27 @@ export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) 
           },
         }}
       >
-        <div className="relative flex h-full min-h-0 flex-col pt-3">
-          <div className="mx-auto h-1 w-10 rounded-full bg-subtle" aria-hidden="true" />
-          <IconButton
-            aria-label="Close inspector"
-            onClick={() => onOpenChange(false)}
-            size="small"
-            sx={{ position: "absolute", right: 12, top: 8 }}
-          >
-            <Icon name="chevron" size={16} />
-          </IconButton>
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="relative flex h-7 shrink-0 items-start justify-center pt-2">
+            <div
+              className="h-1 w-9 rounded-full bg-subtle"
+              aria-hidden="true"
+            />
+            <IconButton
+              aria-label="Close inspector"
+              onClick={() => onOpenChange(false)}
+              size="small"
+              sx={{
+                position: "absolute",
+                right: 8,
+                top: 2,
+                width: 28,
+                height: 28,
+              }}
+            >
+              <Icon name="chevron" size={16} />
+            </IconButton>
+          </div>
           <InspectorContent />
         </div>
       </Drawer>

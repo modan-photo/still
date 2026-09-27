@@ -1,9 +1,8 @@
-import { IconButton, MenuItem, Select, useMediaQuery, useTheme } from "@mui/material";
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { IconButton, useMediaQuery, useTheme } from "@mui/material";
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icons";
-import { PanelSection } from "../components/PanelSection";
-import { BorderControls } from "../components/BorderControls";
-import { WatermarkControls } from "../components/WatermarkControls";
+import { RightPanelContent } from "./RightPanelContent";
+import { RightPanelTabs } from "./RightPanelTabs.tsx";
 
 type RightPanelProps = {
   collapsed: boolean;
@@ -105,53 +104,8 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
 export function InspectorContent() {
   return (
     <>
-      <div className="shrink-0 px-5 pb-3 pt-4">
-        <h2 className="m-0 text-sm font-semibold text-primary">Inspector</h2>
-        <p className="m-0 mt-1 text-xs text-secondary">Select a photo to adjust its appearance</p>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <PanelSection title="Border" defaultOpen>
-            <BorderControls />
-          </PanelSection>
-
-          <PanelSection title="Watermark">
-            <WatermarkControls />
-          </PanelSection>
-
-          <PanelSection title="EXIF">
-            <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-xs">
-              <dt className="text-secondary">Camera</dt><dd className="m-0 text-right text-primary">—</dd>
-              <dt className="text-secondary">Lens</dt><dd className="m-0 text-right text-primary">—</dd>
-              <dt className="text-secondary">Exposure</dt><dd className="m-0 text-right text-primary">—</dd>
-              <dt className="text-secondary">ISO</dt><dd className="m-0 text-right text-primary">—</dd>
-            </dl>
-          </PanelSection>
-
-          <PanelSection title="Collage">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Rows"><CompactSelect value="2" options={["1", "2", "3", "4"]} /></Field>
-              <Field label="Columns"><CompactSelect value="2" options={["1", "2", "3", "4"]} /></Field>
-            </div>
-            <Field label="Background">
-              <button className="flex h-8 w-full items-center gap-2 rounded-md border border-subtle bg-app-elevated px-2 text-xs text-primary" type="button">
-                <span className="h-4 w-4 rounded-full border border-subtle bg-app-base" />Canvas color
-              </button>
-            </Field>
-          </PanelSection>
-      </div>
+      <RightPanelTabs />
+      <RightPanelContent />
     </>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="block"><span className="mb-1.5 block text-xs font-medium text-secondary">{label}</span>{children}</label>;
-}
-
-function CompactSelect({ value, options }: { value: string; options: string[] }) {
-  return (
-    <Select defaultValue={value} size="small" fullWidth sx={{ height: 32, fontSize: 12 }}>
-      {options.map((option, index) => <MenuItem value={index === 0 && value.includes("-") ? "top-left" : index === 1 && value.includes("-") ? "center" : index === 2 && value.includes("-") ? "bottom-right" : option} key={option}>{option}</MenuItem>)}
-    </Select>
   );
 }
