@@ -2,6 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { useProjectStore } from '../src/stores/projectStore.ts';
 import { useTaskStore } from '../src/stores/taskStore.ts';
+import { useUIStore } from '../src/stores/uiStore.ts';
+
+test('system fonts are opt-in by default', () => {
+  assert.equal(useUIStore.getState().systemFontsEnabled, false);
+});
 
 test('deduplicates imports, isolates photo edits, and preserves edits during export', () => {
   const store = useProjectStore;

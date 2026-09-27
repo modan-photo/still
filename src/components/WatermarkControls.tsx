@@ -1,5 +1,5 @@
 import {
-  Button, IconButton, MenuItem, Select, Slider, Switch, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
+  Button, IconButton, ListSubheader, MenuItem, Select, Slider, Switch, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -9,6 +9,7 @@ import {
   type FontInfo, type WatermarkPreset,
 } from '../services/tauri/watermark';
 import { DEFAULT_WATERMARK, type Anchor, type FontSpec, type WatermarkSpec } from '../types/renderSpec';
+import { useUIStore } from '../stores/uiStore';
 
 const ANCHORS: { value: Anchor; label: string }[] = [
   { value: 'topLeft', label: 'Top left' }, { value: 'topCenter', label: 'Top center' }, { value: 'topRight', label: 'Top right' },
@@ -25,12 +26,17 @@ export function WatermarkControls() {
   const [presets, setPresets] = useState<WatermarkPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  useEffect(() => { void listWatermarkFonts().then((available) => {
+  const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
+  useEffect(() => { void listWatermarkFonts(systemFontsEnabled).then((available) => {
     setFonts(available);
     const current = watermark.font;
     const exact = available.find((font) => font.family === current?.family);
     if (current && !current.path && exact?.path) changeFont({ path: exact.path });
-  }).catch((error) => setMessage(String(error))); }, []); // Font enumeration is cached for the app lifetime.
+    else if (current && !exact) {
+      const fallback = available.find((font) => font.builtin && font.family === 'Noto Sans SC') ?? available.find((font) => font.builtin);
+      if (fallback) changeFont({ family: fallback.family, path: fallback.path });
+    }
+  }).catch((error) => setMessage(String(error))); }, [systemFontsEnabled]); // Each source mode is cached for the app lifetime.
   useEffect(() => { void listWatermarkPresets().then(setPresets).catch((error) => setMessage(String(error))); }, []);
   const selectedFont = useMemo(() => fonts.find((font) => font.family === watermark.font?.family), [fonts, watermark.font?.family]);
   const change = (patch: Partial<WatermarkSpec>) => {
@@ -73,7 +79,10 @@ export function WatermarkControls() {
           const font = fonts.find((entry) => entry.family === event.target.value);
           changeFont({ family: String(event.target.value), path: font?.path });
         }} sx={{ height: 34, fontSize: 12, fontFamily: `"${watermark.font?.family}"` }}>
-          {fonts.map((font) => <MenuItem key={`${font.family}-${font.path}`} value={font.family} sx={{ fontFamily: `"${font.family}"` }}>{font.family}</MenuItem>)}
+          <ListSubheader>Application fonts</ListSubheader>
+          {fonts.filter((font) => font.builtin).map((font) => <MenuItem key={`${font.family}-${font.path}`} value={font.family} sx={{ fontFamily: `"${font.family}"` }}>{font.family}</MenuItem>)}
+          {systemFontsEnabled && fonts.some((font) => !font.builtin) && <ListSubheader>System fonts</ListSubheader>}
+          {systemFontsEnabled && fonts.filter((font) => !font.builtin).map((font) => <MenuItem key={`${font.family}-${font.path}`} value={font.family} sx={{ fontFamily: `"${font.family}"` }}>{font.family}</MenuItem>)}
         </Select>
       </Field>
       {selectedFont && <p className="-mt-2 m-0 truncate text-[10px] text-secondary">{selectedFont.builtin ? 'Bundled · exact preview/export match' : 'System font'}</p>}
@@ -124,7 +133,10 @@ export function WatermarkControls() {
     <div className="border-t border-subtle pt-3">
       <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-secondary">Presets</span>
       {presets.length > 0 && <div className="mb-2 space-y-1">{presets.map((preset) => <div key={preset.id} className="flex items-center gap-1">
-        <Button size="small" fullWidth variant="text" sx={{ justifyContent: 'flex-start', fontSize: 11 }} onClick={() => { setDraft(structuredClone(preset.watermark)); update({ watermark: structuredClone(preset.watermark) }); }}>{preset.name}</Button>
+        <Button size="small" fullWidth variant="text" sx={{ justifyContent: 'flex-start', fontSize: 11 }} onClick={() => {
+          const loaded = withAllowedFont(preset.watermark, fonts);
+          setDraft(structuredClone(loaded)); update({ watermark: structuredClone(loaded) });
+        }}>{preset.name}</Button>
         <IconButton size="small" aria-label={`Delete ${preset.name}`} onClick={() => void deleteWatermarkPreset(preset.id).then(setPresets)}>×</IconButton>
       </div>)}</div>}
       <div className="flex gap-2"><TextField size="small" fullWidth placeholder="Preset name" value={presetName} onChange={(event) => setPresetName(event.target.value)} /><Button size="small" variant="outlined" onClick={() => void savePreset()}>Save</Button></div>
@@ -142,4 +154,10 @@ function NumberControl({ label, value, min, max, step = 1, onChange }: { label: 
 }
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return <label className="flex items-center justify-between gap-2 text-xs text-secondary"><span>{label}</span><input type="color" className="h-8 w-12 cursor-pointer rounded border border-subtle bg-transparent p-0.5" value={value.slice(0, 7)} onChange={(event) => onChange(event.target.value.toUpperCase())} /></label>;
+}
+
+function withAllowedFont(watermark: WatermarkSpec, fonts: FontInfo[]): WatermarkSpec {
+  if (!watermark.font || fonts.some((font) => font.family === watermark.font?.family)) return watermark;
+  const fallback = fonts.find((font) => font.builtin && font.family === 'Noto Sans SC') ?? fonts.find((font) => font.builtin);
+  return fallback ? { ...watermark, font: { ...watermark.font, family: fallback.family, path: fallback.path } } : watermark;
 }

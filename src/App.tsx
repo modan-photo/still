@@ -17,9 +17,28 @@ import { useUIStore } from './stores/uiStore';
 import { exportImage, normalizeError } from './services/tauri/image';
 import { TaskProgressBar } from './components/TaskProgressBar';
 import { listWatermarkFonts } from './services/tauri/watermark';
+import { SettingsDialog } from './components/SettingsDialog';
 
 function App({ theme }: { theme: ThemeController }) {
-  useEffect(() => { void listWatermarkFonts(); }, []);
+  const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
+  useEffect(() => {
+    void listWatermarkFonts(systemFontsEnabled).then((fonts) => {
+      if (systemFontsEnabled) return;
+      const fallback = fonts.find((font) => font.builtin && font.family === 'Noto Sans SC') ?? fonts.find((font) => font.builtin);
+      if (!fallback) return;
+      const project = useProjectStore.getState();
+      for (const photo of project.photos) {
+        const watermark = photo.spec.watermark;
+        const font = watermark?.font;
+        if (!watermark || !font) continue;
+        const bundled = fonts.find((entry) => entry.builtin && entry.family === font.family);
+        const allowed = bundled ?? fallback;
+        if (font.family !== allowed.family || font.path !== allowed.path) {
+          project.updateSpec(photo.id, { watermark: { ...watermark, font: { ...font, family: allowed.family, path: allowed.path } } });
+        }
+      }
+    });
+  }, [systemFontsEnabled]);
   const muiTheme = useMuiTheme();
   const mobileLayout = useMediaQuery(muiTheme.breakpoints.down('md'));
   const inspectorOpen = useUIStore((state) => state.inspectorOpen);
@@ -30,6 +49,7 @@ function App({ theme }: { theme: ThemeController }) {
   const { choosePhotos, dragActive, error, clearError } = useImageImport();
   const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const toggleInspector = useCallback(() => setInspectorOpen(!useUIStore.getState().inspectorOpen), [setInspectorOpen]);
   useEditorShortcuts(toggleInspector, choosePhotos);
   const exportSelected = async () => {
@@ -49,8 +69,9 @@ function App({ theme }: { theme: ThemeController }) {
   };
   return <AppShell
     titleBarVisible={!(isTauri() && platform() === 'android')}
-    titleBar={<TitleBar onOpen={choosePhotos} onOpenSettings={() => {}} onTogglePanel={toggleInspector}
-      onToggleTheme={theme.toggleResolvedTheme} panelOpen={inspectorOpen} themeMode={theme.resolvedTheme} />}
+    titleBar={<><TitleBar onOpen={choosePhotos} onOpenSettings={() => setSettingsOpen(true)} onTogglePanel={toggleInspector}
+      onToggleTheme={theme.toggleResolvedTheme} panelOpen={inspectorOpen} themeMode={theme.resolvedTheme} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} /></>}
     progress={<><TaskProgressBar />{error && <Alert severity="error" onClose={clearError}>{error}</Alert>}
       {exportError && <Alert severity="error" onClose={() => setExportError(null)}>{exportError}</Alert>}</>}
     mainCanvas={<MainCanvas onImport={choosePhotos} dragActive={dragActive} onExport={() => void exportSelected()} exporting={exporting} />}

@@ -28,7 +28,7 @@ pub struct WatermarkPreset {
 }
 
 #[tauri::command]
-pub fn watermark_fonts(app: AppHandle) -> Result<Vec<FontInfo>, AppError> {
+pub fn watermark_fonts(app: AppHandle, include_system: bool) -> Result<Vec<FontInfo>, AppError> {
     let mut fonts = Vec::new();
     let resource_fonts = app
         .path()
@@ -51,12 +51,14 @@ pub fn watermark_fonts(app: AppHandle) -> Result<Vec<FontInfo>, AppError> {
             });
         }
     }
-    fonts.extend(
-        SYSTEM_FONTS
-            .get_or_init(enumerate_system_fonts)
-            .iter()
-            .cloned(),
-    );
+    if include_system {
+        fonts.extend(
+            SYSTEM_FONTS
+                .get_or_init(enumerate_system_fonts)
+                .iter()
+                .cloned(),
+        );
+    }
     fonts.sort_by(|left, right| left.family.to_lowercase().cmp(&right.family.to_lowercase()));
     fonts.dedup_by(|left, right| left.family.eq_ignore_ascii_case(&right.family));
     Ok(fonts)

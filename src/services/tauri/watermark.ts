@@ -4,21 +4,26 @@ import type { WatermarkSpec } from '../../types/renderSpec';
 export interface FontInfo { family: string; path: string; builtin: boolean }
 export interface WatermarkPreset { id: string; name: string; watermark: WatermarkSpec }
 
-let fontPromise: Promise<FontInfo[]> | undefined;
+const fontPromises = new Map<boolean, Promise<FontInfo[]>>();
 
-export function listWatermarkFonts(): Promise<FontInfo[]> {
-  fontPromise ??= isTauri()
-    ? invoke<FontInfo[]>('watermark_fonts').then(async (fonts) => {
+export function listWatermarkFonts(includeSystem = false): Promise<FontInfo[]> {
+  let request = fontPromises.get(includeSystem);
+  if (!request) {
+    request = isTauri()
+      ? invoke<FontInfo[]>('watermark_fonts', { includeSystem }).then(async (fonts) => {
         await Promise.all(fonts.filter((font) => font.builtin).map(loadBundledFont));
         return fonts;
       })
-    : Promise.resolve([
-        { family: 'Noto Sans SC', path: '', builtin: false },
-        { family: 'Noto Serif SC', path: '', builtin: false },
-        { family: 'Inter', path: '', builtin: false },
-        { family: 'Playfair Display', path: '', builtin: false },
-      ]);
-  return fontPromise;
+      : Promise.resolve([
+          { family: 'Noto Sans SC', path: '', builtin: true },
+          { family: 'Noto Serif SC', path: '', builtin: true },
+          { family: 'Noto Emoji', path: '', builtin: true },
+          { family: 'Inter', path: '', builtin: true },
+          { family: 'Playfair Display', path: '', builtin: true },
+        ]);
+    fontPromises.set(includeSystem, request);
+  }
+  return request;
 }
 
 async function loadBundledFont(font: FontInfo): Promise<void> {
