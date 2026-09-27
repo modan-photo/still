@@ -4,6 +4,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open } from '@tauri-apps/plugin-dialog';
 import { loadImage, normalizeError } from '../services/tauri/image';
 import { useProjectStore } from '../stores/projectStore';
+import type { ImageMeta } from '../types/image';
 
 export function useImageImport() {
   const [dragActive, setDragActive] = useState(false);
@@ -14,19 +15,21 @@ export function useImageImport() {
     queue.current = queue.current.then(async () => {
       const unique = [...new Set(paths)];
       const failures: string[] = [];
+      const imported: ImageMeta[] = [];
       if (alive.current) setError(null);
       // Two concurrent decoders bound memory; commit in file-selection order.
       for (let i = 0; i < unique.length; i += 2) {
         if (!alive.current) break;
         const results = await Promise.allSettled(unique.slice(i, i + 2).map((path) => loadImage(path)));
         if (!alive.current) break;
-        useProjectStore.getState().addPhotos(results.flatMap((result) => {
+        imported.push(...results.flatMap((result) => {
           if (result.status === 'fulfilled') return [result.value];
           if (normalizeError(result.reason).code === 'cancelled') return [];
           failures.push(normalizeError(result.reason).message); return [];
         }));
         if (results.some((result) => result.status === 'rejected' && normalizeError(result.reason).code === 'cancelled')) break;
       }
+      if (alive.current && imported.length) useProjectStore.getState().addPhotos(imported);
       if (alive.current && failures.length) setError(`${failures.length} photo(s) could not be imported. ${failures[0]}`);
     }).catch((reason) => { if (alive.current) setError(normalizeError(reason).message); });
   }, []);

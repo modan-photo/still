@@ -3,6 +3,8 @@ import { IconButton, Tooltip, useMediaQuery, useTheme } from "@mui/material";
 import { useEffect, useRef } from "react";
 import { Icon } from "../components/Icons";
 import { ThumbnailItem } from "../components/ThumbnailItem";
+import { useProjectStore } from "../stores/projectStore";
+import { useUIStore } from "../stores/uiStore";
 
 export type FilmStripItem = {
   id: string;
@@ -22,6 +24,10 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down("md"));
   const itemPitch = compact ? 64 : 80;
+  const photoCount = useProjectStore((state) => state.photos.length);
+  const showGridButton = photoCount >= 2;
+  const gridPanelOpen = useUIStore((state) => state.gridPanelOpen);
+  const toggleGridPanel = useUIStore((state) => state.toggleGridPanel);
 
   const virtualizer = useVirtualizer({
     horizontal: true,
@@ -90,6 +96,43 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
           </IconButton>
         </Tooltip>
       </div>
+
+      {showGridButton && (
+        <div className="h-full w-[72px] shrink-0 border-l border-subtle bg-app-surface md:w-[84px] lg:w-[96px]">
+          <Tooltip title="Grid view (G)" arrow>
+            <IconButton
+              aria-label="Grid view"
+              aria-pressed={gridPanelOpen}
+              onClick={toggleGridPanel}
+              sx={(currentTheme) => {
+                const colors = currentTheme.still.colors[currentTheme.palette.mode];
+
+                return {
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: 0,
+                  color: gridPanelOpen ? colors.accent : colors.text.secondary,
+                  backgroundColor: gridPanelOpen ? colors.bg.elevated : undefined,
+                  transition: currentTheme.transitions.create(["background-color", "color"], {
+                    duration: currentTheme.still.motion.duration.fast,
+                    easing: currentTheme.still.motion.easing,
+                  }),
+                  "&:hover": {
+                    color: gridPanelOpen ? colors.accent : colors.text.primary,
+                    backgroundColor: colors.bg.elevated,
+                  },
+                  "&.Mui-focusVisible": {
+                    outlineColor: colors.accent,
+                    outlineOffset: -2,
+                  },
+                };
+              }}
+            >
+              <Icon name="grid" size={20} />
+            </IconButton>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }

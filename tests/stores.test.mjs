@@ -8,6 +8,15 @@ test('system fonts are opt-in by default', () => {
   assert.equal(useUIStore.getState().systemFontsEnabled, false);
 });
 
+test('grid panel starts closed and supports explicit and toggled updates', () => {
+  useUIStore.getState().setGridPanelOpen(false);
+  assert.equal(useUIStore.getState().gridPanelOpen, false);
+  useUIStore.getState().toggleGridPanel();
+  assert.equal(useUIStore.getState().gridPanelOpen, true);
+  useUIStore.getState().setGridPanelOpen(false);
+  assert.equal(useUIStore.getState().gridPanelOpen, false);
+});
+
 test('deduplicates imports, isolates photo edits, and preserves edits during export', () => {
   const store = useProjectStore;
   store.getState().clear();

@@ -10,6 +10,30 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       if (event.defaultPrevented || event.isComposing || event.repeat) return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+
+      if (event.key === "Escape" && useUIStore.getState().gridPanelOpen) {
+        event.preventDefault();
+        useUIStore.getState().setGridPanelOpen(false);
+        return;
+      }
+
+      const textEntryActive = target.isContentEditable || Boolean(target.closest(
+        'input, textarea, select, [role="combobox"], [role="dialog"]',
+      ));
+      if (
+        !textEntryActive
+        && !event.ctrlKey
+        && !event.metaKey
+        && !event.altKey
+        && !event.shiftKey
+        && event.key.toLowerCase() === "g"
+        && useProjectStore.getState().photos.length >= 2
+      ) {
+        event.preventDefault();
+        useUIStore.getState().toggleGridPanel();
+        return;
+      }
+
       if (target.isContentEditable || target.closest(
         'input, textarea, select, button, a, [role="slider"], [role="separator"], [role="combobox"], [role="menu"], [role="listbox"], [role="dialog"]',
       )) return;

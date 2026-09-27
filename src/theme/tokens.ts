@@ -43,6 +43,7 @@ export const shadowTokens = {
   elev1: "0 1px 2px rgba(0, 0, 0, 0.06)",
   elev2: "0 4px 16px rgba(0, 0, 0, 0.08)",
   elev3: "0 12px 32px rgba(0, 0, 0, 0.12)",
+  panelUp: "0 -8px 24px rgba(0, 0, 0, 0.12)",
 } as const;
 
 export const spacingTokens = {
@@ -111,6 +112,7 @@ export function getCssVariables(mode: ColorMode): Record<string, string> {
     "--shadow-elev1": shadowTokens.elev1,
     "--shadow-elev2": shadowTokens.elev2,
     "--shadow-elev3": shadowTokens.elev3,
+    "--shadow-panel-up": shadowTokens.panelUp,
     "--space-1": `${spacingTokens.xs}px`,
     "--space-2": `${spacingTokens.sm}px`,
     "--space-3": `${spacingTokens.md}px`,
