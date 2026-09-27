@@ -28,7 +28,7 @@ type DragState = {
   pointerId: number;
   startY: number;
   startHeightPercent: number;
-  workspaceHeight: number;
+  mainCanvasHeight: number;
 };
 
 const clamp = (value: number, minimum: number, maximum: number) =>
@@ -42,6 +42,7 @@ export function GridPanel() {
   const liveHeightPercent = useRef(DEFAULT_HEIGHT_PERCENT);
   const closeTimer = useRef<number | null>(null);
   const heightResetTimer = useRef<number | null>(null);
+  const widthMeasureFrame = useRef<number | null>(null);
   const [heightPercent, setHeightPercent] = useState(DEFAULT_HEIGHT_PERCENT);
   const [dragging, setDragging] = useState(false);
   const [thumbnailSize, setThumbnailSize] = useState<ThumbnailSize>("medium");
@@ -72,16 +73,26 @@ export function GridPanel() {
   useEffect(() => {
     const target = gridSurfaceRef.current;
     if (!target) return;
-    const updateWidth = () => setGridWidth(target.getBoundingClientRect().width);
+    const updateWidth = () => {
+      const nextWidth = target.getBoundingClientRect().width;
+      if (widthMeasureFrame.current !== null) window.cancelAnimationFrame(widthMeasureFrame.current);
+      widthMeasureFrame.current = window.requestAnimationFrame(() => {
+        setGridWidth(nextWidth);
+        widthMeasureFrame.current = null;
+      });
+    };
     updateWidth();
     const observer = new ResizeObserver(updateWidth);
     observer.observe(target);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (widthMeasureFrame.current !== null) window.cancelAnimationFrame(widthMeasureFrame.current);
+    };
   }, []);
 
   useEffect(() => {
     virtualizer.measure();
-  }, [columnCount, rowHeight, virtualizer]);
+  }, [columnCount, gridWidth, rowHeight, thumbnailSize, virtualizer]);
 
   useEffect(() => {
     if (!gridPanelOpen) return;
@@ -124,14 +135,14 @@ export function GridPanel() {
       window.clearTimeout(heightResetTimer.current);
       heightResetTimer.current = null;
     }
-    const workspaceHeight = panelRef.current?.parentElement?.getBoundingClientRect().height ?? 0;
-    if (workspaceHeight <= 0) return;
+    const mainCanvasHeight = panelRef.current?.parentElement?.getBoundingClientRect().height ?? 0;
+    if (mainCanvasHeight <= 0) return;
 
     dragState.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
       startHeightPercent: liveHeightPercent.current,
-      workspaceHeight,
+      mainCanvasHeight,
     };
     setDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -140,7 +151,7 @@ export function GridPanel() {
   const resize = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragState.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const deltaPercent = ((drag.startY - event.clientY) / drag.workspaceHeight) * 100;
+    const deltaPercent = ((drag.startY - event.clientY) / drag.mainCanvasHeight) * 100;
     updateHeight(clamp(drag.startHeightPercent + deltaPercent, 0, MAX_HEIGHT_PERCENT));
   };
 
@@ -175,12 +186,13 @@ export function GridPanel() {
       component="section"
       aria-label="Photo grid panel"
       aria-hidden={!gridPanelOpen}
-      className={`absolute inset-x-0 bottom-0 z-10 flex min-h-0 flex-col overflow-hidden border-t ${gridPanelOpen ? "" : "pointer-events-none"}`}
+      className={`absolute bottom-0 left-0 right-0 z-10 flex min-h-0 flex-col overflow-hidden border-t ${gridPanelOpen ? "" : "pointer-events-none"}`}
       sx={(theme) => {
         const colors = theme.still.colors[theme.palette.mode];
 
         return {
           height: `${heightPercent}%`,
+          maxHeight: `${MAX_HEIGHT_PERCENT}%`,
           transform: gridPanelOpen ? "translateY(0)" : "translateY(100%)",
           transitionProperty: "transform",
           transitionDuration: `${gridPanelOpen ? theme.still.motion.duration.base : theme.still.motion.duration.fast}ms`,
@@ -204,7 +216,7 @@ export function GridPanel() {
         aria-valuemax={MAX_HEIGHT_PERCENT}
         aria-valuenow={Math.round(heightPercent)}
         tabIndex={gridPanelOpen ? 0 : -1}
-        className="flex h-6 shrink-0 touch-none cursor-row-resize items-center justify-center outline-none"
+        className="relative z-40 flex h-6 shrink-0 touch-none cursor-row-resize items-center justify-center outline-none"
         onPointerDown={startResize}
         onPointerMove={resize}
         onPointerUp={endResize}
@@ -266,7 +278,7 @@ export function GridPanel() {
         </ToggleButtonGroup>
       </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain py-4">
         <div
           ref={gridSurfaceRef}
           className="relative mx-4"

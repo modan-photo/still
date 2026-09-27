@@ -93,18 +93,18 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
 
   return (
     <div className={`grid h-full min-h-0 w-full overflow-hidden bg-app-base text-primary transition-[grid-template-rows] ease-app ${filmStripShown ? "duration-base" : "duration-fast"} ${rowLayout}`}>
-      <div className={titleBarVisible ? "hidden min-w-0 border-b border-subtle bg-app-surface md:block" : "hidden"}>{titleBar}</div>
+      <div className={titleBarVisible ? "relative z-30 hidden min-w-0 border-b border-subtle bg-app-surface md:block" : "hidden"}>{titleBar}</div>
 
       <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         {progress}
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <section className="min-h-0 min-w-0 flex-1 overflow-hidden" aria-label="Editor canvas">
+          <section className="relative isolate min-h-0 min-w-0 flex-1 overflow-hidden" aria-label="Editor canvas">
             {mainCanvas}
+            {filmStripMounted && <GridPanel />}
           </section>
           <div className="relative z-20 flex min-h-0 shrink-0">
             {rightPanel}
           </div>
-          {filmStripMounted && <GridPanel />}
         </div>
       </div>
 
