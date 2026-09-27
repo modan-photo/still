@@ -79,44 +79,43 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
     if (enterFrameRef.current !== null) window.cancelAnimationFrame(enterFrameRef.current);
   }, []);
 
-  const rowLayout = filmStripMounted
+  const shellRowLayout = titleBarVisible
+    ? "grid-rows-[0_minmax(0,1fr)] md:grid-rows-[40px_minmax(0,1fr)]"
+    : "grid-rows-[0_minmax(0,1fr)]";
+  const leftColumnRowLayout = filmStripMounted
     ? filmStripShown
-      ? titleBarVisible
-        ? "grid-rows-[0_minmax(0,1fr)_72px] md:grid-rows-[40px_minmax(0,1fr)_84px] lg:grid-rows-[40px_minmax(0,1fr)_96px]"
-        : "grid-rows-[0_minmax(0,1fr)_72px] md:grid-rows-[0_minmax(0,1fr)_84px] lg:grid-rows-[0_minmax(0,1fr)_96px]"
-      : titleBarVisible
-        ? "grid-rows-[0_minmax(0,1fr)_0px] md:grid-rows-[40px_minmax(0,1fr)_0px]"
-        : "grid-rows-[0_minmax(0,1fr)_0px]"
-    : titleBarVisible
-      ? "grid-rows-[0_minmax(0,1fr)] md:grid-rows-[40px_minmax(0,1fr)]"
-      : "grid-rows-[0_minmax(0,1fr)]";
+      ? "grid-rows-[minmax(0,1fr)_72px] md:grid-rows-[minmax(0,1fr)_84px] lg:grid-rows-[minmax(0,1fr)_96px]"
+      : "grid-rows-[minmax(0,1fr)_0px]"
+    : "grid-rows-[minmax(0,1fr)]";
 
   return (
-    <div className={`grid h-full min-h-0 w-full overflow-hidden bg-app-base text-primary transition-[grid-template-rows] ease-app ${filmStripShown ? "duration-base" : "duration-fast"} ${rowLayout}`}>
+    <div className={`grid h-full min-h-0 w-full overflow-hidden bg-app-base text-primary ${shellRowLayout}`}>
       <div className={titleBarVisible ? "relative z-30 hidden min-w-0 border-b border-subtle bg-app-surface md:block" : "hidden"}>{titleBar}</div>
 
-      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-        {progress}
-        <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <section className="relative isolate min-h-0 min-w-0 flex-1 overflow-hidden" aria-label="Editor canvas">
-            {mainCanvas}
-            {filmStripMounted && <GridPanel />}
-          </section>
-          <div className="relative z-20 flex min-h-0 shrink-0">
-            {rightPanel}
+      <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {progress}
+          <div className={`grid min-h-0 min-w-0 flex-1 overflow-hidden transition-[grid-template-rows] ease-app ${filmStripShown ? "duration-base" : "duration-fast"} ${leftColumnRowLayout}`}>
+            <section className="relative isolate h-full min-h-0 min-w-0 overflow-hidden" aria-label="Editor canvas">
+              {mainCanvas}
+              {filmStripMounted && <GridPanel />}
+            </section>
+
+            {filmStripMounted && (
+              <footer
+                className={`min-h-0 min-w-0 w-full overflow-hidden border-t border-subtle bg-app-surface transition-[transform,opacity] ease-app ${filmStripShown ? "translate-y-0 opacity-100 duration-base" : "pointer-events-none translate-y-full opacity-0 duration-fast"}`}
+                aria-label="Photo filmstrip"
+                aria-hidden={!filmStripShown}
+              >
+                {filmStrip}
+              </footer>
+            )}
           </div>
         </div>
+        <div className="relative z-20 flex h-full min-h-0 shrink-0">
+          {rightPanel}
+        </div>
       </div>
-
-      {filmStripMounted && (
-        <footer
-          className={`min-h-0 min-w-0 border-t border-subtle bg-app-surface transition-[transform,opacity] ease-app ${filmStripShown ? "translate-y-0 opacity-100 duration-base" : "pointer-events-none translate-y-full opacity-0 duration-fast"}`}
-          aria-label="Photo filmstrip"
-          aria-hidden={!filmStripShown}
-        >
-          {filmStrip}
-        </footer>
-      )}
     </div>
   );
 }

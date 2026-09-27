@@ -36,7 +36,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   return (
     <aside
       id="right-panel"
-      className="relative min-h-0 shrink-0 border-l border-subtle bg-app-surface transition-[width] duration-base ease-app"
+      className="relative h-full min-h-0 shrink-0 border-l border-subtle bg-app-surface transition-[width] duration-base ease-app"
       style={{ width: collapsed ? 0 : effectiveWidth, transitionDuration: resizing ? "0ms" : undefined, borderLeftWidth: collapsed ? 0 : undefined }}
       aria-label="Inspector"
       data-collapsed={collapsed}

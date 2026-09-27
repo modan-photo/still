@@ -15,7 +15,7 @@ export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCa
   const selectedId = useProjectStore((state) => state.selectedId);
   const photo = photos.find((entry) => entry.id === selectedId);
   const focusedLayout = photos.length <= 1;
-  return <main className={`relative flex h-full min-h-0 flex-col bg-app-base ${focusedLayout ? 'p-5' : 'p-3'}`} aria-label="Photo workspace" tabIndex={0}
+  return <main className={`relative flex h-full min-h-0 flex-1 flex-col bg-app-base ${focusedLayout ? 'p-5' : 'p-3'}`} aria-label="Photo workspace" tabIndex={0}
     data-editor-shortcut-scope="canvas" onDragOver={(event) => event.preventDefault()} onDrop={(event) => event.preventDefault()}>
     <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
       <Button size="small" onClick={onImport}>Import photos</Button>
