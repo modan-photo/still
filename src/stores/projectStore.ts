@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { hasPendingExifSaves, waitForPendingExifSaves } from '../services/exifSaveCoordinator';
 import { getCachedImage, invalidateCache, normalizeError } from '../services/tauri/image';
 import type { ImageMeta } from '../types/image';
 import type { BorderSpec, RenderSpec } from '../types/renderSpec';
@@ -38,6 +39,7 @@ export interface ProjectState {
 }
 
 const pendingCacheInvalidations = new Map<string, Promise<void>>();
+let photoSelectionRequest = 0;
 
 function invalidatePhotoCaches(photos: ProjectPhoto[]) {
   const hashes = [...new Set(photos.map((photo) => photo.hash).filter(Boolean))];
@@ -94,9 +96,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const currentPhotoId = state.currentPhotoId ?? state.selectedId ?? added[0]?.id ?? null;
     return { photos: [...state.photos, ...added], currentPhotoId, selectedId: currentPhotoId };
   }),
-  selectPhoto: (id) => set((state) => state.photos.some((p) => p.id === id)
-    ? { currentPhotoId: id, selectedId: id }
-    : state),
+  selectPhoto: (id) => {
+    const request = ++photoSelectionRequest;
+    const applySelection = () => set((state) => (
+      request === photoSelectionRequest && state.photos.some((photo) => photo.id === id)
+        ? { currentPhotoId: id, selectedId: id }
+        : state
+    ));
+    if (!hasPendingExifSaves()) {
+      applySelection();
+      return;
+    }
+    void waitForPendingExifSaves().then(applySelection);
+  },
   setSelectedIds: (ids) => set((state) => {
     const availableIds = new Set(state.photos.map((photo) => photo.id));
     return { selectedIds: [...new Set(ids)].filter((id) => availableIds.has(id)) };

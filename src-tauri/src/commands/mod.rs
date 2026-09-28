@@ -1,3 +1,4 @@
+pub mod exif;
 pub mod export;
 pub mod image;
 pub mod task;

@@ -1,6 +1,7 @@
 import { Box, MenuItem, Select } from "@mui/material";
 import type { ReactNode } from "react";
 import { FrameControls } from "../components/FrameControls";
+import { ExifPanel } from "../components/exif/ExifPanel";
 import { StampControls } from "../components/StampControls";
 import { useUIStore } from "../stores/uiStore";
 import { RIGHT_PANEL_TABS, type RightPanelTabId } from "./rightPanelTabs";
@@ -26,7 +27,9 @@ export function RightPanelContent() {
               height: "100%",
               overflowY: "auto",
               overscrollBehavior: "contain",
-              padding: "var(--space-4) var(--space-4) var(--space-6)",
+              padding: tab.id === "exif"
+                ? "0 0 var(--space-6)"
+                : "var(--space-4) var(--space-4) var(--space-6)",
               scrollbarWidth: "thin",
               scrollbarColor: `${theme.palette.divider} transparent`,
               "&::-webkit-scrollbar": {
@@ -59,25 +62,10 @@ function renderTabContent(tab: RightPanelTabId) {
     case "stamp":
       return <StampControls />;
     case "exif":
-      return <ExifContent />;
+      return <ExifPanel />;
     case "collage":
       return <CollageContent />;
   }
-}
-
-function ExifContent() {
-  return (
-    <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-xs">
-      <dt className="text-secondary">Camera</dt>
-      <dd className="m-0 text-right text-primary">—</dd>
-      <dt className="text-secondary">Lens</dt>
-      <dd className="m-0 text-right text-primary">—</dd>
-      <dt className="text-secondary">Exposure</dt>
-      <dd className="m-0 text-right text-primary">—</dd>
-      <dt className="text-secondary">ISO</dt>
-      <dd className="m-0 text-right text-primary">—</dd>
-    </dl>
-  );
 }
 
 function CollageContent() {

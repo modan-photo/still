@@ -22,6 +22,12 @@ pub enum AppError {
     #[error("unsupported operation: {0}")]
     Unsupported(String),
 
+    #[error("The file is in use and cannot be modified.")]
+    FileBusy,
+
+    #[error("The file is read-only and cannot be modified.")]
+    FileReadOnly,
+
     #[error("task cancelled")]
     Cancelled,
 }
@@ -35,6 +41,8 @@ impl AppError {
             Self::Resize(_) => "resize_error",
             Self::InvalidInput(_) => "invalid_input",
             Self::Unsupported(_) => "unsupported",
+            Self::FileBusy => "file_busy",
+            Self::FileReadOnly => "file_read_only",
             Self::Cancelled => "cancelled",
         }
     }
@@ -62,5 +70,23 @@ mod tests {
 
         assert_eq!(value["code"], "cancelled");
         assert_eq!(value["message"], "task cancelled");
+    }
+
+    #[test]
+    fn serializes_actionable_file_errors() {
+        let busy = serde_json::to_value(AppError::FileBusy).expect("serialize busy error");
+        let read_only =
+            serde_json::to_value(AppError::FileReadOnly).expect("serialize read-only error");
+
+        assert_eq!(busy["code"], "file_busy");
+        assert_eq!(
+            busy["message"],
+            "The file is in use and cannot be modified."
+        );
+        assert_eq!(read_only["code"], "file_read_only");
+        assert_eq!(
+            read_only["message"],
+            "The file is read-only and cannot be modified."
+        );
     }
 }

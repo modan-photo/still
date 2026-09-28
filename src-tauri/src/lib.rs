@@ -8,6 +8,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(commands::task::TaskManager::default())
         .invoke_handler(tauri::generate_handler![
+            commands::exif::exif_read,
+            commands::exif::exif_write,
             commands::image::image_load,
             commands::image::image_list_directory,
             commands::image::cache_invalidate,

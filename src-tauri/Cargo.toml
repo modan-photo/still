@@ -29,6 +29,7 @@ ab_glyph = "0.2"
 ttf-parser = "0.25"
 fast_image_resize = { version = "4", features = ["image"] }
 kamadak-exif = "0.6"
+little_exif = "0.5"
 rayon = "1"
 crc32fast = "1"
 flate2 = "1"
