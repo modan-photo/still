@@ -107,6 +107,54 @@ mod tests {
         fs::remove_dir_all(directory).unwrap();
     }
 
+    #[test]
+    fn exports_a_copied_spec_from_a_ten_pixel_source() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-batch-spec-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("target.png");
+        image::RgbaImage::from_pixel(10, 10, image::Rgba([1, 2, 3, 255]))
+            .save(&source)
+            .unwrap();
+        let spec = RenderSpec {
+            version: RENDER_SPEC_VERSION,
+            source: SourceSpec {
+                path: source.to_string_lossy().into(),
+                width: 10,
+                height: 10,
+            },
+            border: Some(BorderConfig {
+                style: BorderStyle::Solid,
+                width: 1.0,
+                unit: BorderUnit::Px,
+                color: "#FF0000".into(),
+                radius: 0.0,
+                colors: vec!["#FF0000".into(), "#FF0000".into()],
+                angle: 0.0,
+                caption: false,
+            }),
+            watermark: None,
+            adjustments: None,
+            output: Some(OutputSpec {
+                format: OutputFormat::Png,
+                quality: 100,
+            }),
+        };
+
+        let rendered = apply_render_spec(&source, &spec).unwrap().to_rgba8();
+
+        assert_eq!(rendered.dimensions(), (12, 12));
+        assert_eq!(rendered.get_pixel(0, 0), &image::Rgba([255, 0, 0, 255]));
+        assert_eq!(rendered.get_pixel(1, 1), &image::Rgba([1, 2, 3, 255]));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
     /// Full decode/render/encode acceptance benchmark; ignored in debug runs.
     #[test]
     #[ignore]

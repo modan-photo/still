@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { alpha, Box, Button, IconButton, ToggleButton, ToggleButtonGroup, Tooltip, useTheme } from "@mui/material";
+import { alpha, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, ToggleButton, ToggleButtonGroup, Tooltip, useTheme } from "@mui/material";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icons";
 import { ThumbnailImage } from "../components/ThumbnailImage";
@@ -50,6 +50,7 @@ export function GridPanel() {
   const [thumbnailSize, setThumbnailSize] = useState<ThumbnailSize>("medium");
   const [gridWidth, setGridWidth] = useState(0);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
   const theme = useTheme();
   const photos = useProjectStore((state) => state.photos);
   const selectedId = useProjectStore((state) => state.selectedId);
@@ -58,6 +59,7 @@ export function GridPanel() {
   const setSelectedIds = useProjectStore((state) => state.setSelectedIds);
   const toggleSelectedId = useProjectStore((state) => state.toggleSelectedId);
   const removePhotos = useProjectStore((state) => state.removePhotos);
+  const applySpecToPhotos = useProjectStore((state) => state.applySpecToPhotos);
   const pushUndo = useUndoStore((state) => state.push);
   const gridPanelOpen = useUIStore((state) => state.gridPanelOpen);
   const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
@@ -248,6 +250,13 @@ export function GridPanel() {
     setSelectedIds([]);
   };
 
+  const sourcePhoto = photos.find((photo) => photo.id === selectedId);
+  const applyCurrentSpec = () => {
+    if (!sourcePhoto || selectedIds.length === 0) return;
+    applySpecToPhotos(sourcePhoto.id, selectedIds);
+    setApplyConfirmOpen(false);
+  };
+
   return (
     <Box
       ref={panelRef}
@@ -311,6 +320,14 @@ export function GridPanel() {
           : `${photos.length} photos`}</span>
         {multiSelectMode ? (
           <div className="flex items-center gap-1">
+            <Button
+              size="small"
+              startIcon={<Icon name="copy" size={15} />}
+              disabled={!sourcePhoto || selectedIds.length === 0}
+              onClick={() => setApplyConfirmOpen(true)}
+            >
+              Apply current
+            </Button>
             <Button
               size="small"
               onClick={() => setSelectedIds(photos.map((photo) => photo.id))}
@@ -486,6 +503,16 @@ export function GridPanel() {
           })}
         </div>
       </div>
+      <Dialog open={applyConfirmOpen} onClose={() => setApplyConfirmOpen(false)} aria-labelledby="apply-current-spec-title">
+        <DialogTitle id="apply-current-spec-title">Apply current settings?</DialogTitle>
+        <DialogContent>
+          Apply all render settings from {sourcePhoto?.path.split(/[\\/]/).pop() ?? "the current photo"} to {selectedIds.length} selected {selectedIds.length === 1 ? "photo" : "photos"}? Each target keeps its own source image.
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApplyConfirmOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={applyCurrentSpec}>Apply</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

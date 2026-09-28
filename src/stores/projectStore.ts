@@ -4,6 +4,7 @@ import { getCachedImage, invalidateCache, normalizeError } from '../services/tau
 import type { ImageMeta } from '../types/image';
 import type { BorderSpec, RenderSpec } from '../types/renderSpec';
 import { colorTokens } from '../theme/tokens';
+import { applyRenderSettings } from '../render/spec';
 
 export interface ProjectPhoto extends ImageMeta {
   id: string;
@@ -52,6 +53,7 @@ export interface ProjectState {
   updateCollageDraft: (patch: Partial<CollageDraft>) => void;
   resetCollageDraft: () => void;
   updateSpec: (id: string, patch: SpecPatch) => void;
+  applySpecToPhotos: (sourceId: string, targetIds: string[]) => void;
   applyBorderToAll: (border: BorderSpec) => void;
   markClean: (id: string, exportedSpec: RenderSpec) => void;
   removePhotos: (ids: string[]) => RemovePhotosSnapshot;
@@ -157,6 +159,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   resetCollageDraft: () => set((state) => ({ collageDraft: { ...structuredClone(DEFAULT_COLLAGE_DRAFT), photoIds: [...state.collageDraft.photoIds] } })),
   updateSpec: (id, patch) => set((state) => ({ photos: state.photos.map((photo) => photo.id === id
     ? { ...photo, spec: { ...photo.spec, ...structuredClone(patch) }, dirty: true } : photo) })),
+  applySpecToPhotos: (sourceId, targetIds) => set((state) => {
+    const template = state.photos.find((photo) => photo.id === sourceId)?.spec;
+    if (!template) return state;
+    const targets = new Set(targetIds);
+    return {
+      photos: state.photos.map((photo) => targets.has(photo.id) && photo.id !== sourceId
+        ? { ...photo, spec: applyRenderSettings(photo.spec, template), dirty: true }
+        : photo),
+    };
+  }),
   applyBorderToAll: (border) => set((state) => ({ photos: state.photos.map((photo) => ({
     ...photo,
     spec: { ...photo.spec, border: structuredClone(border) },

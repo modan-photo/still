@@ -1,5 +1,5 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'vitest';
 import { useProjectStore } from '../src/stores/projectStore.ts';
 import { useTaskStore } from '../src/stores/taskStore.ts';
 import { useUIStore } from '../src/stores/uiStore.ts';
@@ -71,6 +71,26 @@ test('batch removal updates selections and chooses the next photo before the pre
   assert.deepEqual(store.getState().photos, []);
   assert.equal(store.getState().currentPhotoId, null);
   assert.equal(store.getState().selectedId, null);
+});
+
+test('applies the current RenderSpec to selected photos while preserving each source', () => {
+  const store = useProjectStore;
+  store.getState().clear();
+  const photo = (path, width) => ({ path, width, height: 10, format: 'png', orientation: 1, previewUrl: null, thumbUrl: `${path}.webp` });
+  store.getState().addPhotos([photo('source.png', 10), photo('target-a.png', 20), photo('target-b.png', 30)]);
+  const border = { style: 'solid', width: 1, unit: 'px', color: '#FF0000', radius: 0, colors: ['#FF0000', '#FF0000'], angle: 0, caption: false };
+  store.getState().updateSpec('source.png', { border, output: { format: 'png', quality: 100 } });
+
+  store.getState().applySpecToPhotos('source.png', ['target-a.png', 'target-b.png']);
+
+  const [, targetA, targetB] = store.getState().photos;
+  assert.deepEqual(targetA.spec.border, border);
+  assert.deepEqual(targetB.spec.border, border);
+  assert.deepEqual(targetA.spec.source, { path: 'target-a.png', width: 20, height: 10 });
+  assert.deepEqual(targetB.spec.source, { path: 'target-b.png', width: 30, height: 10 });
+  assert.notEqual(targetA.spec.border, targetB.spec.border);
+  assert.equal(targetA.dirty, true);
+  assert.equal(targetB.dirty, true);
 });
 
 test('undo store restores only the latest removal snapshot', () => {
