@@ -4,17 +4,17 @@ import {
 } from '@mui/material';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Icon } from '../Icons';
-import { cacheAssetUrl, getCachedImage, normalizeError } from '../../services/tauri/image';
-import { composeCollage } from '../../services/tauri/collage';
-import { useCollageStore } from '../../stores/collageStore';
-import type { CollageConfig, CollageItem, CollageMode } from '../../types/collage';
+import { Icon } from '../../Icons';
+import { cacheAssetUrl, getCachedImage, normalizeError } from '../../../services/tauri/image';
+import { composeCollage } from '../../../services/tauri/collage';
+import { useCollageStore } from '../../../stores/collageStore';
+import type { CollageConfig, CollageItem, CollageMode } from '../../../types/collage';
 
 type Photo = { id: string; path: string; thumbUrl: string };
 type Props = { photos: Photo[]; onClose: () => void };
 const RATIOS = [{ label: '1:1', value: 1 }, { label: '4:3', value: 4 / 3 }, { label: '16:9', value: 16 / 9 }, { label: '9:16', value: 9 / 16 }];
 
-export function CollageWorkspace({ photos, onClose }: Props) {
+export function CollageStudio({ photos, onClose }: Props) {
   const items = useCollageStore((state) => state.items);
   const config = useCollageStore((state) => state.config);
   const selectedItemId = useCollageStore((state) => state.selectedItemId);

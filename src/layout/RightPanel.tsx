@@ -101,11 +101,11 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   );
 }
 
-export function InspectorContent() {
+export function InspectorContent({ excludeCollage = false }: { excludeCollage?: boolean }) {
   return (
     <>
-      <RightPanelTabs />
-      <RightPanelContent />
+      <RightPanelTabs excludeCollage={excludeCollage} />
+      <RightPanelContent excludeCollage={excludeCollage} />
     </>
   );
 }

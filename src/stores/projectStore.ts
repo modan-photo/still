@@ -3,6 +3,7 @@ import { hasPendingExifSaves, waitForPendingExifSaves } from '../services/exifSa
 import { getCachedImage, invalidateCache, normalizeError } from '../services/tauri/image';
 import type { ImageMeta } from '../types/image';
 import type { BorderSpec, RenderSpec } from '../types/renderSpec';
+import { colorTokens } from '../theme/tokens';
 
 export interface ProjectPhoto extends ImageMeta {
   id: string;
@@ -10,24 +11,46 @@ export interface ProjectPhoto extends ImageMeta {
   dirty: boolean;
   thumbRevision: number;
 }
+export type CollageLayout = '1x2' | '1x3' | '2x1' | '2x2' | '2x3' | '3x3' | 'v-strip' | 'h-strip';
+export type CollageAspect = '1:1' | '4:3' | '16:9' | '9:16' | 'auto';
+export interface CollageDraft {
+  photoIds: string[];
+  layout: CollageLayout;
+  gap: number;
+  radius: number;
+  background: { type: 'color' | 'transparent'; color: string };
+  aspect: CollageAspect;
+}
+export const DEFAULT_COLLAGE_DRAFT: CollageDraft = {
+  photoIds: [],
+  layout: '2x2',
+  gap: 20,
+  radius: 0,
+  background: { type: 'color', color: colorTokens.light.bg.surface },
+  aspect: '1:1',
+};
 export type SpecPatch = Partial<Omit<RenderSpec, 'version' | 'source'>>;
 export interface RemovePhotosSnapshot {
   removedPhotos: ProjectPhoto[];
   removedIndices: number[];
   previousCurrentId: string | null;
   previousSelectedIds: string[];
+  previousCollagePhotoIds: string[];
 }
 
 export interface ProjectState {
   photos: ProjectPhoto[];
   selectedIds: string[];
   currentPhotoId: string | null;
+  collageDraft: CollageDraft;
   /** @deprecated Use currentPhotoId. Kept temporarily for existing consumers. */
   selectedId: string | null;
   addPhotos: (photos: ImageMeta[]) => void;
   selectPhoto: (id: string) => void;
   setSelectedIds: (ids: string[]) => void;
   toggleSelectedId: (id: string) => void;
+  updateCollageDraft: (patch: Partial<CollageDraft>) => void;
+  resetCollageDraft: () => void;
   updateSpec: (id: string, patch: SpecPatch) => void;
   applyBorderToAll: (border: BorderSpec) => void;
   markClean: (id: string, exportedSpec: RenderSpec) => void;
@@ -85,6 +108,7 @@ async function regenerateRestoredThumbnails(photos: ProjectPhoto[]) {
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
   photos: [], selectedIds: [], currentPhotoId: null, selectedId: null,
+  collageDraft: structuredClone(DEFAULT_COLLAGE_DRAFT),
   addPhotos: (incoming) => set((state) => {
     const known = new Set(state.photos.map((photo) => photo.path));
     const added = incoming.filter((photo) => {
@@ -121,6 +145,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         : [...state.selectedIds, id],
     };
   }),
+  updateCollageDraft: (patch) => set((state) => ({
+    collageDraft: {
+      ...state.collageDraft,
+      ...structuredClone(patch),
+      ...(patch.photoIds ? { photoIds: [...new Set(patch.photoIds)] } : {}),
+      ...(patch.gap !== undefined ? { gap: Math.min(100, Math.max(0, patch.gap)) } : {}),
+      ...(patch.radius !== undefined ? { radius: Math.min(40, Math.max(0, patch.radius)) } : {}),
+    },
+  })),
+  resetCollageDraft: () => set((state) => ({ collageDraft: { ...structuredClone(DEFAULT_COLLAGE_DRAFT), photoIds: [...state.collageDraft.photoIds] } })),
   updateSpec: (id, patch) => set((state) => ({ photos: state.photos.map((photo) => photo.id === id
     ? { ...photo, spec: { ...photo.spec, ...structuredClone(patch) }, dirty: true } : photo) })),
   applyBorderToAll: (border) => set((state) => ({ photos: state.photos.map((photo) => ({
@@ -147,6 +181,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       removedIndices,
       previousCurrentId,
       previousSelectedIds: [...state.selectedIds],
+      previousCollagePhotoIds: [...state.collageDraft.photoIds],
     };
     if (removedPhotos.length === 0) return snapshot;
 
@@ -166,6 +201,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       selectedIds: state.selectedIds.filter((id) => !targetIds.has(id)),
       currentPhotoId,
       selectedId: currentPhotoId,
+      collageDraft: { ...state.collageDraft, photoIds: state.collageDraft.photoIds.filter((id) => !targetIds.has(id)) },
     });
     invalidatePhotoCaches(removedPhotos);
     return snapshot;
@@ -191,6 +227,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         selectedIds: snapshot.previousSelectedIds.filter((id) => availableIds.has(id)),
         currentPhotoId,
         selectedId: currentPhotoId,
+        collageDraft: { ...state.collageDraft, photoIds: (snapshot.previousCollagePhotoIds ?? []).filter((id) => availableIds.has(id)) },
       };
     });
     void regenerateRestoredThumbnails(snapshot.removedPhotos);

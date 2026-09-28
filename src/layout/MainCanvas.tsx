@@ -11,6 +11,8 @@ import type { BorderSpec } from '../types/renderSpec';
 import type { WatermarkSpec } from '../types/renderSpec';
 import { renderWatermarkPreview } from '../render/watermark';
 import { listWatermarkFonts } from '../services/tauri/watermark';
+import { CollagePreview } from '../components/collage/CollagePreview';
+import { useUIStore } from '../stores/uiStore';
 
 type MainCanvasProps = {
   onImport: () => void;
@@ -18,12 +20,13 @@ type MainCanvasProps = {
   showFolderImport: boolean;
   dragActive: boolean;
   onExport: () => void;
-  onOpenCollage: () => void;
   exporting: boolean;
 };
 
-export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragActive, onExport, onOpenCollage, exporting }: MainCanvasProps) {
+export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragActive, onExport, exporting }: MainCanvasProps) {
   const photos = useProjectStore((state) => state.photos);
+  const isCollageMode = useUIStore((state) => state.activeRightTab === 'collage');
+  const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
   const selectedId = useProjectStore((state) => state.selectedId);
   const removePhotos = useProjectStore((state) => state.removePhotos);
   const pushUndo = useUndoStore((state) => state.push);
@@ -47,6 +50,10 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
     return () => window.clearTimeout(timer);
   }, [photo]);
 
+  useEffect(() => {
+    if (isCollageMode) setGridPanelOpen(false);
+  }, [isCollageMode, setGridPanelOpen]);
+
   const renderedPhoto = photo ?? exitingPhoto ?? lastPhoto.current;
   const removeCurrentPhoto = () => {
     if (!photo) return;
@@ -55,13 +62,18 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
 
   return <main className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-app-base" aria-label="Photo workspace" tabIndex={0}
     data-editor-shortcut-scope="canvas" onDragOver={(event) => event.preventDefault()} onDrop={(event) => event.preventDefault()}>
-    {!photo && <EmptyState onImportPhotos={onImport} onImportFolder={onImportFolder} showFolderImport={showFolderImport} />}
+    {!photo && !isCollageMode && <EmptyState onImportPhotos={onImport} onImportFolder={onImportFolder} showFolderImport={showFolderImport} />}
+    <div
+      className={`absolute inset-0 min-h-0 min-w-0 p-3 transition-opacity duration-fast ease-app ${isCollageMode ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+      aria-hidden={!isCollageMode}
+    >
+      {isCollageMode && <CollagePreview />}
+    </div>
     {renderedPhoto && (
-      <div className={`absolute inset-0 flex min-h-0 flex-col transition-opacity duration-fast ease-app ${focusedLayout ? 'p-5' : 'p-3'} ${photo ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
+      <div className={`absolute inset-0 flex min-h-0 flex-col transition-opacity duration-fast ease-app ${focusedLayout ? 'p-5' : 'p-3'} ${photo && !isCollageMode ? 'opacity-100' : 'pointer-events-none opacity-0'}`} aria-hidden={isCollageMode}>
         <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
           <Button size="small" onClick={onImport}>Import photos</Button>
           <div className="flex items-center gap-2">
-            {photos.length >= 2 && <Button size="small" variant="outlined" onClick={onOpenCollage}>Collage</Button>}
             <Button size="small" disabled={!photo || exporting} onClick={onExport}>{exporting ? 'Exporting…' : 'Export'}</Button>
             <Tooltip title="Remove current photo (Del)" arrow>
               <span>

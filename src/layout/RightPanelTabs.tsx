@@ -3,7 +3,7 @@ import { Icon } from "../components/Icons";
 import { useUIStore } from "../stores/uiStore";
 import { RIGHT_PANEL_TABS, type RightPanelTabId } from "./rightPanelTabs";
 
-export function RightPanelTabs() {
+export function RightPanelTabs({ excludeCollage = false }: { excludeCollage?: boolean }) {
   const activeRightTab = useUIStore((state) => state.activeRightTab);
   const setActiveRightTab = useUIStore((state) => state.setActiveRightTab);
 
@@ -40,7 +40,7 @@ export function RightPanelTabs() {
         },
       })}
     >
-      {RIGHT_PANEL_TABS.map((tab) => (
+      {RIGHT_PANEL_TABS.filter((tab) => !excludeCollage || tab.id !== 'collage').map((tab) => (
         <Tab
           key={tab.id}
           id={`tab-${tab.id}`}

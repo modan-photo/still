@@ -3,6 +3,7 @@ import { RIGHT_PANEL_TABS } from '../layout/rightPanelTabs';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { useUndoStore } from '../stores/undoStore';
+import { enterCollageMode } from '../services/collageMode';
 
 /** Register shell shortcuts without connecting photo-editing operations. */
 export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => void) {
@@ -29,6 +30,7 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         && !event.altKey
         && !event.shiftKey
         && event.key.toLowerCase() === "g"
+        && useUIStore.getState().activeRightTab !== 'collage'
         && useProjectStore.getState().photos.length >= 2
       ) {
         event.preventDefault();
@@ -46,10 +48,12 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         return;
       }
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && /^[1-4]$/.test(event.key)) {
+        if (window.matchMedia('(max-width: 767px)').matches) return;
         const tab = RIGHT_PANEL_TABS[Number(event.key) - 1];
         if (tab) {
           event.preventDefault();
-          useUIStore.getState().setActiveRightTab(tab.id);
+          if (tab.id === 'collage') enterCollageMode();
+          else useUIStore.getState().setActiveRightTab(tab.id);
         }
         return;
       }

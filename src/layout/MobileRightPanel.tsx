@@ -49,7 +49,7 @@ export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) 
               <Icon name="chevron" size={16} />
             </IconButton>
           </div>
-          <InspectorContent />
+          <InspectorContent excludeCollage />
         </div>
       </Drawer>
 

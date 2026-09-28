@@ -5,7 +5,8 @@ export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
   | "check" | "chevron" | "sidebar" | "frame" | "stamp" | "info"
   | "transform" | "rotate-left" | "rotate-right" | "minimize" | "maximize" | "plus" | "copy"
-  | "grid" | "single" | "trash" | "select" | "image-off";
+  | "grid" | "single" | "trash" | "select" | "image-off"
+  | "gap" | "radius" | "background" | "aspect" | "photos";
 
 /** name selects the icon; size controls both SVG dimensions and defaults to 18 pixels. */
 type IconProps = { name: IconName; size?: number; strokeWidth?: number };
@@ -33,6 +34,11 @@ const paths: Record<IconName, ReactNode> = {
   trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></>,
   select: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="m14 17 2.2 2.2 4-5"/></>,
   "image-off": <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 4.5-4.5 3 3 2-2 5.5 5.5M15.5 8.5h.01M4 3l16 18"/></>,
+  gap: <><rect x="3" y="5" width="6" height="14" rx="1"/><rect x="15" y="5" width="6" height="14" rx="1"/><path d="M11.5 7v10M12.5 7v10" strokeDasharray="2 2"/></>,
+  radius: <><path d="M5 19V9a4 4 0 0 1 4-4h10"/><path d="M9 19H5v-4"/></>,
+  background: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 15 5-5 4 4 3-3 6 6"/><circle cx="16.5" cy="7.5" r="1.5"/></>,
+  aspect: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4M7 9v4M17 15h-4M17 15v-4"/></>,
+  photos: <><rect x="5" y="3" width="16" height="16" rx="2"/><path d="M3 7v13a1 1 0 0 0 1 1h13M5 15l4-4 3 3 2-2 5 5"/></>,
   // Selection, disclosure, and sidebar layout icons; chevron points down by default.
   check: <path d="m5 12.5 4.2 4.2L19 7"/>,
   chevron: <path d="m8 10 4 4 4-4"/>,

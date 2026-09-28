@@ -39,4 +39,7 @@ export interface BatchExportReport {
   failures: ExportFailure[];
 }
 
-export interface ExportRequest { specs: RenderSpec[]; options: ExportOptions }
+export type ExportMode = 'photos' | 'collage';
+export interface PhotoExportRequest { exportMode: 'photos'; specs: RenderSpec[]; options: ExportOptions }
+export interface CollageExportRequest { exportMode: 'collage'; outputPath: string; format: OutputFormat; quality: number }
+export type ExportRequest = PhotoExportRequest | CollageExportRequest;
