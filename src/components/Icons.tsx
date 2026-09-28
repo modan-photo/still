@@ -1,22 +1,22 @@
 import type { ReactNode } from "react";
 
-/** 可用图标名称的联合类型，供按钮和设置分区等调用方约束图标参数。 */
+/** Supported icon names used by buttons and settings sections. */
 export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
   | "check" | "chevron" | "sidebar" | "frame" | "stamp" | "info"
   | "transform" | "rotate-left" | "rotate-right" | "minimize" | "maximize" | "plus"
-  | "grid" | "single";
+  | "grid" | "single" | "trash" | "select" | "image-off";
 
-/** name 指定图标；size 同时控制 SVG 的显示宽高，省略时使用 18 像素。 */
+/** name selects the icon; size controls both SVG dimensions and defaults to 18 pixels. */
 type IconProps = { name: IconName; size?: number; strokeWidth?: number };
 
 /**
- * 图标名称到 SVG 图形节点的映射，所有图形使用统一的 24 × 24 坐标系。
- * Record 要求 IconName 中的每个名称都有对应图形，新增名称时需同步补充映射。
- * 复合图形通过 Fragment 组合多个节点，颜色和描边样式由外层 SVG 统一提供。
+ * Maps icon names to SVG nodes in a shared 24 × 24 coordinate system.
+ * Record ensures every IconName has matching artwork; add both when extending the set.
+ * Compound artwork uses fragments while color and stroke styles inherit from the outer SVG.
  */
 const paths: Record<IconName, ReactNode> = {
-  // 文件操作与外观设置图标。
+  // File actions and appearance controls.
   open: <><path d="M3.5 7.5h6l2-2h3.5"/><path d="M4 7.5h16l-1.8 10H5.8L4 7.5Z"/></>,
   sun: <><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></>,
   moon: <path d="M20 15.3A8 8 0 0 1 8.7 4a8 8 0 1 0 11.3 11.3Z"/>,
@@ -29,11 +29,14 @@ const paths: Record<IconName, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14"/>,
   grid: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
   single: <rect x="4" y="5" width="16" height="14" rx="2"/>,
-  // 选中状态、分区展开及侧栏布局图标；chevron 的默认方向朝下。
+  trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></>,
+  select: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="m14 17 2.2 2.2 4-5"/></>,
+  "image-off": <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 4.5-4.5 3 3 2-2 5.5 5.5M15.5 8.5h.01M4 3l16 18"/></>,
+  // Selection, disclosure, and sidebar layout icons; chevron points down by default.
   check: <path d="m5 12.5 4.2 4.2L19 7"/>,
   chevron: <path d="m8 10 4 4 4-4"/>,
   sidebar: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></>,
-  // 照片属性分区与旋转操作图标。
+  // Photo-property sections and rotation actions.
   frame: <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>,
   stamp: <><path d="M4 18V8l4-3 4 3v10"/><path d="M12 18V8l4-3 4 3v10M2 18h20"/></>,
   info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></>,
@@ -43,9 +46,9 @@ const paths: Record<IconName, ReactNode> = {
 };
 
 /**
- * 渲染统一风格的线性图标：viewBox 使图形随 size 缩放，currentColor 继承 CSS 文字颜色。
- * 无填充、圆形端点和圆角连接保持描边风格一致，.icon 类供调用方调整样式。
- * SVG 作为装饰元素对辅助技术隐藏；操作含义应由外层按钮的文字或 aria-label 提供。
+ * Renders consistent line icons: viewBox scales with size and currentColor inherits CSS text color.
+ * Rounded caps and joins keep the stroke style consistent; callers can target the .icon class.
+ * SVGs are decorative and hidden from assistive technology; labels belong on the parent control.
  */
 export function Icon({ name, size = 18, strokeWidth = 1.7 }: IconProps) {
   return (

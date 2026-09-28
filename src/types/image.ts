@@ -1,5 +1,7 @@
 export interface ImageMeta {
   path: string;
+  /** Stable cache file stem shared by thumbnail and preview directories. */
+  hash: string;
   width: number;
   height: number;
   format: string;

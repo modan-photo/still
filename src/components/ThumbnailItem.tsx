@@ -1,12 +1,13 @@
-import { cacheAssetUrl } from '../services/tauri/image';
+import { ThumbnailImage } from './ThumbnailImage';
 type ThumbnailItemProps = {
   thumbPath: string;
+  thumbRevision?: number;
   label: string;
   selected: boolean;
   onSelect: () => void;
 };
 
-export function ThumbnailItem({ label, selected, onSelect, thumbPath }: ThumbnailItemProps) {
+export function ThumbnailItem({ label, selected, onSelect, thumbPath, thumbRevision }: ThumbnailItemProps) {
   return (
     <button
       type="button"
@@ -15,7 +16,7 @@ export function ThumbnailItem({ label, selected, onSelect, thumbPath }: Thumbnai
       aria-pressed={selected}
       onClick={onSelect}
     >
-      <img src={cacheAssetUrl(thumbPath)} alt={label} loading="lazy" decoding="async" className="h-full w-full object-contain" />
+      <ThumbnailImage thumbPath={thumbPath} revision={thumbRevision} label={label} />
     </button>
   );
 }

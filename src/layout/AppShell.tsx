@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useProjectStore } from "../stores/projectStore";
 import { useUIStore } from "../stores/uiStore";
 import { motionTokens } from "../theme/tokens";
+import { UndoToast } from "../components/UndoToast";
 import { GridPanel } from "./GridPanel";
 
 const FAST_MOTION_MS = motionTokens.duration.fast;
@@ -116,6 +117,7 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
           {rightPanel}
         </div>
       </div>
+      <UndoToast />
     </div>
   );
 }

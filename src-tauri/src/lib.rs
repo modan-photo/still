@@ -9,6 +9,8 @@ pub fn run() {
         .manage(commands::task::TaskManager::default())
         .invoke_handler(tauri::generate_handler![
             commands::image::image_load,
+            commands::image::image_list_directory,
+            commands::image::cache_invalidate,
             commands::image::image_export,
             commands::image::thumb_get,
             commands::image::image_apply_border,

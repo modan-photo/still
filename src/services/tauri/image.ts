@@ -21,6 +21,8 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export const cacheAssetUrl = (path: string): string => convertFileSrc(path);
 export const cancelTask = (taskId: string) => call<void>('task_cancel', { taskId });
 export const listTasks = () => call<TaskProgress[]>('task_list');
+export const listImageDirectory = (path: string) => call<string[]>('image_list_directory', { path });
+export const invalidateCache = (hashes: string[]) => call<number>('cache_invalidate', { hashes });
 
 /** Listener lifetime belongs to this invocation; subscribe before work starts. */
 async function run<T>(operation: string, args: Record<string, unknown>, taskId: string): Promise<T> {

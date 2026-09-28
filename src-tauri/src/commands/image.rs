@@ -4,7 +4,7 @@ use crate::{
     image_io::{
         load::inspect_image,
         save::{copy_image_atomic, save_image_atomic},
-        thumb::{get_or_create_cached, CacheKind, CachedImage},
+        thumb::{cache_hash, get_or_create_cached, CacheKind, CachedImage},
     },
     render::{
         pipeline::apply_render_spec,
@@ -12,13 +12,14 @@ use crate::{
     },
 };
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{Manager, State, Window};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageMeta {
     path: PathBuf,
+    hash: String,
     width: u32,
     height: u32,
     format: String,
@@ -26,6 +27,82 @@ pub struct ImageMeta {
     // Paths are converted to asset URLs with convertFileSrc by the frontend.
     preview_url: Option<PathBuf>,
     thumb_url: PathBuf,
+}
+
+fn valid_cache_hash(hash: &str) -> bool {
+    hash.len() == 16 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn invalidate_cache_files(cache_root: &Path, hashes: &[String]) -> Result<usize, AppError> {
+    let hashes: std::collections::HashSet<_> = hashes.iter().collect();
+    if hashes.iter().any(|hash| !valid_cache_hash(hash)) {
+        return Err(AppError::InvalidInput(
+            "cache hashes must be 16 hexadecimal characters".into(),
+        ));
+    }
+
+    let mut removed = 0;
+    for hash in hashes {
+        for directory in ["thumbs", "previews"] {
+            let path = cache_root.join(directory).join(format!("{hash}.webp"));
+            match std::fs::remove_file(path) {
+                Ok(()) => removed += 1,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    Ok(removed)
+}
+
+#[tauri::command]
+pub async fn cache_invalidate(window: Window, hashes: Vec<String>) -> Result<usize, AppError> {
+    let root = window
+        .app_handle()
+        .path()
+        .app_cache_dir()
+        .map_err(|error| AppError::InvalidInput(error.to_string()))?;
+    tauri::async_runtime::spawn_blocking(move || invalidate_cache_files(&root, &hashes))
+        .await
+        .map_err(|error| AppError::InvalidInput(format!("unable to invalidate cache: {error}")))?
+}
+
+fn supported_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp" | "tif" | "tiff"
+            )
+        })
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn image_list_directory(path: String) -> Result<Vec<PathBuf>, AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let directory = std::fs::canonicalize(path)?;
+        if !directory.is_dir() {
+            return Err(AppError::InvalidInput(
+                "selected path is not a directory".into(),
+            ));
+        }
+
+        let mut paths = Vec::new();
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() && supported_image_path(&entry.path()) {
+                paths.push(entry.path());
+            }
+        }
+        paths.sort_by_cached_key(|entry| entry.to_string_lossy().to_ascii_lowercase());
+        Ok(paths)
+    })
+    .await
+    .map_err(|error| {
+        AppError::InvalidInput(format!("unable to scan selected directory: {error}"))
+    })?
 }
 
 #[tauri::command]
@@ -49,12 +126,14 @@ pub async fn image_load(
             report("metadata", 10);
             let path = std::fs::canonicalize(path)?;
             let info = inspect_image(&path)?;
+            let hash = cache_hash(&path)?;
             task::check(&token)?;
             report("thumbnail", 30);
             let thumb = get_or_create_cached(&path, &root, CacheKind::Thumbnail, &token)?;
             task::check(&token)?;
             Ok(ImageMeta {
                 path,
+                hash,
                 width: info.width,
                 height: info.height,
                 format: info.format,
@@ -184,11 +263,11 @@ pub fn image_apply_watermark(spec: RenderSpec) -> Result<StubResult, AppError> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{fs, path::Path, time::SystemTime};
 
     use crate::render::spec::OutputFormat;
 
-    use super::infer_output;
+    use super::{infer_output, invalidate_cache_files, supported_image_path};
 
     #[test]
     fn edited_export_infers_format_from_destination() {
@@ -201,5 +280,41 @@ mod tests {
             Some(OutputFormat::Png)
         );
         assert!(infer_output(Path::new("photo.raw")).is_none());
+    }
+
+    #[test]
+    fn directory_import_recognizes_supported_extensions() {
+        assert!(supported_image_path(Path::new("photo.JPEG")));
+        assert!(supported_image_path(Path::new("photo.webp")));
+        assert!(!supported_image_path(Path::new("notes.txt")));
+    }
+
+    #[test]
+    fn cache_invalidation_is_scoped_to_known_cache_directories() {
+        let root = std::env::temp_dir().join(format!(
+            "still-cache-invalidate-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(root.join("thumbs")).unwrap();
+        fs::create_dir_all(root.join("previews")).unwrap();
+        let hash = "0123456789abcdef".to_string();
+        fs::write(root.join("thumbs").join(format!("{hash}.webp")), b"thumb").unwrap();
+        fs::write(
+            root.join("previews").join(format!("{hash}.webp")),
+            b"preview",
+        )
+        .unwrap();
+        let unrelated = root.join("keep.txt");
+        fs::write(&unrelated, b"keep").unwrap();
+
+        assert_eq!(invalidate_cache_files(&root, &[hash]).unwrap(), 2);
+        assert!(unrelated.is_file());
+        assert!(invalidate_cache_files(&root, &["../escape".into()]).is_err());
+
+        fs::remove_dir_all(root).unwrap();
     }
 }

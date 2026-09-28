@@ -9,7 +9,7 @@ export function RightPanelTabs() {
 
   return (
     <Tabs
-      aria-label="右侧参数面板"
+      aria-label="Inspector panel"
       value={activeRightTab}
       onChange={(_, value: RightPanelTabId) => setActiveRightTab(value)}
       variant="fullWidth"

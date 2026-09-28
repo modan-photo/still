@@ -126,7 +126,7 @@ fn resize_to_long_edge(image: DynamicImage, target: u32) -> Result<DynamicImage,
     Ok(DynamicImage::ImageRgba8(pixels))
 }
 
-fn cache_path(source_path: &Path, cache_root: &Path, kind: CacheKind) -> Result<PathBuf, AppError> {
+pub fn cache_hash(source_path: &Path) -> Result<String, AppError> {
     let metadata = fs::metadata(source_path)?;
     let canonical = fs::canonicalize(source_path)?;
     let modified = metadata
@@ -139,12 +139,15 @@ fn cache_path(source_path: &Path, cache_root: &Path, kind: CacheKind) -> Result<
     canonical.hash(&mut hasher);
     metadata.len().hash(&mut hasher);
     modified.hash(&mut hasher);
-    kind.long_edge().hash(&mut hasher);
-    let hash = hasher.finish();
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
+fn cache_path(source_path: &Path, cache_root: &Path, kind: CacheKind) -> Result<PathBuf, AppError> {
+    let hash = cache_hash(source_path)?;
 
     Ok(cache_root
         .join(kind.directory())
-        .join(format!("{hash:016x}.webp")))
+        .join(format!("{hash}.webp")))
 }
 
 fn cached_result(path: PathBuf, cache_hit: bool) -> Result<CachedImage, AppError> {

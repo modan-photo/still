@@ -66,6 +66,9 @@ export const motionTokens = {
     base: 200,
     slow: 300,
   },
+  delay: {
+    stagger: 50,
+  },
   easing: "cubic-bezier(0.32, 0.72, 0, 1)",
 } as const;
 
@@ -123,6 +126,7 @@ export function getCssVariables(mode: ColorMode): Record<string, string> {
     "--motion-fast": `${motionTokens.duration.fast}ms`,
     "--motion-base": `${motionTokens.duration.base}ms`,
     "--motion-slow": `${motionTokens.duration.slow}ms`,
+    "--motion-stagger": `${motionTokens.delay.stagger}ms`,
     "--motion-easing": motionTokens.easing,
     "--glass-backdrop": glassTokens.backdropFilter,
   };

@@ -1,32 +1,105 @@
-import { Alert, Button, CircularProgress } from '@mui/material';
+import { Button, CircularProgress, IconButton, Tooltip } from '@mui/material';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useImagePreview } from '../hooks/useImagePreview';
-import { useProjectStore } from '../stores/projectStore';
-import { StillMark } from '../components/StillMark';
+import { useProjectStore, type ProjectPhoto } from '../stores/projectStore';
+import { useUndoStore } from '../stores/undoStore';
+import { Icon } from '../components/Icons';
+import { EmptyState } from '../components/EmptyState';
+import { motionTokens } from '../theme/tokens';
 import { renderBorderPreview } from '../render/border';
 import type { BorderSpec } from '../types/renderSpec';
 import type { WatermarkSpec } from '../types/renderSpec';
 import { renderWatermarkPreview } from '../render/watermark';
 import { listWatermarkFonts } from '../services/tauri/watermark';
 
-type MainCanvasProps = { onImport: () => void; dragActive: boolean; onExport: () => void; exporting: boolean };
-export function MainCanvas({ onImport, dragActive, onExport, exporting }: MainCanvasProps) {
+type MainCanvasProps = {
+  onImport: () => void;
+  onImportFolder: () => void;
+  showFolderImport: boolean;
+  dragActive: boolean;
+  onExport: () => void;
+  exporting: boolean;
+};
+
+export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragActive, onExport, exporting }: MainCanvasProps) {
   const photos = useProjectStore((state) => state.photos);
   const selectedId = useProjectStore((state) => state.selectedId);
+  const removePhotos = useProjectStore((state) => state.removePhotos);
+  const pushUndo = useUndoStore((state) => state.push);
   const photo = photos.find((entry) => entry.id === selectedId);
   const focusedLayout = photos.length <= 1;
-  return <main className={`relative flex h-full min-h-0 flex-1 flex-col bg-app-base ${focusedLayout ? 'p-5' : 'p-3'}`} aria-label="Photo workspace" tabIndex={0}
+  const lastPhoto = useRef<ProjectPhoto | null>(photo ?? null);
+  const [exitingPhoto, setExitingPhoto] = useState<ProjectPhoto | null>(null);
+  if (photo) lastPhoto.current = photo;
+
+  useEffect(() => {
+    if (photo) {
+      setExitingPhoto(null);
+      return;
+    }
+    if (!lastPhoto.current) return;
+    setExitingPhoto(lastPhoto.current);
+    const timer = window.setTimeout(() => {
+      setExitingPhoto(null);
+      lastPhoto.current = null;
+    }, motionTokens.duration.fast);
+    return () => window.clearTimeout(timer);
+  }, [photo]);
+
+  const renderedPhoto = photo ?? exitingPhoto ?? lastPhoto.current;
+  const removeCurrentPhoto = () => {
+    if (!photo) return;
+    pushUndo(removePhotos([photo.id]));
+  };
+
+  return <main className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-app-base" aria-label="Photo workspace" tabIndex={0}
     data-editor-shortcut-scope="canvas" onDragOver={(event) => event.preventDefault()} onDrop={(event) => event.preventDefault()}>
-    <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
-      <Button size="small" onClick={onImport}>Import photos</Button>
-      <Button size="small" disabled={!photo || exporting} onClick={onExport}>{exporting ? 'Exporting…' : 'Export'}</Button>
-    </div>
-    {!photo ? <div className="grid min-h-0 flex-1 place-items-center text-center"><div>
-      <StillMark size={36} /><h1 className="text-xl">Start with a photograph</h1>
-      <p className="text-sm text-secondary">Drop photos here or choose files to import.</p>
-      <Button variant="contained" onClick={onImport}>Import photos</Button>
-    </div></div> : <Preview key={photo.id} photoId={photo.id} path={photo.path} frame={photo.spec.border} stamp={photo.spec.watermark} originalWidth={photo.width} originalHeight={photo.height} focusedLayout={focusedLayout} />}
-    {photo && <div className="mt-2 truncate text-center text-xs text-secondary" title={photo.path}>{photo.path.split(/[\\/]/).pop()} · {photo.width} × {photo.height}</div>}
+    {!photo && <EmptyState onImportPhotos={onImport} onImportFolder={onImportFolder} showFolderImport={showFolderImport} />}
+    {renderedPhoto && (
+      <div className={`absolute inset-0 flex min-h-0 flex-col transition-opacity duration-fast ease-app ${focusedLayout ? 'p-5' : 'p-3'} ${photo ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
+        <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
+          <Button size="small" onClick={onImport}>Import photos</Button>
+          <div className="flex items-center gap-2">
+            <Button size="small" disabled={!photo || exporting} onClick={onExport}>{exporting ? 'Exporting…' : 'Export'}</Button>
+            <Tooltip title="Remove current photo (Del)" arrow>
+              <span>
+                <IconButton
+                  aria-label="Remove current photo"
+                  disabled={!photo}
+                  onClick={removeCurrentPhoto}
+                  sx={(theme) => {
+                    const colors = theme.still.colors[theme.palette.mode];
+
+                    return {
+                      width: 36,
+                      height: 36,
+                      borderRadius: `${theme.still.radius.md}px`,
+                      color: colors.text.secondary,
+                      transition: theme.transitions.create(["background-color", "color"], {
+                        duration: theme.still.motion.duration.fast,
+                        easing: theme.still.motion.easing,
+                      }),
+                      "&:hover": {
+                        backgroundColor: colors.bg.elevated,
+                        color: colors.danger,
+                      },
+                      "&.Mui-focusVisible": {
+                        outline: `2px solid ${colors.accent}`,
+                        outlineOffset: 2,
+                      },
+                    };
+                  }}
+                >
+                  <Icon name="trash" size={18} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </div>
+        </div>
+        <Preview key={renderedPhoto.id} photoId={renderedPhoto.id} path={renderedPhoto.path} frame={renderedPhoto.spec.border} stamp={renderedPhoto.spec.watermark} originalWidth={renderedPhoto.width} originalHeight={renderedPhoto.height} focusedLayout={focusedLayout} />
+        <div className="mt-2 truncate text-center text-xs text-secondary" title={renderedPhoto.path}>{renderedPhoto.path.split(/[\\/]/).pop()} · {renderedPhoto.width} × {renderedPhoto.height}</div>
+      </div>
+    )}
     {dragActive && <div className="pointer-events-none absolute inset-2 z-20 grid place-items-center rounded-lg border-2 border-dashed border-accent bg-app-surface/90">Drop photos to import</div>}
   </main>;
 }
@@ -86,7 +159,16 @@ function Preview({ photoId, path, frame, stamp, originalWidth, originalHeight, f
   };
   return <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
     {loading && <CircularProgress size={28} aria-label="Loading preview" />}
-    {error && <Alert severity="error">{error.message}</Alert>}
+    {error && (
+      <div
+        role="alert"
+        className="flex max-w-sm flex-col items-center gap-2 rounded-lg border border-subtle bg-app-surface px-6 py-5 text-center text-secondary"
+      >
+        <Icon name="image-off" size={28} />
+        <span className="text-sm">Unable to load photo</span>
+        <span className="text-xs">{error.message}</span>
+      </div>
+    )}
     <div className={`relative inline-flex ${focusedLayout ? 'max-h-[90%] max-w-[90%]' : 'max-h-full max-w-full'}`}>
       <canvas ref={canvas} aria-label="Photo preview" data-preview-long-edge={image ? Math.max(image.naturalWidth, image.naturalHeight) : undefined}
         onPointerDown={(event) => { if (!stamp?.freePosition || stamp.tiled) return; dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); move(event); }}

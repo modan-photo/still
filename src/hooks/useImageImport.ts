@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open } from '@tauri-apps/plugin-dialog';
-import { loadImage, normalizeError } from '../services/tauri/image';
+import { listImageDirectory, loadImage, normalizeError } from '../services/tauri/image';
 import { useProjectStore } from '../stores/projectStore';
 import type { ImageMeta } from '../types/image';
 
@@ -40,6 +40,20 @@ export function useImageImport() {
       if (selected && alive.current) importPaths(Array.isArray(selected) ? selected : [selected]);
     } catch (reason) { if (alive.current) setError(normalizeError(reason).message); }
   }, [importPaths]);
+  const chooseFolder = useCallback(async () => {
+    if (!isTauri()) { setError('Open the desktop app to import a photo folder.'); return; }
+    try {
+      const selected = await open({ multiple: false, directory: true, title: 'Import photo folder' });
+      if (!selected || !alive.current) return;
+      const paths = await listImageDirectory(selected);
+      if (!alive.current) return;
+      if (paths.length === 0) {
+        setError('The selected folder does not contain supported photos.');
+        return;
+      }
+      importPaths(paths);
+    } catch (reason) { if (alive.current) setError(normalizeError(reason).message); }
+  }, [importPaths]);
   useEffect(() => {
     alive.current = true;
     let disposed = false;
@@ -52,5 +66,5 @@ export function useImageImport() {
       .catch((reason) => { if (!disposed) setError(normalizeError(reason).message); });
     return () => { alive.current = false; disposed = true; unlisten?.(); };
   }, [importPaths]);
-  return { choosePhotos, dragActive, error, clearError: () => setError(null) };
+  return { choosePhotos, chooseFolder, dragActive, error, clearError: () => setError(null) };
 }

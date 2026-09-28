@@ -18,6 +18,7 @@ import { exportImage, normalizeError } from './services/tauri/image';
 import { TaskProgressBar } from './components/TaskProgressBar';
 import { listWatermarkFonts } from './services/tauri/watermark';
 import { SettingsDialog } from './components/SettingsDialog';
+import { ExportCompletionNotice } from './components/ExportCompletionNotice';
 
 function App({ theme }: { theme: ThemeController }) {
   const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
@@ -46,39 +47,59 @@ function App({ theme }: { theme: ThemeController }) {
   const photos = useProjectStore((state) => state.photos);
   const selectedId = useProjectStore((state) => state.selectedId);
   const selectPhoto = useProjectStore((state) => state.selectPhoto);
-  const { choosePhotos, dragActive, error, clearError } = useImageImport();
+  const { choosePhotos, chooseFolder, dragActive, error, clearError } = useImageImport();
   const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportedPhotoIds, setExportedPhotoIds] = useState<string[]>([]);
+  const [exportNoticeOpen, setExportNoticeOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const desktopFolderImport = isTauri() && platform() !== 'android';
   const toggleInspector = useCallback(() => setInspectorOpen(!useUIStore.getState().inspectorOpen), [setInspectorOpen]);
   useEditorShortcuts(toggleInspector, choosePhotos);
+  useEffect(() => {
+    if (photos.length !== 0) return;
+    useUIStore.getState().setGridPanelOpen(false);
+    useProjectStore.getState().setSelectedIds([]);
+  }, [photos.length]);
   const exportSelected = async () => {
     const photo = photos.find((entry) => entry.id === selectedId);
     if (!photo || exporting) return;
     setExporting(true);
     setExportError(null);
+    setExportNoticeOpen(false);
     try {
       const spec = structuredClone(photo.spec);
       const path = await save({ title: 'Export photo', defaultPath: photo.path.replace(/(\.[^.\\/]+)$/, '-export$1') });
       if (path) {
         await exportImage(spec, path);
         useProjectStore.getState().markClean(photo.id, spec);
+        setExportedPhotoIds([photo.id]);
+        setExportNoticeOpen(true);
       }
     } catch (reason) { setExportError(normalizeError(reason).message); }
     finally { setExporting(false); }
   };
-  return <AppShell
-    titleBarVisible={!(isTauri() && platform() === 'android')}
-    titleBar={<><TitleBar onOpen={choosePhotos} onOpenSettings={() => setSettingsOpen(true)} onTogglePanel={toggleInspector}
-      onToggleTheme={theme.toggleResolvedTheme} panelOpen={inspectorOpen} themeMode={theme.resolvedTheme} />
-      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} /></>}
-    progress={<><TaskProgressBar />{error && <Alert severity="error" onClose={clearError}>{error}</Alert>}
-      {exportError && <Alert severity="error" onClose={() => setExportError(null)}>{exportError}</Alert>}</>}
-    mainCanvas={<MainCanvas onImport={choosePhotos} dragActive={dragActive} onExport={() => void exportSelected()} exporting={exporting} />}
-    rightPanel={mobileLayout ? <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
-      : <RightPanel collapsed={!inspectorOpen} onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)} />}
-    filmStrip={<FilmStrip items={photos.map((photo) => ({ id: photo.id, label: photo.path.split(/[\\/]/).pop() ?? photo.path, thumbPath: photo.thumbUrl }))}
-      selectedId={selectedId} onSelect={selectPhoto} onImport={choosePhotos} />}
-  />;
+  return <>
+    <AppShell
+      titleBarVisible={!(isTauri() && platform() === 'android')}
+      titleBar={<><TitleBar onOpen={choosePhotos} onOpenSettings={() => setSettingsOpen(true)} onTogglePanel={toggleInspector}
+        onToggleTheme={theme.toggleResolvedTheme} panelOpen={inspectorOpen} themeMode={theme.resolvedTheme} />
+        <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} /></>}
+      progress={<><TaskProgressBar />{error && <Alert severity="error" onClose={clearError}>{error}</Alert>}
+        {exportError && <Alert severity="error" onClose={() => setExportError(null)}>{exportError}</Alert>}</>}
+      mainCanvas={<MainCanvas onImport={choosePhotos} onImportFolder={chooseFolder} showFolderImport={desktopFolderImport}
+        dragActive={dragActive} onExport={() => void exportSelected()} exporting={exporting} />}
+      rightPanel={photos.length === 0 ? null : mobileLayout ? <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
+        : <RightPanel collapsed={!inspectorOpen} onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)} />}
+      filmStrip={<FilmStrip items={photos.map((photo) => ({ id: photo.id, label: photo.path.split(/[\\/]/).pop() ?? photo.path,
+        thumbPath: photo.thumbUrl, thumbRevision: photo.thumbRevision }))}
+        selectedId={selectedId} onSelect={selectPhoto} onImport={choosePhotos} />}
+    />
+    <ExportCompletionNotice
+      exportedPhotoIds={exportedPhotoIds}
+      open={exportNoticeOpen}
+      onClose={() => setExportNoticeOpen(false)}
+    />
+  </>;
 }
 export default App;

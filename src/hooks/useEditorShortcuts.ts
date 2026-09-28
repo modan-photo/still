@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { RIGHT_PANEL_TABS } from '../layout/rightPanelTabs';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
+import { useUndoStore } from '../stores/undoStore';
 
 /** Register shell shortcuts without connecting photo-editing operations. */
 export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => void) {
@@ -10,6 +11,7 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       if (event.defaultPrevented || event.isComposing || event.repeat) return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (target.closest('[role="dialog"]')) return;
 
       if (event.key === "Escape" && useUIStore.getState().gridPanelOpen) {
         event.preventDefault();
@@ -52,6 +54,19 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+
+      if (
+        (event.key === "Delete" || event.key === "Backspace")
+        && !useUIStore.getState().gridPanelOpen
+      ) {
+        const project = useProjectStore.getState();
+        const currentId = project.currentPhotoId ?? project.selectedId;
+        if (!currentId) return;
+
+        event.preventDefault();
+        useUndoStore.getState().push(project.removePhotos([currentId]));
+        return;
+      }
 
       if (event.key === "Tab" && target.matches('[data-editor-shortcut-scope="canvas"]')) {
         event.preventDefault();

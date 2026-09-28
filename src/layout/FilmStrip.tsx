@@ -10,6 +10,7 @@ export type FilmStripItem = {
   id: string;
   label: string;
   thumbPath: string;
+  thumbRevision?: number;
 };
 
 type FilmStripProps = {
@@ -67,6 +68,7 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
                 <ThumbnailItem
                   label={item.label}
                   thumbPath={item.thumbPath}
+                  thumbRevision={item.thumbRevision}
                   selected={selectedId === item.id}
                   onSelect={() => onSelect(item.id)}
                 />

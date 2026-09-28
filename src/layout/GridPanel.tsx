@@ -1,9 +1,11 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { alpha, Box, ToggleButton, ToggleButtonGroup, Tooltip, useTheme } from "@mui/material";
+import { alpha, Box, Button, IconButton, ToggleButton, ToggleButtonGroup, Tooltip, useTheme } from "@mui/material";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { cacheAssetUrl } from "../services/tauri/image";
+import { Icon } from "../components/Icons";
+import { ThumbnailImage } from "../components/ThumbnailImage";
 import { useProjectStore } from "../stores/projectStore";
 import { useUIStore } from "../stores/uiStore";
+import { useUndoStore } from "../stores/undoStore";
 
 const DEFAULT_HEIGHT_PERCENT = 60;
 const MIN_HEIGHT_PERCENT = 30;
@@ -47,10 +49,16 @@ export function GridPanel() {
   const [dragging, setDragging] = useState(false);
   const [thumbnailSize, setThumbnailSize] = useState<ThumbnailSize>("medium");
   const [gridWidth, setGridWidth] = useState(0);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
   const theme = useTheme();
   const photos = useProjectStore((state) => state.photos);
   const selectedId = useProjectStore((state) => state.selectedId);
+  const selectedIds = useProjectStore((state) => state.selectedIds);
   const selectPhoto = useProjectStore((state) => state.selectPhoto);
+  const setSelectedIds = useProjectStore((state) => state.setSelectedIds);
+  const toggleSelectedId = useProjectStore((state) => state.toggleSelectedId);
+  const removePhotos = useProjectStore((state) => state.removePhotos);
+  const pushUndo = useUndoStore((state) => state.push);
   const gridPanelOpen = useUIStore((state) => state.gridPanelOpen);
   const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
   const gridGap = theme.still.spacing.md;
@@ -101,6 +109,49 @@ export function GridPanel() {
       virtualizer.scrollToIndex(Math.floor(selectedIndex / columnCount), { align: "auto" });
     }
   }, [columnCount, gridPanelOpen, photos.length, selectedId, virtualizer]);
+
+  useEffect(() => {
+    if (gridPanelOpen || !multiSelectMode) return;
+    setMultiSelectMode(false);
+    setSelectedIds([]);
+  }, [gridPanelOpen, multiSelectMode, setSelectedIds]);
+
+  useEffect(() => {
+    if (!gridPanelOpen || !multiSelectMode) return;
+
+    const handleMultiSelectShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.repeat) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('[role="dialog"]')) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setMultiSelectMode(false);
+        setSelectedIds([]);
+        return;
+      }
+
+      const textEntryActive = target instanceof HTMLElement && (
+        target.isContentEditable
+        || Boolean(target.closest('input, textarea, select, [role="combobox"], [role="dialog"]'))
+      );
+      if (
+        !textEntryActive
+        && (event.ctrlKey || event.metaKey)
+        && !event.altKey
+        && !event.shiftKey
+        && event.key.toLowerCase() === "a"
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setSelectedIds(photos.map((photo) => photo.id));
+      }
+    };
+
+    window.addEventListener("keydown", handleMultiSelectShortcut, { capture: true });
+    return () => window.removeEventListener("keydown", handleMultiSelectShortcut, { capture: true });
+  }, [gridPanelOpen, multiSelectMode, photos, setSelectedIds]);
 
   useEffect(() => () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
@@ -180,6 +231,23 @@ export function GridPanel() {
     selectPhoto(photoId);
   };
 
+  const enterMultiSelect = () => {
+    setSelectedIds([]);
+    setMultiSelectMode(true);
+  };
+
+  const exitMultiSelect = () => {
+    setMultiSelectMode(false);
+    setSelectedIds([]);
+  };
+
+  const removeSelectedPhotos = () => {
+    if (selectedIds.length === 0) return;
+    pushUndo(removePhotos(selectedIds));
+    setMultiSelectMode(false);
+    setSelectedIds([]);
+  };
+
   return (
     <Box
       ref={panelRef}
@@ -238,44 +306,114 @@ export function GridPanel() {
       </div>
 
       <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-subtle px-4 text-sm text-primary">
-        <span>{photos.length} photos</span>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={thumbnailSize}
-          aria-label="Thumbnail size"
-          onChange={(_, nextSize: ThumbnailSize | null) => {
-            if (nextSize) setThumbnailSize(nextSize);
-          }}
-          sx={(currentTheme) => {
-            const colors = currentTheme.still.colors[currentTheme.palette.mode];
-
-            return {
-              height: 28,
-              "& .MuiToggleButton-root": {
-                width: 32,
-                padding: 0,
-                color: colors.text.secondary,
-                borderColor: colors.border.subtle,
-                transition: currentTheme.transitions.create(["background-color", "color"], {
-                  duration: currentTheme.still.motion.duration.fast,
-                  easing: currentTheme.still.motion.easing,
-                }),
-                "&:hover": { color: colors.text.primary, backgroundColor: colors.bg.elevated },
-                "&.Mui-selected": { color: colors.accent, backgroundColor: colors.bg.elevated },
-                "&.Mui-selected:hover": { color: colors.accent, backgroundColor: colors.bg.elevated },
-              },
-            };
-          }}
-        >
-          {THUMBNAIL_SIZE_OPTIONS.map((option) => (
-            <Tooltip key={option.value} title={option.label} arrow>
-              <ToggleButton value={option.value} aria-label={option.label} tabIndex={gridPanelOpen ? 0 : -1}>
-                <ThumbnailSizeIcon density={option.density} />
-              </ToggleButton>
+        <span>{multiSelectMode
+          ? `Selected ${selectedIds.length} ${selectedIds.length === 1 ? "photo" : "photos"}`
+          : `${photos.length} photos`}</span>
+        {multiSelectMode ? (
+          <div className="flex items-center gap-1">
+            <Button
+              size="small"
+              onClick={() => setSelectedIds(photos.map((photo) => photo.id))}
+              disabled={selectedIds.length === photos.length}
+            >
+              Select all
+            </Button>
+            <Button size="small" onClick={exitMultiSelect}>Cancel selection</Button>
+            <Tooltip title="Remove selected photos" arrow>
+              <span className="inline-flex">
+                <IconButton
+                  size="small"
+                  aria-label="Remove selected photos"
+                  disabled={selectedIds.length === 0}
+                  onClick={removeSelectedPhotos}
+                  sx={(currentTheme) => {
+                    const colors = currentTheme.still.colors[currentTheme.palette.mode];
+                    return {
+                      width: 36,
+                      height: 36,
+                      borderRadius: `${currentTheme.still.radius.md}px`,
+                      color: colors.danger,
+                      transition: currentTheme.transitions.create(["background-color", "color"], {
+                        duration: currentTheme.still.motion.duration.fast,
+                        easing: currentTheme.still.motion.easing,
+                      }),
+                      "&::after": { content: '\"\"', position: "absolute", inset: -4 },
+                      "&:hover": { backgroundColor: colors.bg.elevated, color: colors.danger },
+                    };
+                  }}
+                >
+                  <Icon name="trash" size={17} />
+                </IconButton>
+              </span>
             </Tooltip>
-          ))}
-        </ToggleButtonGroup>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Tooltip title="Select photos" arrow>
+              <IconButton
+                size="small"
+                aria-label="Select photos"
+                onClick={enterMultiSelect}
+                sx={(currentTheme) => {
+                  const colors = currentTheme.still.colors[currentTheme.palette.mode];
+                  return {
+                    width: 36,
+                    height: 36,
+                    border: "1px solid",
+                    borderColor: colors.border.subtle,
+                    borderRadius: `${currentTheme.still.radius.md}px`,
+                    color: colors.text.secondary,
+                    transition: currentTheme.transitions.create(["background-color", "color"], {
+                      duration: currentTheme.still.motion.duration.fast,
+                      easing: currentTheme.still.motion.easing,
+                    }),
+                    "&::after": { content: '\"\"', position: "absolute", inset: -4 },
+                    "&:hover": { backgroundColor: colors.bg.elevated, color: colors.accent },
+                  };
+                }}
+              >
+                <Icon name="select" size={20} />
+              </IconButton>
+            </Tooltip>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={thumbnailSize}
+              aria-label="Thumbnail size"
+              onChange={(_, nextSize: ThumbnailSize | null) => {
+                if (nextSize) setThumbnailSize(nextSize);
+              }}
+              sx={(currentTheme) => {
+                const colors = currentTheme.still.colors[currentTheme.palette.mode];
+
+                return {
+                  height: 36,
+                  "& .MuiToggleButton-root": {
+                    width: 36,
+                    padding: 0,
+                    color: colors.text.secondary,
+                    borderColor: colors.border.subtle,
+                    transition: currentTheme.transitions.create(["background-color", "color"], {
+                      duration: currentTheme.still.motion.duration.fast,
+                      easing: currentTheme.still.motion.easing,
+                    }),
+                    "&:hover": { color: colors.text.primary, backgroundColor: colors.bg.elevated },
+                    "&.Mui-selected": { color: colors.accent, backgroundColor: colors.bg.elevated },
+                    "&.Mui-selected:hover": { color: colors.accent, backgroundColor: colors.bg.elevated },
+                  },
+                };
+              }}
+            >
+              {THUMBNAIL_SIZE_OPTIONS.map((option) => (
+                <Tooltip key={option.value} title={option.label} arrow>
+                  <ToggleButton value={option.value} aria-label={option.label} tabIndex={gridPanelOpen ? 0 : -1}>
+                    <ThumbnailSizeIcon density={option.density} />
+                  </ToggleButton>
+                </Tooltip>
+              ))}
+            </ToggleButtonGroup>
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain py-4">
@@ -299,28 +437,47 @@ export function GridPanel() {
                 }}
               >
                 {rowPhotos.map((photo) => {
-                  const selected = selectedId === photo.id;
+                  const selected = multiSelectMode
+                    ? selectedIds.includes(photo.id)
+                    : selectedId === photo.id;
                   const label = photo.path.split(/[\\/]/).pop() ?? photo.path;
 
                   return (
                     <button
                       key={photo.id}
                       type="button"
-                      aria-label={`Select ${label}`}
+                      aria-label={multiSelectMode
+                        ? `${selected ? "Deselect" : "Select"} ${label}`
+                        : `Select ${label}`}
                       aria-pressed={selected}
                       tabIndex={gridPanelOpen ? 0 : -1}
                       title={label}
                       className={`group relative aspect-[4/3] min-w-0 overflow-hidden rounded-md border-2 bg-app-elevated outline-none transition-[border-color,box-shadow,transform] duration-fast ease-app hover:-translate-y-0.5 hover:shadow-elev2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "border-accent shadow-elev1" : "border-subtle"}`}
-                      onClick={() => selectAndScheduleClose(photo.id)}
-                      onDoubleClick={() => selectAndKeepOpen(photo.id)}
+                      onClick={(event) => {
+                        if (multiSelectMode) {
+                          if (event.detail === 1) toggleSelectedId(photo.id);
+                          return;
+                        }
+                        selectAndScheduleClose(photo.id);
+                      }}
+                      onDoubleClick={() => {
+                        if (!multiSelectMode) selectAndKeepOpen(photo.id);
+                      }}
                     >
-                      <img
-                        src={cacheAssetUrl(photo.thumbUrl)}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="h-full w-full object-contain"
+                      <ThumbnailImage
+                        thumbPath={photo.thumbUrl}
+                        revision={photo.thumbRevision}
+                        label={label}
                       />
+                      {multiSelectMode && (
+                        <span className="pointer-events-none absolute left-0 top-0 grid h-11 w-11 place-items-center" aria-hidden="true">
+                          <span className={`grid h-[22px] w-[22px] place-items-center rounded-full border transition-[background-color,border-color,color] duration-fast ease-app ${selected ? "border-accent bg-accent text-[var(--color-bg-surface)]" : "border-subtle bg-app-surface text-secondary"}`}>
+                            <span className={selected ? "opacity-100" : "opacity-0"}>
+                              <Icon name="check" size={14} strokeWidth={2.2} />
+                            </span>
+                          </span>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -342,7 +499,7 @@ function ThumbnailSizeIcon({ density }: { density: number }) {
   }));
 
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.25" aria-hidden="true">
+    <svg width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.25" aria-hidden="true">
       {cells.map((cell) => (
         <rect key={`${cell.x}-${cell.y}`} x={cell.x} y={cell.y} width={cellSize} height={cellSize} rx="1" />
       ))}
