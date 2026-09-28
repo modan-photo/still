@@ -20,6 +20,7 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { ExportCompletionNotice } from './components/ExportCompletionNotice';
 import { ExportDialog } from './components/ExportDialog';
 import type { BatchExportReport, ExportRequest } from './types/export';
+import { CollageWorkspace } from './components/collage/CollageWorkspace';
 
 function App({ theme }: { theme: ThemeController }) {
   const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
@@ -55,6 +56,7 @@ function App({ theme }: { theme: ThemeController }) {
   const [exportNoticeOpen, setExportNoticeOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [collageOpen, setCollageOpen] = useState(false);
   const desktopFolderImport = isTauri() && platform() !== 'android';
   const toggleInspector = useCallback(() => setInspectorOpen(!useUIStore.getState().inspectorOpen), [setInspectorOpen]);
   useEditorShortcuts(toggleInspector, choosePhotos);
@@ -81,6 +83,9 @@ function App({ theme }: { theme: ThemeController }) {
     } catch (reason) { const error = normalizeError(reason); if (error.code !== 'cancelled') setExportError(error.message); }
     finally { setExporting(false); }
   };
+  const collagePhotos = (useProjectStore.getState().selectedIds.length > 0
+    ? photos.filter((photo) => useProjectStore.getState().selectedIds.includes(photo.id))
+    : photos).map((photo) => ({ id: photo.id, path: photo.path, thumbUrl: photo.thumbUrl }));
   return <>
     <AppShell
       titleBarVisible={!(isTauri() && platform() === 'android')}
@@ -90,7 +95,7 @@ function App({ theme }: { theme: ThemeController }) {
       progress={<><TaskProgressBar />{error && <Alert severity="error" onClose={clearError}>{error}</Alert>}
         {exportError && <Alert severity="error" onClose={() => setExportError(null)}>{exportError}</Alert>}</>}
       mainCanvas={<MainCanvas onImport={choosePhotos} onImportFolder={chooseFolder} showFolderImport={desktopFolderImport}
-        dragActive={dragActive} onExport={() => setExportDialogOpen(true)} exporting={exporting} />}
+        dragActive={dragActive} onExport={() => setExportDialogOpen(true)} onOpenCollage={() => setCollageOpen(true)} exporting={exporting} />}
       rightPanel={photos.length === 0 ? null : mobileLayout ? <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
         : <RightPanel collapsed={!inspectorOpen} onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)} />}
       filmStrip={<FilmStrip items={photos.map((photo) => ({ id: photo.id, label: photo.path.split(/[\\/]/).pop() ?? photo.path,
@@ -103,6 +108,7 @@ function App({ theme }: { theme: ThemeController }) {
       open={exportNoticeOpen}
       onClose={() => setExportNoticeOpen(false)}
     />
+    {collageOpen && <CollageWorkspace photos={collagePhotos} onClose={() => setCollageOpen(false)} />}
   </>;
 }
 export default App;

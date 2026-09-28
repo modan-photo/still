@@ -18,10 +18,11 @@ type MainCanvasProps = {
   showFolderImport: boolean;
   dragActive: boolean;
   onExport: () => void;
+  onOpenCollage: () => void;
   exporting: boolean;
 };
 
-export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragActive, onExport, exporting }: MainCanvasProps) {
+export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragActive, onExport, onOpenCollage, exporting }: MainCanvasProps) {
   const photos = useProjectStore((state) => state.photos);
   const selectedId = useProjectStore((state) => state.selectedId);
   const removePhotos = useProjectStore((state) => state.removePhotos);
@@ -60,6 +61,7 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
         <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
           <Button size="small" onClick={onImport}>Import photos</Button>
           <div className="flex items-center gap-2">
+            {photos.length >= 2 && <Button size="small" variant="outlined" onClick={onOpenCollage}>Collage</Button>}
             <Button size="small" disabled={!photo || exporting} onClick={onExport}>{exporting ? 'Exporting…' : 'Export'}</Button>
             <Tooltip title="Remove current photo (Del)" arrow>
               <span>
