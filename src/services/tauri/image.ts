@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useTaskStore } from '../../stores/taskStore';
 import type { CachedImage, CacheKind, ImageMeta, TaskProgress } from '../../types/image';
 import type { RenderSpec } from '../../types/renderSpec';
+import type { BatchExportReport, ExportOptions } from '../../types/export';
 
 export class AppError extends Error {
   constructor(public readonly code: string, message: string) { super(message); this.name = 'AppError'; }
@@ -48,5 +49,7 @@ async function run<T>(operation: string, args: Record<string, unknown>, taskId: 
 export const loadImage = (path: string, taskId = crypto.randomUUID()) => run<ImageMeta>('image_load', { path }, taskId);
 export const getCachedImage = (path: string, kind: CacheKind, taskId = crypto.randomUUID()) => run<CachedImage>('thumb_get', { path, kind }, taskId);
 export const exportImage = (spec: RenderSpec, outPath: string, taskId = crypto.randomUUID()) => run<void>('image_export', { spec: structuredClone(spec), outPath }, taskId);
+export const exportImageBatch = (specs: RenderSpec[], opts: ExportOptions, taskId = crypto.randomUUID()) =>
+  run<BatchExportReport>('image_export_batch', { specs: structuredClone(specs), opts: structuredClone(opts) }, taskId);
 export const applyBorderStub = (spec: RenderSpec) => call<{ implemented: false; spec: RenderSpec }>('image_apply_border', { spec });
 export const applyWatermarkStub = (spec: RenderSpec) => call<{ implemented: false; spec: RenderSpec }>('image_apply_watermark', { spec });

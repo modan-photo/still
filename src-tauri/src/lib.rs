@@ -12,6 +12,7 @@ pub fn run() {
             commands::image::image_list_directory,
             commands::image::cache_invalidate,
             commands::image::image_export,
+            commands::export::image_export_batch,
             commands::image::thumb_get,
             commands::image::image_apply_border,
             commands::image::image_apply_watermark,
@@ -27,6 +28,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

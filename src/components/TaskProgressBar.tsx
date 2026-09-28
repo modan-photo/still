@@ -19,9 +19,9 @@ export function TaskProgressBar() {
   };
   return <Box sx={{ flexShrink: 0 }}>
     {active.length > 0 && <>
-      <LinearProgress aria-label="Image processing progress" variant="determinate" value={active.reduce((sum, task) => sum + task.progress, 0) / active.length} sx={{ height: 3 }} />
+      <LinearProgress aria-label="Image processing progress" variant="determinate" value={active.reduce((sum, task) => sum + task.progress, 0) / active.length} sx={{ height: 3, '& .MuiLinearProgress-bar': { transition: 'transform 240ms var(--motion-easing)' } }} />
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, fontSize: 12 }}>
-        <span role="status">Processing {active.length} task(s)…</span><Button size="small" onClick={() => void cancel()}>Cancel active tasks</Button>
+        <span role="status">{active.length === 1 && active[0].operation === 'image_export_batch' ? active[0].stage : `Processing ${active.length} task(s)…`}</span><Button size="small" onClick={() => void cancel()}>Cancel</Button>
       </Box>
     </>}
     {failed && <Alert severity="error" onClose={() => dismiss(failed.taskId)}>{failed.error}</Alert>}

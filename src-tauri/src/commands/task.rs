@@ -59,8 +59,13 @@ impl TaskManager {
     ) {
         if let Ok(mut tasks) = self.0.lock() {
             if let Some((event, token)) = tasks.get_mut(id) {
-                event.stage = stage.into();
-                event.progress = progress;
+                if result.is_some() {
+                    event.stage = stage.into();
+                    event.progress = event.progress.max(progress);
+                } else if progress >= event.progress {
+                    event.stage = stage.into();
+                    event.progress = progress;
+                }
                 if let Some(result) = result {
                     event.status = match result {
                         Ok(()) => "completed",
@@ -93,7 +98,7 @@ pub async fn run<T, F>(
 ) -> Result<T, AppError>
 where
     T: Send + 'static,
-    F: FnOnce(CancellationToken, Box<dyn Fn(&str, u8) + Send>) -> Result<T, AppError>
+    F: FnOnce(CancellationToken, Arc<dyn Fn(&str, u8) + Send + Sync>) -> Result<T, AppError>
         + Send
         + 'static,
 {
@@ -104,7 +109,7 @@ where
     let worker_id = id.clone();
     let result_token = token.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let report = Box::new(move |stage: &str, progress: u8| {
+        let report = Arc::new(move |stage: &str, progress: u8| {
             worker_manager.report(&worker_window, &worker_id, stage, progress, None)
         });
         check(&token)?;

@@ -1,125 +1,33 @@
-import {
-  alpha,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  Snackbar,
-  SnackbarContent,
-  useTheme,
-} from "@mui/material";
-import { useState } from "react";
-import { useProjectStore } from "../stores/projectStore";
-import { useUndoStore } from "../stores/undoStore";
+import { alpha, Button, Dialog, DialogActions, DialogContent, DialogTitle, Snackbar, SnackbarContent } from '@mui/material';
+import { platform } from '@tauri-apps/plugin-os';
+import { openPath } from '@tauri-apps/plugin-opener';
+import { useState } from 'react';
+import type { BatchExportReport } from '../types/export';
 
-type ExportCompletionNoticeProps = {
-  exportedPhotoIds: string[];
-  open: boolean;
-  onClose: () => void;
-};
+type Props = { report: BatchExportReport | null; open: boolean; onClose: () => void };
 
-/** Offers workspace removal after a successful export without touching source files. */
-export function ExportCompletionNotice({ exportedPhotoIds, open, onClose }: ExportCompletionNoticeProps) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const theme = useTheme();
-  const photos = useProjectStore((state) => state.photos);
-  const removePhotos = useProjectStore((state) => state.removePhotos);
-  const pushUndo = useUndoStore((state) => state.push);
-  const availableIds = exportedPhotoIds.filter((id) => photos.some((photo) => photo.id === id));
-  const exportedCount = exportedPhotoIds.length;
-
-  const openConfirmation = () => {
-    onClose();
-    setConfirmOpen(true);
-  };
-
-  const closeConfirmation = () => setConfirmOpen(false);
-
-  const confirmRemoval = () => {
-    if (availableIds.length > 0) pushUndo(removePhotos(availableIds));
-    setConfirmOpen(false);
-  };
-
-  return (
-    <>
-      <Snackbar
-        open={open && exportedCount > 0}
-        autoHideDuration={6_000}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        onClose={(_, reason) => {
-          if (reason !== "clickaway") onClose();
-        }}
-        TransitionProps={{
-          timeout: {
-            enter: theme.still.motion.duration.base,
-            exit: theme.still.motion.duration.fast,
-          },
-        }}
-      >
-        <SnackbarContent
-          role="status"
-          message={`Exported ${exportedCount} ${exportedCount === 1 ? "photo" : "photos"}`}
-          action={(
-            <Button size="small" onClick={openConfirmation}>
-              Remove exported photos
-            </Button>
-          )}
-          sx={(currentTheme) => {
-            const colors = currentTheme.still.colors[currentTheme.palette.mode];
-
-            return {
-              minWidth: 0,
-              color: colors.text.primary,
-              backgroundColor: alpha(colors.bg.elevated, currentTheme.still.glass.backgroundOpacity),
-              backgroundImage: "none",
-              border: `1px solid ${colors.border.subtle}`,
-              borderRadius: `${currentTheme.still.radius.lg}px`,
-              boxShadow: currentTheme.still.shadow.elev3,
-              backdropFilter: currentTheme.still.glass.backdropFilter,
-              WebkitBackdropFilter: currentTheme.still.glass.backdropFilter,
-              "& .MuiSnackbarContent-action": { marginRight: 0 },
-            };
-          }}
-        />
-      </Snackbar>
-
-      <Dialog
-        open={confirmOpen}
-        onClose={closeConfirmation}
-        aria-labelledby="remove-exported-photos-title"
-        aria-describedby="remove-exported-photos-description"
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: (currentTheme) => ({
-              borderRadius: `${currentTheme.still.radius.lg}px`,
-              boxShadow: currentTheme.still.shadow.elev3,
-            }),
-          },
-        }}
-      >
-        <DialogTitle id="remove-exported-photos-title">Remove exported photos?</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="remove-exported-photos-description">
-            This will remove {availableIds.length} {availableIds.length === 1 ? "photo" : "photos"} from the workspace. Original files will not be deleted.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeConfirmation}>Cancel</Button>
-          <Button
-            onClick={confirmRemoval}
-            disabled={availableIds.length === 0}
-            sx={(currentTheme) => ({
-              color: currentTheme.still.colors[currentTheme.palette.mode].danger,
-            })}
-          >
-            Remove
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
+export function ExportCompletionNotice({ report, open, onClose }: Props) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  if (!report) return null;
+  const mobile = platform() === 'android';
+  const summary = `Exported ${report.succeeded} · Failed ${report.failed}${report.skipped ? ` · Skipped ${report.skipped}` : ''}`;
+  const showDetails = () => { onClose(); setDetailsOpen(true); };
+  return <>
+    <Snackbar open={open} autoHideDuration={8_000} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} onClose={(_, reason) => reason !== 'clickaway' && onClose()}>
+      <SnackbarContent role="status" message={<div><div>{summary}</div>{mobile && <div className="mt-0.5 max-w-[52vw] truncate text-[11px] opacity-70">Saved to {report.outputDirectory}</div>}</div>}
+        action={<div className="flex items-center">
+          {report.failed > 0 && <Button size="small" onClick={showDetails}>Details</Button>}
+          {!mobile && <Button size="small" onClick={() => void openPath(report.outputDirectory)}>Open folder</Button>}
+        </div>}
+        sx={(theme) => { const colors = theme.still.colors[theme.palette.mode]; return { minWidth: 0, color: colors.text.primary, backgroundColor: alpha(colors.bg.elevated, theme.still.glass.backgroundOpacity), backgroundImage: 'none', border: `1px solid ${colors.border.subtle}`, borderRadius: `${theme.still.radius.lg}px`, boxShadow: theme.still.shadow.elev3, backdropFilter: theme.still.glass.backdropFilter, '& .MuiSnackbarContent-action': { marginRight: 0 } }; }} />
+    </Snackbar>
+    <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} fullWidth maxWidth="sm" aria-labelledby="export-failures-title">
+      <DialogTitle id="export-failures-title">Export report</DialogTitle>
+      <DialogContent dividers>
+        <div className="mb-4 text-sm text-secondary">{summary}</div>
+        <div className="space-y-3">{report.failures.map((failure) => <div key={failure.sourcePath} className="rounded-md border border-subtle p-3"><div className="truncate text-sm text-primary" title={failure.sourcePath}>{failure.sourcePath.split(/[\\/]/).pop()}</div><div className="mt-1 text-xs leading-5 text-secondary">{failure.reason}</div></div>)}</div>
+      </DialogContent>
+      <DialogActions><Button onClick={() => setDetailsOpen(false)}>Close</Button></DialogActions>
+    </Dialog>
+  </>;
 }

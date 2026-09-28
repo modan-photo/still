@@ -7,15 +7,22 @@ use std::{
 };
 
 use image::{
-    codecs::{jpeg::JpegEncoder, png::PngEncoder, webp::WebPEncoder},
+    codecs::{jpeg::JpegEncoder, png::PngEncoder},
     DynamicImage, ExtendedColorType, ImageEncoder, RgbImage, RgbaImage,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     error::AppError,
+    image_io::metadata::copy_metadata,
     render::spec::{OutputFormat, OutputSpec},
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExistingDestination {
+    Reject,
+    Replace,
+}
 
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -27,8 +34,31 @@ pub fn save_image_atomic(
     output: &OutputSpec,
     cancellation: &CancellationToken,
 ) -> Result<(), AppError> {
+    save_image_atomic_with_metadata(
+        image,
+        destination,
+        output,
+        cancellation,
+        ExistingDestination::Reject,
+        None,
+        false,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn save_image_atomic_with_metadata(
+    image: &DynamicImage,
+    destination: &Path,
+    output: &OutputSpec,
+    cancellation: &CancellationToken,
+    existing: ExistingDestination,
+    metadata_source: Option<&Path>,
+    preserve_exif: bool,
+    preserve_icc: bool,
+) -> Result<(), AppError> {
     ensure_not_cancelled(cancellation)?;
-    if destination.exists() {
+    if destination.exists() && existing == ExistingDestination::Reject {
         return Err(AppError::InvalidInput(format!(
             "destination already exists: {}",
             destination.display()
@@ -60,7 +90,7 @@ pub fn save_image_atomic(
     match output.format {
         OutputFormat::Jpeg => encode_jpeg(image, &mut writer, output.quality)?,
         OutputFormat::Png => encode_png(image, &mut writer)?,
-        OutputFormat::Webp => encode_webp(image, &mut writer)?,
+        OutputFormat::Webp => encode_webp(image, &mut writer, output.quality)?,
     }
 
     writer.flush()?;
@@ -69,10 +99,33 @@ pub fn save_image_atomic(
     drop(file);
     ensure_not_cancelled(cancellation)?;
 
-    // A hard link publishes the complete file without overwriting a destination
-    // created concurrently. Both names are on the same filesystem.
-    fs::hard_link(temporary.path(), destination)?;
-    let _ = fs::remove_file(temporary.path());
+    if let Some(source) = metadata_source {
+        copy_metadata(
+            source,
+            temporary.path(),
+            output.format,
+            image.width(),
+            image.height(),
+            preserve_exif,
+            preserve_icc,
+        )?;
+        ensure_not_cancelled(cancellation)?;
+    }
+
+    match existing {
+        ExistingDestination::Reject => {
+            // A hard link publishes the complete file without overwriting a destination
+            // created concurrently. Both names are on the same filesystem.
+            fs::hard_link(temporary.path(), destination)?;
+            let _ = fs::remove_file(temporary.path());
+        }
+        ExistingDestination::Replace => {
+            if destination.exists() {
+                fs::remove_file(destination)?;
+            }
+            fs::rename(temporary.path(), destination)?;
+        }
+    }
     temporary.disarm();
     Ok(())
 }
@@ -101,17 +154,14 @@ fn encode_png(image: &DynamicImage, writer: &mut impl Write) -> Result<(), AppEr
     Ok(())
 }
 
-fn encode_webp(image: &DynamicImage, writer: &mut impl Write) -> Result<(), AppError> {
+fn encode_webp(image: &DynamicImage, writer: &mut impl Write, quality: u8) -> Result<(), AppError> {
     let pixels: Cow<'_, RgbaImage> = match image.as_rgba8() {
         Some(pixels) => Cow::Borrowed(pixels),
         None => Cow::Owned(image.to_rgba8()),
     };
-    WebPEncoder::new_lossless(writer).write_image(
-        pixels.as_raw(),
-        pixels.width(),
-        pixels.height(),
-        ExtendedColorType::Rgba8,
-    )?;
+    let encoded = webp::Encoder::from_rgba(pixels.as_raw(), pixels.width(), pixels.height())
+        .encode(quality.clamp(1, 100) as f32);
+    writer.write_all(&encoded)?;
     Ok(())
 }
 
@@ -346,5 +396,38 @@ mod tests {
         }
 
         fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn webp_quality_changes_the_encoded_output() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-webp-quality-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_fn(256, 256, |x, y| {
+            Rgba([(x ^ y) as u8, x as u8, y as u8, 255])
+        }));
+        let token = CancellationToken::new();
+        let low = directory.join("low.webp");
+        let high = directory.join("high.webp");
+        for (path, quality) in [(&low, 20), (&high, 95)] {
+            save_image_atomic(
+                &image,
+                path,
+                &OutputSpec {
+                    format: OutputFormat::Webp,
+                    quality,
+                },
+                &token,
+            )
+            .unwrap();
+        }
+        assert_ne!(fs::read(&low).unwrap(), fs::read(&high).unwrap());
+        fs::remove_dir_all(directory).unwrap();
     }
 }
