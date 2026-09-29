@@ -5,6 +5,7 @@ import {
   IconButton,
   Paper,
   Popper,
+  Tooltip,
   useTheme,
 } from '@mui/material';
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
@@ -24,6 +25,7 @@ export interface FramePresetSelectProps {
   originalHeight: number;
   onSelect: (preset: FramePreset) => void;
   onSaveCurrent: () => void;
+  onQuickSave?: () => void;
   saveCurrentDisabled?: boolean;
   onPresetActions?: (preset: FramePreset, position: FramePresetActionPosition) => void;
 }
@@ -43,6 +45,7 @@ export function FramePresetSelect({
   originalHeight,
   onSelect,
   onSaveCurrent,
+  onQuickSave,
   saveCurrentDisabled = false,
   onPresetActions,
 }: FramePresetSelectProps) {
@@ -81,46 +84,82 @@ export function FramePresetSelect({
 
   return (
     <>
-      <ButtonBase
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? listboxId : undefined}
-        onClick={(event) => setAnchor(open ? null : event.currentTarget)}
-        sx={(currentTheme) => ({
-          width: '100%',
-          height: 40,
-          display: 'flex',
-          gap: `${currentTheme.still.spacing.sm}px`,
-          justifyContent: 'flex-start',
-          padding: `${currentTheme.still.spacing.xs}px ${currentTheme.still.spacing.sm}px`,
-          border: '1px solid transparent',
-          borderRadius: `${currentTheme.still.radius.md}px`,
-          backgroundColor: currentTheme.still.colors[currentTheme.palette.mode].bg.elevated,
-          color: currentTheme.still.colors[currentTheme.palette.mode].text.primary,
-          transition: currentTheme.transitions.create(['background-color', 'border-color'], {
-            duration: currentTheme.still.motion.duration.fast,
-          }),
-          '&:hover': {
-            backgroundColor: currentTheme.still.colors[currentTheme.palette.mode].bg.surface,
-            borderColor: currentTheme.still.colors[currentTheme.palette.mode].border.subtle,
-          },
-        })}
-      >
-        <FrameMiniPreview
-          src={previewSource}
-          preset={previewPreset}
-          originalWidth={originalWidth}
-          originalHeight={originalHeight}
-        />
-        <span className="min-w-0 flex-1 truncate text-left text-sm">
-          {selectedPreset.name}{modified ? ' *' : ''}
-        </span>
-        <span className={`shrink-0 text-secondary transition-transform duration-fast ${open ? 'rotate-180' : ''}`}>
-          <Icon name="chevron" size={14} />
-        </span>
-      </ButtonBase>
+      <div className="group relative">
+        <ButtonBase
+          ref={triggerRef}
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? listboxId : undefined}
+          onClick={(event) => setAnchor(open ? null : event.currentTarget)}
+          sx={(currentTheme) => ({
+            width: '100%',
+            height: 40,
+            display: 'flex',
+            gap: `${currentTheme.still.spacing.sm}px`,
+            justifyContent: 'flex-start',
+            padding: `${currentTheme.still.spacing.xs}px ${currentTheme.still.spacing.sm}px`,
+            paddingRight: modified
+              ? `${currentTheme.still.spacing.xxl * 2}px`
+              : `${currentTheme.still.spacing.xxl}px`,
+            border: '1px solid transparent',
+            borderRadius: `${currentTheme.still.radius.md}px`,
+            backgroundColor: currentTheme.still.colors[currentTheme.palette.mode].bg.elevated,
+            color: currentTheme.still.colors[currentTheme.palette.mode].text.primary,
+            transition: currentTheme.transitions.create(['background-color', 'border-color'], {
+              duration: currentTheme.still.motion.duration.fast,
+            }),
+            '&:hover': {
+              backgroundColor: currentTheme.still.colors[currentTheme.palette.mode].bg.surface,
+              borderColor: currentTheme.still.colors[currentTheme.palette.mode].border.subtle,
+            },
+          })}
+        >
+          <FrameMiniPreview
+            src={previewSource}
+            preset={previewPreset}
+            originalWidth={originalWidth}
+            originalHeight={originalHeight}
+          />
+          <span className="min-w-0 flex-1 truncate text-left text-sm">
+            {selectedPreset.name}{modified ? ' *' : ''}
+          </span>
+          <span className={`absolute right-2 text-secondary transition-transform duration-fast ${open ? 'rotate-180' : ''}`}>
+            <Icon name="chevron" size={14} />
+          </span>
+        </ButtonBase>
+        {modified && onQuickSave && (
+          <Tooltip title="Save changes">
+            <IconButton
+              type="button"
+              size="small"
+              aria-label={`Save changes to ${selectedPreset.name}`}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onQuickSave();
+              }}
+              sx={(currentTheme) => ({
+                position: 'absolute',
+                top: 6,
+                right: currentTheme.still.spacing.xxl,
+                width: 28,
+                height: 28,
+                opacity: 0,
+                color: currentTheme.still.colors[currentTheme.palette.mode].text.secondary,
+                transition: currentTheme.transitions.create(['opacity', 'color'], {
+                  duration: currentTheme.still.motion.duration.fast,
+                }),
+                '.group:hover &': { opacity: 1 },
+                '&:focus-visible': { opacity: 1 },
+                '&:hover': { color: currentTheme.still.colors[currentTheme.palette.mode].accent },
+              })}
+            >
+              <Icon name="save" size={14} />
+            </IconButton>
+          </Tooltip>
+        )}
+      </div>
 
       <Popper
         open={open}

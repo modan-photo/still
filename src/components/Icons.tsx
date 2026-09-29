@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
   | "check" | "chevron" | "sidebar" | "frame" | "stamp" | "info"
-  | "transform" | "rotate-left" | "rotate-right" | "minimize" | "maximize" | "plus" | "copy"
-  | "grid" | "single" | "trash" | "select" | "image-off" | "more"
+  | "transform" | "rotate-left" | "rotate-right" | "reset" | "minimize" | "maximize" | "plus" | "copy"
+  | "grid" | "single" | "trash" | "select" | "image-off" | "more" | "save"
   | "gap" | "radius" | "background" | "aspect" | "photos";
 
 /** name selects the icon; size controls both SVG dimensions and defaults to 18 pixels. */
@@ -30,6 +30,7 @@ const paths: Record<IconName, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14"/>,
   copy: <><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></>,
   more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></>,
+  save: <><path d="M5 3h12l2 2v16H5V3Z"/><path d="M8 3v6h8V3M8 21v-8h8v8"/></>,
   grid: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
   single: <rect x="4" y="5" width="16" height="14" rx="2"/>,
   trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></>,
@@ -51,6 +52,7 @@ const paths: Record<IconName, ReactNode> = {
   transform: <><path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5"/><rect x="7" y="7" width="10" height="10" rx="1"/></>,
   "rotate-left": <><path d="M4 8V3m0 0h5M4 3l4 4"/><path d="M5.2 11a7 7 0 1 0 2-4"/></>,
   "rotate-right": <><path d="M20 8V3m0 0h-5m5 0-4 4"/><path d="M18.8 11a7 7 0 1 1-2-4"/></>,
+  reset: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></>,
 };
 
 /**

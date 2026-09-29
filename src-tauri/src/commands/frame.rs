@@ -114,17 +114,33 @@ fn frame_preset_path(app: &AppHandle) -> Result<PathBuf, AppError> {
 fn read_preset_file(path: &Path) -> Result<FramePresetFile, AppError> {
     match fs::read(path) {
         Ok(bytes) => {
-            let file: FramePresetFile = serde_json::from_slice(&bytes).map_err(|error| {
+            let parsed = serde_json::from_slice::<FramePresetFile>(&bytes).map_err(|error| {
                 AppError::InvalidInput(format!("invalid frame-presets.json: {error}"))
-            })?;
-            validate_preset_file(&file)?;
-            Ok(file)
+            });
+            match parsed {
+                Ok(file) if validate_preset_file(&file).is_ok() => Ok(file),
+                Ok(_) | Err(_) => {
+                    backup_invalid_preset_file(path)?;
+                    Ok(FramePresetFile::default())
+                }
+            }
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             Ok(FramePresetFile::default())
         }
         Err(error) => Err(error.into()),
     }
+}
+
+fn backup_invalid_preset_file(path: &Path) -> Result<(), AppError> {
+    let mut backup_name = path.as_os_str().to_os_string();
+    backup_name.push(".bak");
+    let backup_path = PathBuf::from(backup_name);
+    if backup_path.exists() {
+        fs::remove_file(&backup_path)?;
+    }
+    fs::rename(path, backup_path)?;
+    Ok(())
 }
 
 fn validate_preset_file(file: &FramePresetFile) -> Result<(), AppError> {
@@ -193,5 +209,31 @@ mod tests {
             }]
         })).expect("deserialize preset file");
         assert!(validate_preset_file(&file).is_err());
+    }
+
+    #[test]
+    fn invalid_file_is_backed_up_and_replaced_with_defaults() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-frame-preset-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).expect("create test directory");
+        let path = directory.join("frame-presets.json");
+        fs::write(&path, b"{not valid json").expect("write invalid preset file");
+
+        let loaded = read_preset_file(&path).expect("recover invalid preset file");
+
+        assert_eq!(loaded.version, FRAME_PRESET_FILE_VERSION);
+        assert!(loaded.presets.is_empty());
+        assert!(!path.exists());
+        assert_eq!(
+            fs::read_to_string(directory.join("frame-presets.json.bak")).expect("read backup"),
+            "{not valid json"
+        );
+        fs::remove_dir_all(directory).expect("remove test directory");
     }
 }

@@ -11,22 +11,24 @@ import {
   Slider,
   Switch,
   TextField,
+  Tooltip,
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { BUILTIN_FRAME_PRESETS, DEFAULT_FRAME_PRESET_ID } from '../constants/framePresets';
 import { useRenderSpec } from '../hooks/useRenderSpec';
 import { loadFramePresets, saveFramePresets } from '../services/tauri/framePresets';
 import { loadUIState, saveLastFramePresetId } from '../services/tauri/uiState';
 import { useProjectStore } from '../stores/projectStore';
-import type { FramePreset } from '../types/frame';
+import type { FramePreset, FrameStyle } from '../types/frame';
 import { DEFAULT_BORDER, type BorderSpec } from '../types/renderSpec';
 import { framePresetToBorderSpec } from './FrameMiniPreview';
 import { FramePresetActions, type FramePresetActionTarget } from './FramePresetActions';
 import { FramePresetSelect } from './FramePresetSelect';
 import { makeUniqueFramePresetName, SaveFramePresetDialog } from './SaveFramePresetDialog';
 import { motionTokens } from '../theme/tokens';
+import { Icon } from './Icons';
 
 const PRESET_COLORS = ['#FFFFFF', '#F5F0E8', '#D8E7DE', '#BEDBE7', '#F3C6C2', '#F0D28C', '#D8C6E8', '#A8A8A8', '#555555', '#171717', '#B64236', '#2E6450'];
 
@@ -54,7 +56,6 @@ export function FrameControls() {
   const frameApplied = Boolean(spec?.border);
   const frame = spec?.border ?? DEFAULT_BORDER;
   const change = (patch: Partial<BorderSpec>) => update({ border: { ...frame, ...patch } });
-  const dimensionValue = frame.width;
 
   useEffect(() => {
     let disposed = false;
@@ -67,11 +68,15 @@ export function FrameControls() {
           ...storedPresets.map((preset) => preset.id),
         ]);
         if (!selectionChangedDuringLoad.current) {
-          setCurrentFramePresetId(
-            uiState.lastFramePresetId && availableIds.has(uiState.lastFramePresetId)
-              ? uiState.lastFramePresetId
-              : DEFAULT_FRAME_PRESET_ID,
-          );
+          const restoredId = uiState.lastFramePresetId && availableIds.has(uiState.lastFramePresetId)
+            ? uiState.lastFramePresetId
+            : DEFAULT_FRAME_PRESET_ID;
+          setCurrentFramePresetId(restoredId);
+          if (uiState.lastFramePresetId !== restoredId) {
+            void saveLastFramePresetId(restoredId).catch((error: unknown) => {
+              console.warn('Unable to repair the selected frame preset', error);
+            });
+          }
         }
       })
       .catch((error: unknown) => {
@@ -89,9 +94,11 @@ export function FrameControls() {
   }, [photo, presetsLoaded, selectedId, selectedPreset, spec?.border, update]);
 
   const selectPreset = (preset: FramePreset) => {
+    const discardedUnsavedChanges = preset.id !== currentFramePresetId && presetModified;
     selectionChangedDuringLoad.current = true;
     setCurrentFramePresetId(preset.id);
     update({ border: framePresetToBorderSpec(preset) });
+    if (discardedUnsavedChanges) setNotice('Unsaved frame changes discarded');
     void saveLastFramePresetId(preset.id).catch((error: unknown) => {
       console.warn('Unable to persist the selected frame preset', error);
     });
@@ -122,6 +129,28 @@ export function FrameControls() {
     setCurrentFramePresetId(preset.id);
     selectionChangedDuringLoad.current = true;
     setNotice('Saved to My Presets');
+  };
+
+  const quickSaveCurrentPreset = async () => {
+    if (!selectedPreset || !currentPreviewPreset || !presetModified) return;
+    if (selectedPreset.builtin) {
+      setSaveDialogOpen(true);
+      return;
+    }
+    const updatedPreset: FramePreset = {
+      ...selectedPreset,
+      params: structuredClone(currentPreviewPreset.params),
+    };
+    const nextUserPresets = userPresets.map((preset) => (
+      preset.id === updatedPreset.id ? updatedPreset : preset
+    ));
+    try {
+      await saveFramePresets(nextUserPresets);
+      setUserPresets(nextUserPresets);
+      setNotice('Preset updated');
+    } catch {
+      setNotice('Unable to update this preset');
+    }
   };
 
   const renameUserPreset = async (preset: FramePreset, requestedName: string) => {
@@ -168,57 +197,87 @@ export function FrameControls() {
     setNotice('Preset deleted');
   };
 
+  const resetFrame = useCallback(() => {
+    if (!selectedId || !photo) return;
+    const fallback = presets.find((preset) => preset.id === DEFAULT_FRAME_PRESET_ID);
+    if (!fallback) return;
+    selectionChangedDuringLoad.current = true;
+    setCurrentFramePresetId(fallback.id);
+    update({ border: framePresetToBorderSpec(fallback) });
+    setNotice('Reset to default');
+    void saveLastFramePresetId(fallback.id).catch((error: unknown) => {
+      console.warn('Unable to persist the default frame preset', error);
+    });
+  }, [photo, presets, selectedId, update]);
+
+  useEffect(() => {
+    const resetWithShortcut = (event: KeyboardEvent) => {
+      if (event.altKey || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== 'r') return;
+      event.preventDefault();
+      resetFrame();
+    };
+    window.addEventListener('keydown', resetWithShortcut);
+    return () => window.removeEventListener('keydown', resetWithShortcut);
+  }, [resetFrame]);
+
   if (!selectedId || !photo) {
     return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a frame.</p>;
   }
 
   return <div className="space-y-4">
-    <FramePresetSelect
-      presets={presets}
-      selectedPresetId={selectedPreset.id}
-      currentPreviewPreset={currentPreviewPreset}
-      modified={presetModified}
-      previewSource={photo.thumbUrl}
-      originalWidth={photo.width}
-      originalHeight={photo.height}
-      onSelect={selectPreset}
-      onSaveCurrent={() => setSaveDialogOpen(true)}
-      onPresetActions={(preset, position) => setPresetActionTarget({ preset, position })}
-    />
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <FramePresetSelect
+          presets={presets}
+          selectedPresetId={selectedPreset.id}
+          currentPreviewPreset={currentPreviewPreset}
+          modified={presetModified}
+          previewSource={photo.thumbUrl}
+          originalWidth={photo.width}
+          originalHeight={photo.height}
+          onSelect={selectPreset}
+          onSaveCurrent={() => setSaveDialogOpen(true)}
+          onQuickSave={() => void quickSaveCurrentPreset()}
+          onPresetActions={(preset, position) => setPresetActionTarget({ preset, position })}
+        />
+      </div>
+      <Tooltip title="Reset to default (White Border)">
+        <IconButton
+          type="button"
+          aria-label="Reset frame to default"
+          onClick={resetFrame}
+          sx={(theme) => ({
+            width: 32,
+            height: 32,
+            flex: '0 0 auto',
+            border: '1px solid',
+            borderColor: theme.still.colors[theme.palette.mode].border.subtle,
+            borderRadius: `${theme.still.radius.md}px`,
+            backgroundColor: theme.still.colors[theme.palette.mode].bg.elevated,
+            color: theme.still.colors[theme.palette.mode].text.secondary,
+            transition: theme.transitions.create(['background-color', 'color'], {
+              duration: theme.still.motion.duration.fast,
+            }),
+            '&:hover': {
+              backgroundColor: theme.still.colors[theme.palette.mode].bg.surface,
+              color: theme.still.colors[theme.palette.mode].text.primary,
+            },
+          })}
+        >
+          <Icon name="reset" size={16} />
+        </IconButton>
+      </Tooltip>
+    </div>
 
-    <NumberSlider
-      label="Width"
-      value={dimensionValue}
-      min={0}
-      max={200}
-      onChange={(value) => change({ width: value })}
-      suffix={frame.unit === 'px' ? 'px' : '%'}
-      after={<ToggleButtonGroup
-        exclusive
-        size="small"
-        value={frame.unit}
-        onChange={(_, unit: BorderSpec['unit'] | null) => {
-          if (!unit || unit === frame.unit) return;
-          const longEdge = Math.max(photo.width, photo.height);
-          const converted = unit === 'percent'
-            ? Math.round(dimensionValue / longEdge * 1_000) / 10
-            : Math.round(dimensionValue / 100 * longEdge);
-          change({ unit, width: clamp(converted, 0, 200) });
-        }}
-        aria-label="Frame width unit"
-        sx={{ height: 28, '& .MuiToggleButton-root': { px: 1, fontSize: 10 } }}
-      ><ToggleButton value="px">px</ToggleButton><ToggleButton value="percent">%</ToggleButton></ToggleButtonGroup>}
-    />
-
-    {frame.style === 'gradient' ? <GradientStops frame={frame} onChange={change} />
-      : frame.style !== 'film' && frame.style !== 'polaroid' ? <ColorPicker label="Color" color={frame.color} onChange={(color) => change({ color })} /> : null}
-
-    {frame.style === 'gradient' && <NumberSlider label="Angle" value={frame.angle} min={-180} max={180} onChange={(angle) => change({ angle })} suffix="°" />}
-    <NumberSlider label="Corner radius" value={frame.radius} min={0} max={100} onChange={(radius) => change({ radius })} suffix="px" />
-    {frame.style === 'polaroid' && <label className="flex items-center justify-between text-xs text-secondary">
-      Reserve caption area
-      <Switch size="small" checked={frame.caption} onChange={(event) => change({ caption: event.target.checked })} />
-    </label>}
+    <FrameParameterTransition style={selectedPreset.style}>
+      {(displayStyle) => <FrameParameterFields
+        displayStyle={displayStyle}
+        frame={frame}
+        photoWidth={photo.width}
+        photoHeight={photo.height}
+        onChange={change}
+      />}
+    </FrameParameterTransition>
 
     <Button fullWidth variant="outlined" size="small" disabled={photoCount < 2 || !frameApplied} onClick={() => setConfirmOpen(true)}>
       Apply to all photos
@@ -370,6 +429,115 @@ const clamp = (value: number, min: number, max: number) => Number.isFinite(value
 
 function borderMatchesPreset(border: BorderSpec, preset: FramePreset): boolean {
   return JSON.stringify(border) === JSON.stringify(framePresetToBorderSpec(preset));
+}
+
+function FrameParameterTransition({
+  style,
+  children,
+}: {
+  style: FrameStyle;
+  children: (displayStyle: FrameStyle) => ReactNode;
+}) {
+  const [displayStyle, setDisplayStyle] = useState(style);
+  const [visible, setVisible] = useState(true);
+  const enterFrame = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (style === displayStyle) {
+      setVisible(true);
+      return;
+    }
+    setVisible(false);
+    const swapTimer = window.setTimeout(() => {
+      setDisplayStyle(style);
+      enterFrame.current = window.requestAnimationFrame(() => {
+        setVisible(true);
+        enterFrame.current = null;
+      });
+    }, motionTokens.duration.fast);
+    return () => {
+      window.clearTimeout(swapTimer);
+      if (enterFrame.current !== null) {
+        window.cancelAnimationFrame(enterFrame.current);
+        enterFrame.current = null;
+      }
+    };
+  }, [displayStyle, style]);
+
+  return (
+    <div
+      aria-hidden={!visible}
+      style={{
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? 'auto' : 'none',
+        transitionProperty: 'opacity',
+        transitionDuration: `${motionTokens.duration.fast}ms`,
+        transitionTimingFunction: motionTokens.easing,
+      }}
+    >
+      {children(displayStyle)}
+    </div>
+  );
+}
+
+function FrameParameterFields({
+  displayStyle,
+  frame,
+  photoWidth,
+  photoHeight,
+  onChange,
+}: {
+  displayStyle: FrameStyle;
+  frame: BorderSpec;
+  photoWidth: number;
+  photoHeight: number;
+  onChange: (patch: Partial<BorderSpec>) => void;
+}) {
+  const dimensionValue = frame.width;
+  return (
+    <div className="space-y-4">
+      <NumberSlider
+        label="Width"
+        value={dimensionValue}
+        min={0}
+        max={200}
+        onChange={(value) => onChange({ width: value })}
+        suffix={frame.unit === 'px' ? 'px' : '%'}
+        after={<ToggleButtonGroup
+          exclusive
+          size="small"
+          value={frame.unit}
+          onChange={(_, unit: BorderSpec['unit'] | null) => {
+            if (!unit || unit === frame.unit) return;
+            const longEdge = Math.max(photoWidth, photoHeight);
+            const converted = unit === 'percent'
+              ? Math.round(dimensionValue / longEdge * 1_000) / 10
+              : Math.round(dimensionValue / 100 * longEdge);
+            onChange({ unit, width: clamp(converted, 0, 200) });
+          }}
+          aria-label="Frame width unit"
+          sx={{ height: 28, '& .MuiToggleButton-root': { px: 1, fontSize: 10 } }}
+        ><ToggleButton value="px">px</ToggleButton><ToggleButton value="percent">%</ToggleButton></ToggleButtonGroup>}
+      />
+
+      {displayStyle === 'gradient'
+        ? <GradientStops frame={frame} onChange={onChange} />
+        : displayStyle !== 'polaroid'
+          ? <ColorPicker label="Color" color={frame.color} onChange={(color) => onChange({ color })} />
+          : null}
+
+      {displayStyle === 'gradient' && (
+        <NumberSlider label="Angle" value={frame.angle} min={-180} max={180} onChange={(angle) => onChange({ angle })} suffix="°" />
+      )}
+      <NumberSlider label="Corner radius" value={frame.radius} min={0} max={100} onChange={(radius) => onChange({ radius })} suffix="px" />
+      {displayStyle === 'polaroid' && (
+        <label className="flex items-center justify-between text-xs text-secondary">
+          Reserve caption area
+          <Switch size="small" checked={frame.caption} onChange={(event) => onChange({ caption: event.target.checked })} />
+        </label>
+      )}
+    </div>
+  );
 }
 
 function framePreviewPreset(border: BorderSpec, preset: FramePreset): Pick<FramePreset, 'style' | 'params'> {

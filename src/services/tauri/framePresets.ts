@@ -7,6 +7,7 @@ interface FramePresetFile {
 }
 
 const BROWSER_STORAGE_KEY = 'still.frame-presets';
+const BROWSER_BACKUP_STORAGE_KEY = `${BROWSER_STORAGE_KEY}.bak`;
 const EMPTY_PRESET_FILE: FramePresetFile = { version: 1, presets: [] };
 const FRAME_STYLES: readonly FrameStyle[] = ['solid', 'gradient', 'shadow', 'polaroid'];
 
@@ -33,9 +34,28 @@ function readBrowserPresetFile(): unknown {
   const stored = localStorage.getItem(BROWSER_STORAGE_KEY);
   if (!stored) return EMPTY_PRESET_FILE;
   try {
-    return JSON.parse(stored) as unknown;
+    const value = JSON.parse(stored) as unknown;
+    const normalized = normalizePresetFile(value);
+    if (!isRecord(value)
+      || value.version !== 1
+      || !Array.isArray(value.presets)
+      || normalized.presets.length !== value.presets.length) {
+      backupBrowserPresetFile(stored);
+      return EMPTY_PRESET_FILE;
+    }
+    return value;
   } catch {
+    backupBrowserPresetFile(stored);
     return EMPTY_PRESET_FILE;
+  }
+}
+
+function backupBrowserPresetFile(contents: string): void {
+  try {
+    localStorage.setItem(BROWSER_BACKUP_STORAGE_KEY, contents);
+    localStorage.removeItem(BROWSER_STORAGE_KEY);
+  } catch {
+    // Storage may be unavailable; loading defaults is still safe.
   }
 }
 
