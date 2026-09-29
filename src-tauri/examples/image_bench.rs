@@ -1,15 +1,19 @@
 //! Standalone benchmark reusing production I/O without starting a Tauri window.
+// Path-included production modules expose more APIs than this benchmark exercises.
+#[allow(dead_code)]
 #[path = "../src/error.rs"]
 mod error;
+#[allow(dead_code)]
 #[path = "../src/image_io/mod.rs"]
 mod image_io;
+#[allow(dead_code)]
 #[path = "../src/render/mod.rs"]
 mod render;
 
 use image_io::{
     load::inspect_image,
     save::save_image_atomic,
-    thumb::{get_or_create_cached, get_or_create_cached_batch, CacheKind},
+    thumb::{get_or_create_cached, CacheKind},
 };
 use render::spec::{OutputFormat, OutputSpec};
 use serde_json::json;
@@ -117,37 +121,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "jpegEncodeMs": encode_ms, "decodeAndExportMs": decode_ms + encode_ms, "decodedBytes": decoded_bytes}));
         eprintln!("Measured {}/{}", index + 1, paths.len());
     }
-    let start = Instant::now();
-    let cold = get_or_create_cached_batch(
-        &paths,
-        &run_dir.join("batch-cache"),
-        CacheKind::Thumbnail,
-        &token,
-    );
-    let batch_ms = start.elapsed().as_secs_f64() * 1000.0;
-    for result in cold {
-        if result?.cache_hit {
-            return Err("cold batch unexpectedly hit cache".into());
-        }
-    }
-    let start = Instant::now();
-    let warm = get_or_create_cached_batch(
-        &paths,
-        &run_dir.join("batch-cache"),
-        CacheKind::Thumbnail,
-        &token,
-    );
-    let warm_ms = start.elapsed().as_secs_f64() * 1000.0;
-    for result in warm {
-        if !result?.cache_hit {
-            return Err("repeat batch missed cache".into());
-        }
-    }
     let report = json!({"schemaVersion": 1, "synthetic": smoke, "debugBuild": cfg!(debug_assertions),
-        "os": std::env::consts::OS, "arch": std::env::consts::ARCH, "rayonThreads": rayon::current_num_threads(),
-        "imageCount": paths.len(), "coldThumbnailBatchMs": batch_ms, "cachedThumbnailBatchMs": warm_ms,
+        "os": std::env::consts::OS, "arch": std::env::consts::ARCH,
+        "imageCount": paths.len(),
         "peakMemoryBytes": null, "images": images,
-        "limitations": "Cold means empty application cache, not cold OS disk cache. Batch uses Rayon API, not the UI's two-worker queue. Memory and Canvas frame rate are not measured. JPEG exports reencode at quality 90."});
+        "limitations": "Cold means empty application cache, not cold OS disk cache. Memory and Canvas frame rate are not measured. JPEG exports reencode at quality 90."});
     let report_path = run_dir.join("report.json");
     fs::write(&report_path, serde_json::to_vec_pretty(&report)?)?;
     println!("{}", report_path.display());

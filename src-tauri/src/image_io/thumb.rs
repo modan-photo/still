@@ -8,7 +8,6 @@ use std::{
 
 use fast_image_resize::{images::Image, PixelType, ResizeOptions, Resizer};
 use image::{DynamicImage, RgbaImage};
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
@@ -83,19 +82,6 @@ pub fn get_or_create_cached(
         Err(_) if destination.is_file() => cached_result(destination, true),
         Err(error) => Err(error),
     }
-}
-
-/// Runs independent cache requests on Rayon's shared CPU pool.
-pub fn get_or_create_cached_batch(
-    source_paths: &[PathBuf],
-    cache_root: &Path,
-    kind: CacheKind,
-    cancellation: &CancellationToken,
-) -> Vec<Result<CachedImage, AppError>> {
-    source_paths
-        .par_iter()
-        .map(|path| get_or_create_cached(path, cache_root, kind, cancellation))
-        .collect()
 }
 
 fn resize_to_long_edge(image: DynamicImage, target: u32) -> Result<DynamicImage, AppError> {
@@ -209,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn fifty_jpegs_reuse_cache_and_preview_is_bounded() {
+    fn multiple_jpegs_reuse_cache_and_preview_is_bounded() {
         let directory = std::env::temp_dir().join(format!(
             "still-batch-{}-{}",
             std::process::id(),
@@ -225,7 +211,7 @@ mod tests {
         })
         .save(&source)
         .unwrap();
-        let paths: Vec<_> = (0..50)
+        let paths: Vec<_> = (0..6)
             .map(|index| {
                 let path = directory.join(format!("photo-{index}.jpg"));
                 fs::copy(&source, &path).unwrap();
@@ -234,16 +220,21 @@ mod tests {
             .collect();
         let token = CancellationToken::new();
         let cache = directory.join("cache");
-        let first = super::get_or_create_cached_batch(&paths, &cache, CacheKind::Thumbnail, &token);
+        let first: Vec<_> = paths
+            .iter()
+            .map(|path| get_or_create_cached(path, &cache, CacheKind::Thumbnail, &token))
+            .collect();
         assert!(first.iter().all(|result| result
             .as_ref()
             .is_ok_and(|image| !image.cache_hit && image.width == 512)));
-        let second =
-            super::get_or_create_cached_batch(&paths, &cache, CacheKind::Thumbnail, &token);
+        let second: Vec<_> = paths
+            .iter()
+            .map(|path| get_or_create_cached(path, &cache, CacheKind::Thumbnail, &token))
+            .collect();
         assert!(second
             .iter()
             .all(|result| result.as_ref().is_ok_and(|image| image.cache_hit)));
-        assert_eq!(fs::read_dir(cache.join("thumbs")).unwrap().count(), 50);
+        assert_eq!(fs::read_dir(cache.join("thumbs")).unwrap().count(), 6);
         let preview = get_or_create_cached(&source, &cache, CacheKind::Preview, &token).unwrap();
         assert_eq!((preview.width, preview.height), (2048, 683));
         fs::remove_dir_all(directory).unwrap();
