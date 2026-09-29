@@ -11,11 +11,17 @@ type TitleBarProps = {
   themeMode: "light" | "dark";
 };
 
-/** Windows title bar with direct editor actions and native window controls. */
+/**
+ * Desktop custom title bar with application actions and native window controls.
+ * Elements marked with `data-tauri-drag-region` remain draggable; interactive
+ * buttons intentionally sit outside those regions so clicks reach their handlers.
+ */
 export function TitleBar({ onOpenSettings, onToggleTheme, themeMode }: TitleBarProps) {
+  // Android supplies its own system chrome and must not render desktop controls.
   if (isTauri() && platform() === "android") return null;
 
   const windowAction = (action: "minimize" | "maximize" | "close") => async () => {
+    // Browser preview renders the title bar for visual parity but has no native window.
     if (!isTauri()) return;
 
     const appWindow = getCurrentWindow();
@@ -37,6 +43,7 @@ export function TitleBar({ onOpenSettings, onToggleTheme, themeMode }: TitleBarP
         </div>
       </div>
 
+      {/* Flexible drag region pushes all actions to the right edge. */}
       <div className="h-full min-w-8 flex-1" data-tauri-drag-region />
 
       <div className="flex h-full shrink-0 items-center">
@@ -73,6 +80,7 @@ export function TitleBar({ onOpenSettings, onToggleTheme, themeMode }: TitleBarP
   );
 }
 
+/** Windows-style full-height hit target for native window actions. */
 const windowButtonSx = {
   width: 46,
   height: 40,
@@ -82,6 +90,7 @@ const windowButtonSx = {
   "&:hover": { bgcolor: "var(--color-bg-elevated)", color: "text.primary" },
 } as const;
 
+/** Match native controls geometrically while retaining application focus styling. */
 const titleBarActionSx = {
   width: 46,
   height: 40,

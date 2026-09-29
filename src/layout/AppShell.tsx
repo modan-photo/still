@@ -17,12 +17,17 @@ type AppShellProps = {
 };
 
 /**
- * Editor-wide layout only. Feature regions are supplied as slots; photo count
- * controls whether the filmstrip row exists, while editing stays in its slot.
+ * Owns the editor's top-level geometry without owning feature behavior.
+ *
+ * Feature regions are supplied as slots so this component only coordinates the
+ * title bar, canvas, inspector, filmstrip and global overlays. Photo count controls
+ * whether the filmstrip row exists, while the canvas remains mounted in its slot.
  */
 export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, filmStrip, progress }: AppShellProps) {
   const photoCount = useProjectStore((state) => state.photos.length);
   const wantsFilmStrip = photoCount >= 2;
+  // Mounting and visibility are separate so the row can animate to zero before its
+  // relatively expensive virtualized contents are removed from the DOM.
   const [filmStripMounted, setFilmStripMounted] = useState(wantsFilmStrip);
   const [filmStripShown, setFilmStripShown] = useState(wantsFilmStrip);
   const filmStripMountedRef = useRef(filmStripMounted);
@@ -30,18 +35,24 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
   const unmountDelayRef = useRef<number | null>(null);
   const enterFrameRef = useRef<number | null>(null);
 
+  // The ref exposes the latest mount state to delayed callbacks without making the
+  // transition effect depend on state that it changes itself.
   const updateFilmStripMounted = (mounted: boolean) => {
     filmStripMountedRef.current = mounted;
     setFilmStripMounted(mounted);
   };
 
   useEffect(() => {
+    // A rapid sequence of imports/removals supersedes any animation scheduled for
+    // the previous photo count.
     if (hideDelayRef.current !== null) window.clearTimeout(hideDelayRef.current);
     if (unmountDelayRef.current !== null) window.clearTimeout(unmountDelayRef.current);
     if (enterFrameRef.current !== null) window.cancelAnimationFrame(enterFrameRef.current);
 
     if (wantsFilmStrip) {
       if (!filmStripMountedRef.current) {
+        // Render the zero-height row first, then reveal it on the next frame so the
+        // browser has two distinct grid states to interpolate between.
         updateFilmStripMounted(true);
         setFilmStripShown(false);
         enterFrameRef.current = window.requestAnimationFrame(() => {
@@ -57,6 +68,7 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
     if (!filmStripMountedRef.current) return;
     const hideFilmStrip = () => {
       setFilmStripShown(false);
+      // Keep the footer mounted until its slide/fade transition has completed.
       unmountDelayRef.current = window.setTimeout(() => {
         updateFilmStripMounted(false);
         unmountDelayRef.current = null;
@@ -64,6 +76,8 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
     };
 
     if (useUIStore.getState().gridPanelOpen) {
+      // The grid is anchored above the filmstrip. Close it first so the two bottom
+      // surfaces do not animate through each other when the second photo disappears.
       useUIStore.getState().setGridPanelOpen(false);
       hideDelayRef.current = window.setTimeout(() => {
         hideFilmStrip();
@@ -74,15 +88,20 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
     }
   }, [wantsFilmStrip]);
 
+  // Release every timer/frame owned by the shell if the entire editor unmounts.
   useEffect(() => () => {
     if (hideDelayRef.current !== null) window.clearTimeout(hideDelayRef.current);
     if (unmountDelayRef.current !== null) window.clearTimeout(unmountDelayRef.current);
     if (enterFrameRef.current !== null) window.cancelAnimationFrame(enterFrameRef.current);
   }, []);
 
+  // On compact screens the title bar slot is a zero-height row; desktop reserves
+  // the native-title-bar height explicitly to keep canvas sizing deterministic.
   const shellRowLayout = titleBarVisible
     ? "grid-rows-[0_minmax(0,1fr)] md:grid-rows-[40px_minmax(0,1fr)]"
     : "grid-rows-[0_minmax(0,1fr)]";
+  // Grid row animation controls layout height while the footer transition controls
+  // its visual slide and opacity.
   const leftColumnRowLayout = filmStripMounted
     ? filmStripShown
       ? "grid-rows-[minmax(0,1fr)_72px] md:grid-rows-[minmax(0,1fr)_84px] lg:grid-rows-[minmax(0,1fr)_96px]"

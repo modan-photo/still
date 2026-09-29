@@ -10,6 +10,11 @@ type MobileCollageEditorProps = {
   onExit: () => void;
 };
 
+/**
+ * Full-screen collage workspace used on compact screens.
+ * Desktop exposes the same settings in the right inspector; mobile moves them into
+ * a bottom toolbar and sheet so the preview retains most of the viewport.
+ */
 export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
   const theme = useTheme();
   const reset = useProjectStore((state) => state.resetCollageDraft);
@@ -17,6 +22,8 @@ export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
   const [activePanel, setActivePanel] = useState<CollagePanelId | null>(null);
 
   const closeSheet = useCallback(() => {
+    // A sheet adds one browser-history entry so Android's system back action closes
+    // the sheet before leaving the collage editor.
     if (activePanel !== null && window.history.state?.stillCollageSheet) {
       window.history.back();
     } else {
@@ -29,17 +36,21 @@ export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
       closeSheet();
       return;
     }
+    // Switching between open panels reuses the same history entry.
     if (activePanel === null) window.history.pushState({ ...window.history.state, stillCollageSheet: true }, '');
     setActivePanel(panel);
   }, [activePanel, closeSheet]);
 
   useEffect(() => {
+    // Browser/system back closes whichever collage settings sheet is active.
     const handlePopState = () => setActivePanel(null);
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const exit = () => {
+    // Remove the sheet entry before returning to the editor to avoid leaving a stale
+    // history state that would consume the next back action.
     if (activePanel !== null && window.history.state?.stillCollageSheet) window.history.back();
     onExit();
   };
@@ -58,6 +69,8 @@ export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
         backgroundColor: theme.still.colors[theme.palette.mode].bg.base,
       }}
     >
+      {/* Three equalized grid tracks keep the title centered despite asymmetric
+          back and action controls. */}
       <Box
         component="header"
         sx={{
@@ -86,6 +99,7 @@ export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
         <CollagePreview />
       </Box>
 
+      {/* Toolbar stays above the modal sheet edge so users can switch panels directly. */}
       <Box sx={{ position: 'relative', zIndex: theme.zIndex.modal + 1 }}>
         <MobileCollageToolbar activePanel={activePanel} onPanelChange={changePanel} />
       </Box>

@@ -11,6 +11,7 @@ import type { SyncModule } from "../render/spec";
 const DEFAULT_HEIGHT_PERCENT = 60;
 const MIN_HEIGHT_PERCENT = 30;
 const MAX_HEIGHT_PERCENT = 80;
+// Dragging below this threshold dismisses the panel rather than leaving a sliver.
 const DISMISS_HEIGHT_PERCENT = 20;
 const KEYBOARD_RESIZE_STEP = 5;
 const THUMBNAIL_MIN_WIDTH = {
@@ -37,10 +38,19 @@ type DragState = {
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
+/**
+ * Expandable, virtualized photo grid layered over the lower canvas.
+ *
+ * The panel combines navigation, batch selection, render-setting propagation and
+ * height resizing. Rows—not individual photos—are virtualized because column count
+ * changes responsively with the measured panel width and thumbnail-size preference.
+ */
 export function GridPanel() {
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridSurfaceRef = useRef<HTMLDivElement>(null);
+  // High-frequency pointer values live in refs so resizing does not depend on stale
+  // render closures. React state is updated only for values that affect rendering.
   const dragState = useRef<DragState | null>(null);
   const liveHeightPercent = useRef(DEFAULT_HEIGHT_PERCENT);
   const closeTimer = useRef<number | null>(null);
@@ -73,6 +83,8 @@ export function GridPanel() {
   const gridPanelOpen = useUIStore((state) => state.gridPanelOpen);
   const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
   const gridGap = theme.still.spacing.md;
+  // Derive a complete row model from the measured surface width. The same values
+  // feed CSS grid and the virtualizer so their geometry cannot drift apart.
   const thumbnailMinWidth = THUMBNAIL_MIN_WIDTH[thumbnailSize];
   const columnCount = Math.max(1, Math.floor((gridWidth + gridGap) / (thumbnailMinWidth + gridGap)));
   const thumbnailWidth = gridWidth > 0
@@ -85,6 +97,7 @@ export function GridPanel() {
     count: rowCount,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight + gridGap,
+    // A few off-screen rows prevent blank flashes during fast wheel scrolling.
     overscan: 3,
     getItemKey: (rowIndex) => photos[rowIndex * columnCount]?.id ?? rowIndex,
   });
@@ -94,6 +107,8 @@ export function GridPanel() {
     if (!target) return;
     const updateWidth = () => {
       const nextWidth = target.getBoundingClientRect().width;
+      // ResizeObserver can fire repeatedly during panel animation; publish at most
+      // one width measurement per animation frame.
       if (widthMeasureFrame.current !== null) window.cancelAnimationFrame(widthMeasureFrame.current);
       widthMeasureFrame.current = window.requestAnimationFrame(() => {
         setGridWidth(nextWidth);
@@ -110,10 +125,13 @@ export function GridPanel() {
   }, []);
 
   useEffect(() => {
+    // Column count, thumbnail density and panel width all invalidate row estimates.
     virtualizer.measure();
   }, [columnCount, gridWidth, rowHeight, thumbnailSize, virtualizer]);
 
   useEffect(() => {
+    // Opening the panel should reveal the current photo even when selection changed
+    // through the filmstrip or keyboard while the grid was closed.
     if (!gridPanelOpen) return;
     const selectedIndex = photos.findIndex((photo) => photo.id === selectedId);
     if (selectedIndex >= 0) {
@@ -122,6 +140,7 @@ export function GridPanel() {
   }, [columnCount, gridPanelOpen, photos.length, selectedId, virtualizer]);
 
   useEffect(() => {
+    // Batch selection is scoped to one open-grid session.
     if (gridPanelOpen || !multiSelectMode) return;
     setMultiSelectMode(false);
     setSelectedIds([]);
@@ -136,6 +155,8 @@ export function GridPanel() {
       if (target instanceof HTMLElement && target.closest('[role="dialog"]')) return;
 
       if (event.key === "Escape") {
+        // Capture phase and stopImmediatePropagation ensure the editor-level Escape
+        // handler does not close the entire grid before selection mode is cleared.
         event.preventDefault();
         event.stopImmediatePropagation();
         setMultiSelectMode(false);
@@ -154,6 +175,7 @@ export function GridPanel() {
         && !event.shiftKey
         && event.key.toLowerCase() === "a"
       ) {
+        // Ctrl/Cmd+A is intentionally active only while batch selection owns the grid.
         event.preventDefault();
         event.stopImmediatePropagation();
         setSelectedIds(photos.map((photo) => photo.id));
@@ -164,12 +186,15 @@ export function GridPanel() {
     return () => window.removeEventListener("keydown", handleMultiSelectShortcut, { capture: true });
   }, [gridPanelOpen, multiSelectMode, photos, setSelectedIds]);
 
+  // Timers may outlive a closing animation; release them with the panel component.
   useEffect(() => () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
     if (heightResetTimer.current !== null) window.clearTimeout(heightResetTimer.current);
   }, []);
 
   const updateHeight = (nextHeightPercent: number) => {
+    // Keep a synchronous copy for pointer-up, which may occur before React commits
+    // the latest height state.
     liveHeightPercent.current = nextHeightPercent;
     setHeightPercent(nextHeightPercent);
   };
@@ -180,6 +205,8 @@ export function GridPanel() {
     setDragging(false);
 
     if (finalHeight < DISMISS_HEIGHT_PERCENT) {
+      // Reset after the close transition so the next open starts at the default size
+      // without visibly jumping while it slides away.
       setGridPanelOpen(false);
       heightResetTimer.current = window.setTimeout(() => {
         updateHeight(DEFAULT_HEIGHT_PERCENT);
@@ -197,6 +224,8 @@ export function GridPanel() {
       window.clearTimeout(heightResetTimer.current);
       heightResetTimer.current = null;
     }
+    // Pointer pixels are converted to percentages relative to the canvas that owns
+    // the panel, not the full browser window.
     const mainCanvasHeight = panelRef.current?.parentElement?.getBoundingClientRect().height ?? 0;
     if (mainCanvasHeight <= 0) return;
 
@@ -226,6 +255,7 @@ export function GridPanel() {
   };
 
   const selectAndScheduleClose = (photoId: string) => {
+    // Single click previews the choice briefly before returning to the editor canvas.
     selectPhoto(photoId);
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => {
@@ -235,6 +265,7 @@ export function GridPanel() {
   };
 
   const selectAndKeepOpen = (photoId: string) => {
+    // Double click cancels the single-click close timer and keeps browsing context.
     if (closeTimer.current !== null) {
       window.clearTimeout(closeTimer.current);
       closeTimer.current = null;
@@ -254,6 +285,7 @@ export function GridPanel() {
 
   const removeSelectedPhotos = () => {
     if (selectedIds.length === 0) return;
+    // One snapshot groups the batch removal into a single undo operation.
     pushUndo(removePhotos(selectedIds));
     setMultiSelectMode(false);
     setSelectedIds([]);
@@ -261,11 +293,13 @@ export function GridPanel() {
 
   const sourcePhoto = photos.find((photo) => photo.id === selectedId);
   const applyCurrentSpec = () => {
+    // Full apply copies every render module while preserving each target's source.
     if (!sourcePhoto || selectedIds.length === 0) return;
     applySpecToPhotos(sourcePhoto.id, selectedIds);
     setApplyConfirmOpen(false);
   };
   const selectedSyncModules = (Object.keys(syncModules) as SyncModule[]).filter((module) => syncModules[module]);
+  // The source may itself be selected, but it is not a sync target.
   const syncTargetCount = selectedIds.filter((id) => id !== syncSourceId).length;
   const openSyncSettings = () => {
     setSyncSourceId(selectedId ?? photos[0]?.id ?? "");
@@ -290,6 +324,8 @@ export function GridPanel() {
         return {
           height: `${heightPercent}%`,
           maxHeight: `${MAX_HEIGHT_PERCENT}%`,
+          // Translate instead of conditionally mounting so close/open animations and
+          // virtualized scroll state remain stable.
           transform: gridPanelOpen ? "translateY(0)" : "translateY(100%)",
           transitionProperty: "transform",
           transitionDuration: `${gridPanelOpen ? theme.still.motion.duration.base : theme.still.motion.duration.fast}ms`,
@@ -322,6 +358,7 @@ export function GridPanel() {
           if (dragState.current) finishResize();
         }}
         onKeyDown={(event) => {
+          // The separator is keyboard-resizable for parity with pointer dragging.
           if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
           event.preventDefault();
           const direction = event.key === "ArrowUp" ? 1 : -1;
@@ -468,6 +505,7 @@ export function GridPanel() {
           style={{ height: virtualizer.getTotalSize() }}
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
+            // Convert the virtual row index back into its contiguous photo slice.
             const firstPhotoIndex = virtualRow.index * columnCount;
             const rowPhotos = photos.slice(firstPhotoIndex, firstPhotoIndex + columnCount);
 
@@ -500,6 +538,8 @@ export function GridPanel() {
                       className={`group relative aspect-[4/3] min-w-0 overflow-hidden rounded-md border-2 bg-app-elevated outline-none transition-[border-color,box-shadow,transform] duration-fast ease-app hover:-translate-y-0.5 hover:shadow-elev2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "border-accent shadow-elev1" : "border-subtle"}`}
                       onClick={(event) => {
                         if (multiSelectMode) {
+                          // Ignore the synthetic second click of a double-click so a
+                          // batch item toggles only once.
                           if (event.detail === 1) toggleSelectedId(photo.id);
                           return;
                         }
@@ -592,6 +632,7 @@ export function GridPanel() {
 }
 
 function ThumbnailSizeIcon({ density }: { density: number }) {
+  // Generate the density glyph from geometry so all size options share one icon.
   const gap = 1.5;
   const cellSize = (16 - gap * (density - 1)) / density;
   const cells = Array.from({ length: density * density }, (_, index) => ({

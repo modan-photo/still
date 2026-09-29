@@ -6,6 +6,11 @@ import { useUIStore } from "../stores/uiStore";
 import { RIGHT_PANEL_TABS, type RightPanelTabId } from "./rightPanelTabs";
 import { CollageTab } from "./RightPanel/tabs/CollageTab";
 
+/**
+ * Hosts all inspector panels in a stable tabpanel structure.
+ * Inactive panels stay represented for accessible tab relationships but are removed
+ * from layout with `display: none` so only the active panel can scroll.
+ */
 export function RightPanelContent({ excludeCollage = false }: { excludeCollage?: boolean }) {
   const activeRightTab = useUIStore((state) => state.activeRightTab);
 
@@ -27,6 +32,8 @@ export function RightPanelContent({ excludeCollage = false }: { excludeCollage?:
               height: "100%",
               overflowY: "auto",
               overscrollBehavior: "contain",
+              // EXIF owns its own grouped edge-to-edge layout; editing tabs receive
+              // the shared inspector padding here.
               padding: tab.id === "exif"
                 ? "0 0 var(--space-6)"
                 : "var(--space-4) var(--space-4) var(--space-6)",
@@ -55,6 +62,7 @@ export function RightPanelContent({ excludeCollage = false }: { excludeCollage?:
   );
 }
 
+/** Keep tab metadata and its concrete feature component mapped in one place. */
 function renderTabContent(tab: RightPanelTabId) {
   switch (tab) {
     case "frame":

@@ -7,6 +7,10 @@ type MobileRightPanelProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+/**
+ * Persistent bottom-sheet inspector for compact editor layouts.
+ * Collage is excluded because mobile collage editing has its own full-screen shell.
+ */
 export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) {
   return (
     <>
@@ -17,8 +21,10 @@ export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) 
         aria-label="Inspector"
         sx={{
           "& .MuiDrawer-paper": {
+            // Dynamic viewport units account for mobile browser/system chrome.
             height: "50dvh",
             maxHeight: "calc(100dvh - 72px)",
+            // Leave the filmstrip row visible beneath the sheet.
             bottom: "72px",
             overflow: "hidden",
             borderTopLeftRadius: "var(--radius-xl)",
@@ -53,6 +59,7 @@ export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) 
         </div>
       </Drawer>
 
+      {/* When the persistent drawer is closed, expose a floating restore control. */}
       {!open && (
         <IconButton
           aria-label="Open inspector"

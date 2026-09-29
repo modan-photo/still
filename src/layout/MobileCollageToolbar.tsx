@@ -17,6 +17,7 @@ type MobileCollageToolbarProps = {
   onPanelChange: (panel: CollagePanelId | null) => void;
 };
 
+/** Compact six-action navigator for the mobile collage settings sheet. */
 export function MobileCollageToolbar({ activePanel, onPanelChange }: MobileCollageToolbarProps) {
   const theme = useTheme();
 
@@ -26,6 +27,8 @@ export function MobileCollageToolbar({ activePanel, onPanelChange }: MobileColla
       aria-label="Collage settings"
       sx={{
         display: 'grid',
+        // Equal columns fill wide screens; the minimum width allows horizontal
+        // scrolling instead of shrinking touch targets on narrow devices.
         gridTemplateColumns: 'repeat(6, minmax(54px, 1fr))',
         width: '100%',
         height: 64,
@@ -44,6 +47,7 @@ export function MobileCollageToolbar({ activePanel, onPanelChange }: MobileColla
             key={item.id}
             aria-label={`${item.label} settings`}
             aria-pressed={active}
+            // Tapping the active tool toggles its sheet closed.
             onClick={() => onPanelChange(active ? null : item.id)}
             sx={{
               display: 'flex',

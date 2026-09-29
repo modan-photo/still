@@ -12,6 +12,12 @@ type RightPanelProps = {
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 400;
 
+/**
+ * Resizable desktop inspector container.
+ *
+ * Tablet layouts use a fixed narrower width, while larger desktop layouts remember
+ * the user's drag/keyboard width for the current session.
+ */
 export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   const [width, setWidth] = useState(300);
   const [resizing, setResizing] = useState(false);
@@ -21,6 +27,8 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   const effectiveWidth = tablet ? 260 : width;
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    // Pointer capture keeps resize events flowing even if the pointer leaves the
+    // narrow separator hit target.
     if (event.button !== 0) return;
     setResizing(true);
     dragStart.current = { x: event.clientX, width };
@@ -29,6 +37,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
 
   const resize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    // The inspector is right-aligned, so dragging left increases its width.
     const nextWidth = dragStart.current.width + dragStart.current.x - event.clientX;
     setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, nextWidth)));
   };
@@ -41,6 +50,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
       aria-label="Inspector"
       data-collapsed={collapsed}
     >
+      {/* Tablet width is fixed; only full desktop exposes the resize separator. */}
       {!collapsed && !tablet && (
         <div
           className="absolute inset-y-0 left-0 z-20 w-1 -translate-x-1/2 cursor-col-resize touch-none outline-none transition-colors duration-fast hover:bg-accent focus-visible:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -59,6 +69,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
           }}
           onLostPointerCapture={() => setResizing(false)}
           onKeyDown={(event) => {
+            // Keyboard resizing mirrors the pointer direction from the left edge.
             if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
             event.preventDefault();
             const delta = event.key === "ArrowLeft" ? 8 : -8;
@@ -101,6 +112,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   );
 }
 
+/** Shared tab/content composition used by both desktop and mobile inspectors. */
 export function InspectorContent({ excludeCollage = false }: { excludeCollage?: boolean }) {
   return (
     <>

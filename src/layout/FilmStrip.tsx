@@ -21,10 +21,16 @@ type FilmStripProps = {
   onSelect: (id: string) => void;
 };
 
+/**
+ * Virtualized horizontal photo navigator shown when a project has multiple images.
+ * Only visible thumbnail cells are mounted; the trailing controls remain fixed so
+ * importing, collage entry and grid access are always reachable.
+ */
 export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down("md"));
+  // Pitch must track the responsive thumbnail width used by ThumbnailItem.
   const itemPitch = compact ? 64 : 80;
   const photoCount = useProjectStore((state) => state.photos.length);
   const showGridButton = photoCount >= 2;
@@ -38,15 +44,19 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
     count: items.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => itemPitch,
+    // Render a small buffer beyond both viewport edges to keep fast scrolling smooth.
     overscan: 6,
     getItemKey: (index) => items[index].id,
   });
 
   useEffect(() => {
+    // Breakpoint changes alter every item's estimated width.
     virtualizer.measure();
   }, [itemPitch, virtualizer]);
 
   useEffect(() => {
+    // Selection can change through the grid or keyboard, so keep its filmstrip cell
+    // visible even when the user did not click inside this component.
     const index = items.findIndex((item) => item.id === selectedId);
     if (index >= 0) virtualizer.scrollToIndex(index, { align: 'auto' });
   }, [selectedId, items.length, virtualizer]);
@@ -102,6 +112,7 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
         </Tooltip>
       </div>
 
+      {/* Collage performs additional draft initialization through the shared service. */}
       {showGridButton && (
         <div className="h-full w-[72px] shrink-0 border-l border-subtle bg-app-surface md:w-[84px] lg:w-[96px]">
           <Tooltip title="Collage" arrow>
@@ -132,6 +143,7 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
         </div>
       )}
 
+      {/* Grid view is mutually exclusive with the collage canvas. */}
       {showGridButton && (
         <div className="h-full w-[72px] shrink-0 border-l border-subtle bg-app-surface md:w-[84px] lg:w-[96px]">
           <Tooltip title="Grid view (G)" arrow>

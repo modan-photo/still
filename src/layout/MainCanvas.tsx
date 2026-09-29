@@ -23,6 +23,11 @@ type MainCanvasProps = {
   exporting: boolean;
 };
 
+/**
+ * Central editor workspace that switches between empty, photo and collage states.
+ * Photo pixels are delegated to `Preview`; this component owns workspace actions,
+ * transitions, drag feedback and selection/removal behavior.
+ */
 export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragActive, onExport, exporting }: MainCanvasProps) {
   const photos = useProjectStore((state) => state.photos);
   const isCollageMode = useUIStore((state) => state.activeRightTab === 'collage');
@@ -31,7 +36,10 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
   const removePhotos = useProjectStore((state) => state.removePhotos);
   const pushUndo = useUndoStore((state) => state.push);
   const photo = photos.find((entry) => entry.id === selectedId);
+  // A single-photo project can afford more canvas padding than the filmstrip layout.
   const focusedLayout = photos.length <= 1;
+  // Preserve the last photo briefly so removal can fade the preview out instead of
+  // tearing it from the DOM on the same frame as the store update.
   const lastPhoto = useRef<ProjectPhoto | null>(photo ?? null);
   const [exitingPhoto, setExitingPhoto] = useState<ProjectPhoto | null>(null);
   if (photo) lastPhoto.current = photo;
@@ -51,18 +59,21 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
   }, [photo]);
 
   useEffect(() => {
+    // Grid and collage both occupy the canvas; collage always takes precedence.
     if (isCollageMode) setGridPanelOpen(false);
   }, [isCollageMode, setGridPanelOpen]);
 
   const renderedPhoto = photo ?? exitingPhoto ?? lastPhoto.current;
   const removeCurrentPhoto = () => {
     if (!photo) return;
+    // Store the complete removal snapshot so the global undo toast can restore it.
     pushUndo(removePhotos([photo.id]));
   };
 
   return <main className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-app-base" aria-label="Photo workspace" tabIndex={0}
     data-editor-shortcut-scope="canvas" onDragOver={(event) => event.preventDefault()} onDrop={(event) => event.preventDefault()}>
     {!photo && !isCollageMode && <EmptyState onImportPhotos={onImport} onImportFolder={onImportFolder} showFolderImport={showFolderImport} />}
+    {/* Collage remains mounted only while active; opacity controls the workspace swap. */}
     <div
       className={`absolute inset-0 min-h-0 min-w-0 p-3 transition-opacity duration-fast ease-app ${isCollageMode ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       aria-hidden={!isCollageMode}
@@ -118,6 +129,7 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
   </main>;
 }
 
+/** Draws the decoded photo and all non-destructive edits onto one preview canvas. */
 function Preview({ photoId, path, frame, stamp, adjustments, originalWidth, originalHeight, focusedLayout }: { photoId: string; path: string; frame?: BorderSpec; stamp?: WatermarkSpec; adjustments?: AdjustmentsSpec; originalWidth: number; originalHeight: number; focusedLayout: boolean }) {
   const { image, loading, error } = useImagePreview(path);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -129,6 +141,8 @@ function Preview({ photoId, path, frame, stamp, adjustments, originalWidth, orig
     const target = canvas.current;
     if (!target || !image) return;
     let cancelled = false;
+    // Coalesce rapid slider changes into the next frame-sized interval instead of
+    // redrawing synchronously for every input event.
     const timer = window.setTimeout(() => { void (async () => {
       const source = adjustments ? renderAdjustedPreview(image, adjustments) : image;
       if (frame) {
@@ -139,6 +153,7 @@ function Preview({ photoId, path, frame, stamp, adjustments, originalWidth, orig
         target.getContext('2d')?.drawImage(source, 0, 0);
       }
       if (stamp) {
+        // Font discovery must complete before text measurement and rendering.
         await listWatermarkFonts();
         if (!cancelled) {
           const bounds = await renderWatermarkPreview(target, stamp, Math.max(originalWidth, originalHeight));
@@ -148,6 +163,7 @@ function Preview({ photoId, path, frame, stamp, adjustments, originalWidth, orig
     })(); }, 16);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [adjustments, frame, image, originalHeight, originalWidth, stamp]);
+  // Explicitly release the canvas backing store and its potentially large pixel buffer.
   useEffect(() => () => {
     if (canvas.current) { canvas.current.width = 0; canvas.current.height = 0; }
   }, []);
@@ -158,11 +174,13 @@ function Preview({ photoId, path, frame, stamp, adjustments, originalWidth, orig
     let y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
     const rendered = markSize.current;
     const previewLongEdge = Math.max(event.currentTarget.width, event.currentTarget.height);
+    // Convert the desired 32-source-pixel inset into preview-canvas coordinates.
     const margin = 32 * previewLongEdge / Math.max(originalWidth, originalHeight);
     const edgeX = rendered ? Math.min(0.45, (rendered.width / 2 + margin) / event.currentTarget.width) : 0.08;
     const edgeY = rendered ? Math.min(0.45, (rendered.height / 2 + margin) / event.currentTarget.height) : 0.08;
     const targetsX = [edgeX, 0.5, 1 - edgeX];
     const targetsY = [edgeY, 0.5, 1 - edgeY];
+    // Twelve CSS pixels provides a predictable snap affordance at any zoom level.
     const thresholdX = 12 / rect.width;
     const thresholdY = 12 / rect.height;
     const snapX = targetsX.find((target) => Math.abs(target - x) <= thresholdX);
@@ -170,6 +188,7 @@ function Preview({ photoId, path, frame, stamp, adjustments, originalWidth, orig
     if (snapX !== undefined) x = snapX;
     if (snapY !== undefined) y = snapY;
     setGuides({ x: snapX, y: snapY });
+    // Free positioning supersedes the legacy anchor offsets.
     updateSpec(photoId, { watermark: { ...stamp, offsetX: 0, offsetY: 0, freePosition: { x, y } } });
   };
   return <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">

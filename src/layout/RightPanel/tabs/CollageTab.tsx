@@ -9,6 +9,7 @@ import { RadiusPanel } from '../../../components/collage/panels/RadiusPanel';
 import { PanelSection } from '../../../components/PanelSection';
 import { useProjectStore } from '../../../stores/projectStore';
 
+/** Desktop collage settings panel with a scrollable body and fixed actions. */
 export function CollageTab() {
   const reset = useProjectStore((state) => state.resetCollageDraft);
 
@@ -20,6 +21,7 @@ export function CollageTab() {
       <PanelSection title="Background"><BackgroundPanel /></PanelSection>
       <PanelSection title="Canvas ratio"><AspectPanel /></PanelSection>
     </Box>
+    {/* Keep export/reset reachable when the settings list exceeds panel height. */}
     <Box sx={(theme) => ({ position: 'sticky', bottom: 0, zIndex: 2, display: 'grid', gap: `${theme.still.spacing.sm}px`, padding: `${theme.still.spacing.md}px ${theme.still.spacing.lg}px`, borderTop: '1px solid', borderColor: 'divider', backgroundColor: theme.still.colors[theme.palette.mode].bg.surface })}>
       <CollageExportButton />
       <Button size="small" onClick={reset}>Reset settings</Button>
