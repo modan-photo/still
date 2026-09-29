@@ -7,14 +7,12 @@ import { StillMark } from "../components/StillMark";
 
 type TitleBarProps = {
   onOpenSettings: () => void;
-  onTogglePanel: () => void;
   onToggleTheme: () => void;
-  panelOpen: boolean;
   themeMode: "light" | "dark";
 };
 
 /** Windows title bar with direct editor actions and native window controls. */
-export function TitleBar({ onOpenSettings, onTogglePanel, onToggleTheme, panelOpen, themeMode }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onToggleTheme, themeMode }: TitleBarProps) {
   if (isTauri() && platform() === "android") return null;
 
   const windowAction = (action: "minimize" | "maximize" | "close") => async () => {
@@ -42,17 +40,6 @@ export function TitleBar({ onOpenSettings, onTogglePanel, onToggleTheme, panelOp
         <Tooltip title={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} arrow>
           <MuiIconButton aria-label={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} onClick={onToggleTheme} size="small" sx={titleBarActionSx}>
             <Icon name={themeMode === "light" ? "moon" : "sun"} size={16} />
-          </MuiIconButton>
-        </Tooltip>
-        <Tooltip title={panelOpen ? "Hide inspector" : "Show inspector"} arrow>
-          <MuiIconButton
-            aria-label={panelOpen ? "Hide inspector" : "Show inspector"}
-            aria-pressed={panelOpen}
-            onClick={onTogglePanel}
-            size="small"
-            sx={{ ...titleBarActionSx, color: panelOpen ? "primary.main" : "text.secondary" }}
-          >
-            <Icon name="sidebar" size={16} />
           </MuiIconButton>
         </Tooltip>
         <span className="mx-1 h-4 w-px bg-subtle" aria-hidden="true" />
