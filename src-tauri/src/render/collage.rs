@@ -7,11 +7,9 @@ use fast_image_resize::{images::Image, PixelType, ResizeOptions, Resizer};
 use image::{imageops, DynamicImage, Pixel, Rgba, RgbaImage};
 use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
 use serde::Deserialize;
-use tauri::{State, Window};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    commands::task::{self, TaskManager},
     error::AppError,
     image_io::save::save_image_atomic,
     render::spec::{OutputFormat, OutputSpec},
@@ -221,29 +219,18 @@ pub enum BackgroundImageMode {
     Contain,
 }
 
-#[tauri::command]
-pub async fn collage_compose(
-    window: Window,
-    state: State<'_, TaskManager>,
-    task_id: String,
-    items: Vec<CollageItem>,
-    config: CollageConfig,
+pub fn compose_to_file(
+    items: &[CollageItem],
+    config: &CollageConfig,
+    token: &CancellationToken,
+    report: Arc<dyn Fn(&str, u8) + Send + Sync>,
 ) -> Result<String, AppError> {
-    task::run(
-        window,
-        state.inner().clone(),
-        task_id,
-        "collage_compose",
-        move |token, report| {
-            let path = PathBuf::from(&config.output_path);
-            let image = compose(&items, &config, &token, report.clone())?;
-            report("encoding", 94);
-            let output = output_spec(&path, config.quality)?;
-            save_image_atomic(&DynamicImage::ImageRgba8(image), &path, &output, &token)?;
-            Ok(path.to_string_lossy().into_owned())
-        },
-    )
-    .await
+    let path = PathBuf::from(&config.output_path);
+    let image = compose(items, config, token, report.clone())?;
+    report("encoding", 94);
+    let output = output_spec(&path, config.quality)?;
+    save_image_atomic(&DynamicImage::ImageRgba8(image), &path, &output, token)?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 pub fn compose(
@@ -264,7 +251,7 @@ pub fn compose(
         order.sort_by_key(|(_, item)| item.cell.z_index);
     }
     for (position, (index, item)) in order.into_iter().enumerate() {
-        task::check(token)?;
+        check_cancelled(token)?;
         let rect = item_rect(index, items.len(), item, config, scale, width, height);
         if rect.2 == 0 || rect.3 == 0 {
             continue;
@@ -397,7 +384,7 @@ fn draw_item(
     token: &CancellationToken,
 ) -> Result<(), AppError> {
     let source = image::open(&item.path)?.into_rgba8();
-    task::check(token)?;
+    check_cancelled(token)?;
     let (sw, sh) = source.dimensions();
     let fit = match item.transform.fit {
         FitMode::Cover => (rect.2 as f64 / sw as f64).max(rect.3 as f64 / sh as f64),
@@ -414,7 +401,7 @@ fn draw_item(
             Rgba([0, 0, 0, 0]),
         );
     }
-    task::check(token)?;
+    check_cancelled(token)?;
     if config.shadow.enabled {
         draw_shadow(canvas, rect, config);
     }
@@ -466,6 +453,14 @@ fn resize_rgba(source: RgbaImage, width: u32, height: u32) -> Result<RgbaImage, 
         .map_err(|e| AppError::Resize(e.to_string()))?;
     RgbaImage::from_raw(width, height, destination.into_vec())
         .ok_or_else(|| AppError::Resize("invalid RGBA resize buffer".into()))
+}
+
+fn check_cancelled(token: &CancellationToken) -> Result<(), AppError> {
+    if token.is_cancelled() {
+        Err(AppError::Cancelled)
+    } else {
+        Ok(())
+    }
 }
 
 fn inside_round_rect(x: i32, y: i32, w: i32, h: i32, r: i32) -> bool {

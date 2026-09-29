@@ -1,3 +1,4 @@
+pub mod collage;
 pub mod exif;
 pub mod export;
 pub mod frame;
