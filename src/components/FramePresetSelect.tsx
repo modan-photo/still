@@ -18,9 +18,14 @@ import { Icon } from './Icons';
 
 type FramePreviewPreset = Pick<FramePreset, 'style' | 'params'>;
 
+const NO_FRAME_PREVIEW: FramePreviewPreset = {
+  style: 'solid',
+  params: { width: 0, unit: 'px', color: '#FFFFFF', radius: 0 },
+};
+
 export interface FramePresetSelectProps {
   presets: readonly FramePreset[];
-  selectedPresetId: string;
+  selectedPresetId: string | null;
   currentPreviewPreset?: FramePreviewPreset;
   modified?: boolean;
   previewSource: string;
@@ -60,7 +65,9 @@ export function FramePresetSelect({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const open = Boolean(anchor);
-  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? presets[0];
+  const selectedPreset = selectedPresetId
+    ? presets.find((preset) => preset.id === selectedPresetId)
+    : undefined;
 
   useEffect(() => {
     if (!open || mobile) return;
@@ -74,7 +81,7 @@ export function FramePresetSelect({
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [mobile, open]);
 
-  if (!selectedPreset) return null;
+  if (presets.length === 0) return null;
 
   const close = () => setAnchor(null);
   const select = (preset: FramePreset) => {
@@ -86,7 +93,7 @@ export function FramePresetSelect({
     close();
     onPresetActions?.(preset, position);
   };
-  const previewPreset = currentPreviewPreset ?? selectedPreset;
+  const previewPreset = currentPreviewPreset ?? selectedPreset ?? NO_FRAME_PREVIEW;
 
   return (
     <>
@@ -128,13 +135,13 @@ export function FramePresetSelect({
             originalHeight={originalHeight}
           />
           <span className="min-w-0 flex-1 truncate text-left text-sm">
-            {selectedPreset.name}{modified ? ' *' : ''}
+            {selectedPreset?.name ?? 'No Frame'}{modified ? ' *' : ''}
           </span>
           <span className={`absolute right-2 text-secondary transition-transform duration-fast ${open ? 'rotate-180' : ''}`}>
             <Icon name="chevron" size={14} />
           </span>
         </ButtonBase>
-        {modified && onQuickSave && (
+        {modified && selectedPreset && onQuickSave && (
           <Tooltip title="Save changes">
             <IconButton
               type="button"
@@ -205,7 +212,7 @@ export function FramePresetSelect({
                   <PresetPanelContent
                     id={desktopListboxId}
                     presets={presets}
-                    selectedPresetId={selectedPreset.id}
+                    selectedPresetId={selectedPreset?.id ?? null}
                     previewSource={previewSource}
                     originalWidth={originalWidth}
                     originalHeight={originalHeight}
@@ -275,7 +282,7 @@ export function FramePresetSelect({
         <PresetPanelContent
           id={mobileListboxId}
           presets={presets}
-          selectedPresetId={selectedPreset.id}
+          selectedPresetId={selectedPreset?.id ?? null}
           previewSource={previewSource}
           originalWidth={originalWidth}
           originalHeight={originalHeight}
@@ -310,7 +317,7 @@ function PresetPanelContent({
 }: {
   id: string;
   presets: readonly FramePreset[];
-  selectedPresetId: string;
+  selectedPresetId: string | null;
   previewSource: string;
   originalWidth: number;
   originalHeight: number;
@@ -383,7 +390,7 @@ function PresetGroup({
   title: string;
   showHeading?: boolean;
   presets: readonly FramePreset[];
-  selectedPresetId: string;
+  selectedPresetId: string | null;
   previewSource: string;
   originalWidth: number;
   originalHeight: number;

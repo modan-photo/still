@@ -44,7 +44,6 @@ export function FrameControls() {
   const [presetActionTarget, setPresetActionTarget] = useState<FramePresetActionTarget | null>(null);
   const [userPresets, setUserPresets] = useState<FramePreset[]>([]);
   const [currentFramePresetId, setCurrentFramePresetId] = useState(DEFAULT_FRAME_PRESET_ID);
-  const [presetsLoaded, setPresetsLoaded] = useState(false);
   const selectionChangedDuringLoad = useRef(false);
   const presets = useMemo<FramePreset[]>(() => [
     ...BUILTIN_FRAME_PRESETS.map((preset) => structuredClone(preset)),
@@ -82,16 +81,8 @@ export function FrameControls() {
       .catch((error: unknown) => {
         console.warn('Unable to restore frame presets', error);
       })
-      .finally(() => {
-        if (!disposed) setPresetsLoaded(true);
-      });
     return () => { disposed = true; };
   }, []);
-
-  useEffect(() => {
-    if (!presetsLoaded || !selectedId || !photo || spec?.border || !selectedPreset) return;
-    update({ border: framePresetToBorderSpec(selectedPreset) });
-  }, [photo, presetsLoaded, selectedId, selectedPreset, spec?.border, update]);
 
   const selectPreset = (preset: FramePreset) => {
     const discardedUnsavedChanges = preset.id !== currentFramePresetId && presetModified;
@@ -104,10 +95,10 @@ export function FrameControls() {
     });
   };
 
-  const presetModified = selectedPreset
+  const presetModified = frameApplied && selectedPreset
     ? !borderMatchesPreset(frame, selectedPreset)
     : false;
-  const currentPreviewPreset = selectedPreset
+  const currentPreviewPreset = frameApplied && selectedPreset
     ? framePreviewPreset(frame, selectedPreset)
     : undefined;
 
@@ -229,7 +220,7 @@ export function FrameControls() {
       <div className="min-w-0 flex-1">
         <FramePresetSelect
           presets={presets}
-          selectedPresetId={selectedPreset.id}
+          selectedPresetId={frameApplied ? selectedPreset.id : null}
           currentPreviewPreset={currentPreviewPreset}
           modified={presetModified}
           previewSource={photo.thumbUrl}
@@ -238,6 +229,7 @@ export function FrameControls() {
           onSelect={selectPreset}
           onSaveCurrent={() => setSaveDialogOpen(true)}
           onQuickSave={() => void quickSaveCurrentPreset()}
+          saveCurrentDisabled={!frameApplied}
           onPresetActions={(preset, position) => setPresetActionTarget({ preset, position })}
         />
       </div>
@@ -269,15 +261,19 @@ export function FrameControls() {
       </Tooltip>
     </div>
 
-    <FrameParameterTransition style={selectedPreset.style}>
-      {(displayStyle) => <FrameParameterFields
-        displayStyle={displayStyle}
-        frame={frame}
-        photoWidth={photo.width}
-        photoHeight={photo.height}
-        onChange={change}
-      />}
-    </FrameParameterTransition>
+    {frameApplied ? (
+      <FrameParameterTransition style={selectedPreset.style}>
+        {(displayStyle) => <FrameParameterFields
+          displayStyle={displayStyle}
+          frame={frame}
+          photoWidth={photo.width}
+          photoHeight={photo.height}
+          onChange={change}
+        />}
+      </FrameParameterTransition>
+    ) : (
+      <p className="m-0 text-xs leading-5 text-secondary">Select a preset to add a frame.</p>
+    )}
 
     <Button fullWidth variant="outlined" size="small" disabled={photoCount < 2 || !frameApplied} onClick={() => setConfirmOpen(true)}>
       Apply to all photos
