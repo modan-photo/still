@@ -6,7 +6,6 @@ import { Icon } from "../components/Icons";
 import { StillMark } from "../components/StillMark";
 
 type TitleBarProps = {
-  onOpen: () => void;
   onOpenSettings: () => void;
   onTogglePanel: () => void;
   onToggleTheme: () => void;
@@ -15,7 +14,7 @@ type TitleBarProps = {
 };
 
 /** Windows title bar with direct editor actions and native window controls. */
-export function TitleBar({ onOpen, onOpenSettings, onTogglePanel, onToggleTheme, panelOpen, themeMode }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onTogglePanel, onToggleTheme, panelOpen, themeMode }: TitleBarProps) {
   if (isTauri() && platform() === "android") return null;
 
   const windowAction = (action: "minimize" | "maximize" | "close") => async () => {
@@ -40,11 +39,6 @@ export function TitleBar({ onOpen, onOpenSettings, onTogglePanel, onToggleTheme,
         </div>
 
         <span className="mx-1 h-4 w-px bg-subtle" aria-hidden="true" />
-        <Tooltip title="Import photos (Ctrl+O)" arrow>
-          <MuiIconButton aria-label="Import photos" onClick={onOpen} size="small" sx={titleBarActionSx}>
-            <Icon name="open" size={16} />
-          </MuiIconButton>
-        </Tooltip>
         <Tooltip title={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} arrow>
           <MuiIconButton aria-label={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} onClick={onToggleTheme} size="small" sx={titleBarActionSx}>
             <Icon name={themeMode === "light" ? "moon" : "sun"} size={16} />

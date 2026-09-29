@@ -134,7 +134,7 @@ function App({ theme }: { theme: ThemeController }) {
       <MobileCollageEditor onExit={() => setActiveRightTab(previousRightTab.current)} />
     ) : <AppShell
       titleBarVisible={!(isTauri() && platform() === 'android')}
-      titleBar={<><TitleBar onOpen={choosePhotos} onOpenSettings={() => setSettingsOpen(true)} onTogglePanel={toggleInspector}
+      titleBar={<><TitleBar onOpenSettings={() => setSettingsOpen(true)} onTogglePanel={toggleInspector}
         onToggleTheme={theme.toggleResolvedTheme} panelOpen={inspectorOpen} themeMode={theme.resolvedTheme} />
         <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} /></>}
       progress={<><TaskProgressBar />{error && <Alert severity="error" onClose={clearError}>{error}</Alert>}
