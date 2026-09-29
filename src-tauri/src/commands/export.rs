@@ -342,11 +342,6 @@ fn export_one(
     token: &tokio_util::sync::CancellationToken,
 ) -> Result<(), AppError> {
     task::check(token)?;
-    if job.spec.adjustments.is_some() {
-        return Err(AppError::Unsupported(
-            "adjustment effects are not implemented yet".into(),
-        ));
-    }
     let source = Path::new(&job.spec.source.path);
     let rendered = apply_render_spec(source, &job.spec)?;
     task::check(token)?;

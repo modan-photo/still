@@ -4,7 +4,10 @@ use image::DynamicImage;
 
 use crate::{
     error::AppError,
-    render::{border::apply_border, spec::RenderSpec, watermark::apply_watermark},
+    render::{
+        adjustments::apply_adjustments, border::apply_border, spec::RenderSpec,
+        watermark::apply_watermark,
+    },
 };
 
 /// Decodes the source image and establishes the shared rendering entry point.
@@ -12,6 +15,11 @@ use crate::{
 pub fn apply_render_spec(path: &Path, spec: &RenderSpec) -> Result<DynamicImage, AppError> {
     spec.validate().map_err(AppError::InvalidInput)?;
     let mut image = crate::image_io::load::decode_image(path)?;
+    if let Some(adjustments) = &spec.adjustments {
+        let mut rgba = image.to_rgba8();
+        apply_adjustments(&mut rgba, adjustments);
+        image = DynamicImage::ImageRgba8(rgba);
+    }
     if let Some(border) = &spec.border {
         image = DynamicImage::ImageRgba8(apply_border(&image.to_rgba8(), border));
     }

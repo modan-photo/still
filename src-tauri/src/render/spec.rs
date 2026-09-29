@@ -37,6 +37,9 @@ impl RenderSpec {
         if let Some(watermark) = &self.watermark {
             watermark.validate()?;
         }
+        if let Some(adjustments) = &self.adjustments {
+            adjustments.validate()?;
+        }
         Ok(())
     }
 }
@@ -285,6 +288,20 @@ pub struct AdjustmentsSpec {
     pub exposure: f32,
     pub contrast: f32,
     pub saturation: f32,
+}
+
+impl AdjustmentsSpec {
+    fn validate(&self) -> Result<(), String> {
+        if !self.exposure.is_finite() || !(-5.0..=5.0).contains(&self.exposure) {
+            return Err("adjustments.exposure must be finite and in -5..=5".into());
+        }
+        for (name, value) in [("contrast", self.contrast), ("saturation", self.saturation)] {
+            if !value.is_finite() || !(-1.0..=1.0).contains(&value) {
+                return Err(format!("adjustments.{name} must be finite and in -1..=1"));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

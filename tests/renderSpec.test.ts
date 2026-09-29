@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { borderGeometry } from '../src/render/border';
-import { applyRenderSettings } from '../src/render/spec';
+import { applyRenderSettings, syncRenderSettings } from '../src/render/spec';
+import { applyAdjustmentsToImageData } from '../src/render/adjustments';
 import type { RenderSpec } from '../src/types/renderSpec';
 
 const template: RenderSpec = {
@@ -49,5 +50,38 @@ describe('batch RenderSpec application', () => {
       borderWidth: 1,
       radius: 0,
     });
+  });
+});
+
+describe('module synchronization', () => {
+  it('copies only checked modules and clears missing source modules', () => {
+    const target: RenderSpec = {
+      version: 1,
+      source: { path: 'target.png', width: 10, height: 10 },
+      border: template.border,
+      watermark: {
+        type: 'text', content: 'Target', position: 'center', offsetX: 0, offsetY: 0,
+        opacity: 1, rotation: 0, scale: 1, tiled: false, tileGap: 96,
+      },
+      adjustments: { exposure: 0, contrast: 0, saturation: 0 },
+    };
+    const source: RenderSpec = {
+      version: 1,
+      source: { path: 'source.png', width: 20, height: 20 },
+      adjustments: { exposure: 0.5, contrast: 0.2, saturation: -0.1 },
+    };
+
+    const synced = syncRenderSettings(target, source, ['border', 'adjustments']);
+
+    expect(synced.source).toEqual(target.source);
+    expect(synced.border).toBeUndefined();
+    expect(synced.watermark).toEqual(target.watermark);
+    expect(synced.adjustments).toEqual(source.adjustments);
+  });
+
+  it('calculates adjustment preview pixels with export-compatible semantics', () => {
+    const pixels = { data: new Uint8ClampedArray([64, 64, 64, 200]), width: 1, height: 1 } as ImageData;
+    applyAdjustmentsToImageData(pixels, { exposure: 1, contrast: 0, saturation: 0 });
+    expect([...pixels.data]).toEqual([128, 128, 128, 200]);
   });
 });

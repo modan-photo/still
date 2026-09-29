@@ -1,11 +1,12 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { alpha, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, ToggleButton, ToggleButtonGroup, Tooltip, useTheme } from "@mui/material";
+import { alpha, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, TextField, ToggleButton, ToggleButtonGroup, Tooltip, useTheme } from "@mui/material";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icons";
 import { ThumbnailImage } from "../components/ThumbnailImage";
 import { useProjectStore } from "../stores/projectStore";
 import { useUIStore } from "../stores/uiStore";
 import { useUndoStore } from "../stores/undoStore";
+import type { SyncModule } from "../render/spec";
 
 const DEFAULT_HEIGHT_PERCENT = 60;
 const MIN_HEIGHT_PERCENT = 30;
@@ -51,6 +52,13 @@ export function GridPanel() {
   const [gridWidth, setGridWidth] = useState(0);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncSourceId, setSyncSourceId] = useState("");
+  const [syncModules, setSyncModules] = useState<Record<SyncModule, boolean>>({
+    border: true,
+    watermark: true,
+    adjustments: true,
+  });
   const theme = useTheme();
   const photos = useProjectStore((state) => state.photos);
   const selectedId = useProjectStore((state) => state.selectedId);
@@ -60,6 +68,7 @@ export function GridPanel() {
   const toggleSelectedId = useProjectStore((state) => state.toggleSelectedId);
   const removePhotos = useProjectStore((state) => state.removePhotos);
   const applySpecToPhotos = useProjectStore((state) => state.applySpecToPhotos);
+  const syncSpecModules = useProjectStore((state) => state.syncSpecModules);
   const pushUndo = useUndoStore((state) => state.push);
   const gridPanelOpen = useUIStore((state) => state.gridPanelOpen);
   const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
@@ -256,6 +265,17 @@ export function GridPanel() {
     applySpecToPhotos(sourcePhoto.id, selectedIds);
     setApplyConfirmOpen(false);
   };
+  const selectedSyncModules = (Object.keys(syncModules) as SyncModule[]).filter((module) => syncModules[module]);
+  const syncTargetCount = selectedIds.filter((id) => id !== syncSourceId).length;
+  const openSyncSettings = () => {
+    setSyncSourceId(selectedId ?? photos[0]?.id ?? "");
+    setSyncOpen(true);
+  };
+  const syncSettings = () => {
+    if (!syncSourceId || syncTargetCount === 0 || selectedSyncModules.length === 0) return;
+    syncSpecModules(syncSourceId, selectedIds, selectedSyncModules);
+    setSyncOpen(false);
+  };
 
   return (
     <Box
@@ -322,11 +342,19 @@ export function GridPanel() {
           <div className="flex items-center gap-1">
             <Button
               size="small"
-              startIcon={<Icon name="copy" size={15} />}
+              aria-label="Apply current settings to selected photos"
               disabled={!sourcePhoto || selectedIds.length === 0}
               onClick={() => setApplyConfirmOpen(true)}
             >
-              Apply current
+              Apply
+            </Button>
+            <Button
+              size="small"
+              aria-label="Sync selected settings"
+              disabled={selectedIds.length === 0}
+              onClick={openSyncSettings}
+            >
+              Sync
             </Button>
             <Button
               size="small"
@@ -511,6 +539,52 @@ export function GridPanel() {
         <DialogActions>
           <Button onClick={() => setApplyConfirmOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={applyCurrentSpec}>Apply</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={syncOpen} onClose={() => setSyncOpen(false)} aria-labelledby="sync-settings-title" fullWidth maxWidth="xs">
+        <DialogTitle id="sync-settings-title">Sync settings</DialogTitle>
+        <DialogContent>
+          <div className="space-y-3 pt-1">
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Source photo"
+              value={syncSourceId}
+              onChange={(event) => setSyncSourceId(event.target.value)}
+            >
+              {photos.map((photo) => (
+                <MenuItem key={photo.id} value={photo.id}>{photo.path.split(/[\\/]/).pop()}</MenuItem>
+              ))}
+            </TextField>
+            <div>
+              <span className="block text-xs font-medium text-secondary">Modules</span>
+              {(['border', 'watermark', 'adjustments'] as const).map((module) => (
+                <FormControlLabel
+                  key={module}
+                  control={<Checkbox
+                    size="small"
+                    checked={syncModules[module]}
+                    onChange={(event) => setSyncModules((current) => ({ ...current, [module]: event.target.checked }))}
+                  />}
+                  label={module === 'border' ? 'Frame' : module === 'watermark' ? 'Watermark' : 'Adjustments'}
+                />
+              ))}
+            </div>
+            <p className="m-0 text-xs leading-5 text-secondary">
+              {syncTargetCount} selected {syncTargetCount === 1 ? 'photo' : 'photos'} will receive the chosen modules. Missing source modules clear the matching target settings.
+            </p>
+          </div>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSyncOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={!syncSourceId || syncTargetCount === 0 || selectedSyncModules.length === 0}
+            onClick={syncSettings}
+          >
+            Sync
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

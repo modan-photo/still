@@ -38,13 +38,13 @@ export function borderGeometry(
 /** Renders the downsampled source with the same geometry used by Rust export. */
 export function renderBorderPreview(
   canvas: HTMLCanvasElement,
-  image: HTMLImageElement,
+  image: HTMLImageElement | HTMLCanvasElement,
   cfg: BorderSpec,
   originalWidth: number,
   originalHeight: number,
 ): void {
-  const sourceWidth = image.naturalWidth;
-  const sourceHeight = image.naturalHeight;
+  const sourceWidth = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
+  const sourceHeight = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
   const geometry = borderGeometry(sourceWidth, sourceHeight, originalWidth, originalHeight, cfg);
   canvas.width = geometry.width;
   canvas.height = geometry.height;

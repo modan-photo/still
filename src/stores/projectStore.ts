@@ -4,7 +4,7 @@ import { getCachedImage, invalidateCache, normalizeError } from '../services/tau
 import type { ImageMeta } from '../types/image';
 import type { BorderSpec, RenderSpec } from '../types/renderSpec';
 import { colorTokens } from '../theme/tokens';
-import { applyRenderSettings } from '../render/spec';
+import { applyRenderSettings, syncRenderSettings, type SyncModule } from '../render/spec';
 
 export interface ProjectPhoto extends ImageMeta {
   id: string;
@@ -54,6 +54,7 @@ export interface ProjectState {
   resetCollageDraft: () => void;
   updateSpec: (id: string, patch: SpecPatch) => void;
   applySpecToPhotos: (sourceId: string, targetIds: string[]) => void;
+  syncSpecModules: (sourceId: string, targetIds: string[], modules: SyncModule[]) => void;
   applyBorderToAll: (border: BorderSpec) => void;
   markClean: (id: string, exportedSpec: RenderSpec) => void;
   removePhotos: (ids: string[]) => RemovePhotosSnapshot;
@@ -166,6 +167,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return {
       photos: state.photos.map((photo) => targets.has(photo.id) && photo.id !== sourceId
         ? { ...photo, spec: applyRenderSettings(photo.spec, template), dirty: true }
+        : photo),
+    };
+  }),
+  syncSpecModules: (sourceId, targetIds, modules) => set((state) => {
+    const template = state.photos.find((photo) => photo.id === sourceId)?.spec;
+    if (!template || modules.length === 0) return state;
+    const targets = new Set(targetIds);
+    return {
+      photos: state.photos.map((photo) => targets.has(photo.id) && photo.id !== sourceId
+        ? { ...photo, spec: syncRenderSettings(photo.spec, template, modules), dirty: true }
         : photo),
     };
   }),

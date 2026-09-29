@@ -93,6 +93,23 @@ test('applies the current RenderSpec to selected photos while preserving each so
   assert.equal(targetB.dirty, true);
 });
 
+test('syncs only selected RenderSpec modules to target photos', () => {
+  const store = useProjectStore;
+  store.getState().clear();
+  const photo = (path) => ({ path, width: 10, height: 10, format: 'png', orientation: 1, previewUrl: null, thumbUrl: `${path}.webp` });
+  store.getState().addPhotos([photo('source.png'), photo('target.png')]);
+  const border = { style: 'solid', width: 2, unit: 'px', color: '#FFFFFF', radius: 0, colors: ['#FFFFFF', '#FFFFFF'], angle: 0, caption: false };
+  store.getState().updateSpec('source.png', { adjustments: { exposure: 0.25, contrast: 0.1, saturation: -0.2 } });
+  store.getState().updateSpec('target.png', { border });
+
+  store.getState().syncSpecModules('source.png', ['target.png'], ['border', 'adjustments']);
+
+  const target = store.getState().photos[1];
+  assert.equal(target.spec.border, undefined);
+  assert.deepEqual(target.spec.adjustments, { exposure: 0.25, contrast: 0.1, saturation: -0.2 });
+  assert.deepEqual(target.spec.source, { path: 'target.png', width: 10, height: 10 });
+});
+
 test('undo store restores only the latest removal snapshot', () => {
   const store = useProjectStore;
   store.getState().clear();

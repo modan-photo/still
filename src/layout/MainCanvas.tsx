@@ -7,9 +7,9 @@ import { Icon } from '../components/Icons';
 import { EmptyState } from '../components/EmptyState';
 import { motionTokens } from '../theme/tokens';
 import { renderBorderPreview } from '../render/border';
-import type { BorderSpec } from '../types/renderSpec';
-import type { WatermarkSpec } from '../types/renderSpec';
+import type { AdjustmentsSpec, BorderSpec, WatermarkSpec } from '../types/renderSpec';
 import { renderWatermarkPreview } from '../render/watermark';
+import { renderAdjustedPreview } from '../render/adjustments';
 import { listWatermarkFonts } from '../services/tauri/watermark';
 import { CollagePreview } from '../components/collage/CollagePreview';
 import { useUIStore } from '../stores/uiStore';
@@ -110,7 +110,7 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
             </Tooltip>
           </div>
         </div>
-        <Preview key={renderedPhoto.id} photoId={renderedPhoto.id} path={renderedPhoto.path} frame={renderedPhoto.spec.border} stamp={renderedPhoto.spec.watermark} originalWidth={renderedPhoto.width} originalHeight={renderedPhoto.height} focusedLayout={focusedLayout} />
+        <Preview key={renderedPhoto.id} photoId={renderedPhoto.id} path={renderedPhoto.path} frame={renderedPhoto.spec.border} stamp={renderedPhoto.spec.watermark} adjustments={renderedPhoto.spec.adjustments} originalWidth={renderedPhoto.width} originalHeight={renderedPhoto.height} focusedLayout={focusedLayout} />
         <div className="mt-2 truncate text-center text-xs text-secondary" title={renderedPhoto.path}>{renderedPhoto.path.split(/[\\/]/).pop()} · {renderedPhoto.width} × {renderedPhoto.height}</div>
       </div>
     )}
@@ -118,7 +118,7 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
   </main>;
 }
 
-function Preview({ photoId, path, frame, stamp, originalWidth, originalHeight, focusedLayout }: { photoId: string; path: string; frame?: BorderSpec; stamp?: WatermarkSpec; originalWidth: number; originalHeight: number; focusedLayout: boolean }) {
+function Preview({ photoId, path, frame, stamp, adjustments, originalWidth, originalHeight, focusedLayout }: { photoId: string; path: string; frame?: BorderSpec; stamp?: WatermarkSpec; adjustments?: AdjustmentsSpec; originalWidth: number; originalHeight: number; focusedLayout: boolean }) {
   const { image, loading, error } = useImagePreview(path);
   const canvas = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
@@ -130,12 +130,13 @@ function Preview({ photoId, path, frame, stamp, originalWidth, originalHeight, f
     if (!target || !image) return;
     let cancelled = false;
     const timer = window.setTimeout(() => { void (async () => {
+      const source = adjustments ? renderAdjustedPreview(image, adjustments) : image;
       if (frame) {
-        renderBorderPreview(target, image, frame, originalWidth, originalHeight);
+        renderBorderPreview(target, source, frame, originalWidth, originalHeight);
       } else {
-        target.width = image.naturalWidth;
-        target.height = image.naturalHeight;
-        target.getContext('2d')?.drawImage(image, 0, 0);
+        target.width = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
+        target.height = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
+        target.getContext('2d')?.drawImage(source, 0, 0);
       }
       if (stamp) {
         await listWatermarkFonts();
@@ -146,7 +147,7 @@ function Preview({ photoId, path, frame, stamp, originalWidth, originalHeight, f
       }
     })(); }, 16);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [frame, image, originalHeight, originalWidth, stamp]);
+  }, [adjustments, frame, image, originalHeight, originalWidth, stamp]);
   useEffect(() => () => {
     if (canvas.current) { canvas.current.width = 0; canvas.current.height = 0; }
   }, []);

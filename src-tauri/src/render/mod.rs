@@ -1,3 +1,4 @@
+pub mod adjustments;
 pub mod border;
 pub mod collage;
 pub mod pipeline;
