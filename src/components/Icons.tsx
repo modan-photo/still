@@ -5,7 +5,7 @@ export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
   | "check" | "chevron" | "sidebar" | "frame" | "stamp" | "info"
   | "transform" | "rotate-left" | "rotate-right" | "minimize" | "maximize" | "plus" | "copy"
-  | "grid" | "single" | "trash" | "select" | "image-off"
+  | "grid" | "single" | "trash" | "select" | "image-off" | "more"
   | "gap" | "radius" | "background" | "aspect" | "photos";
 
 /** name selects the icon; size controls both SVG dimensions and defaults to 18 pixels. */
@@ -29,6 +29,7 @@ const paths: Record<IconName, ReactNode> = {
   maximize: <rect x="5.5" y="5.5" width="13" height="13" rx="0.5"/>,
   plus: <path d="M12 5v14M5 12h14"/>,
   copy: <><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></>,
+  more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></>,
   grid: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
   single: <rect x="4" y="5" width="16" height="14" rx="2"/>,
   trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></>,

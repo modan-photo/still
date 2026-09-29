@@ -6,25 +6,28 @@ import {
   DialogTitle,
   IconButton,
   Popover,
+  Snackbar,
+  SnackbarContent,
   Slider,
   Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { BUILTIN_FRAME_PRESETS, DEFAULT_FRAME_PRESET_ID } from '../constants/framePresets';
 import { useRenderSpec } from '../hooks/useRenderSpec';
-import { renderBorderPreview } from '../render/border';
-import { cacheAssetUrl } from '../services/tauri/image';
+import { loadFramePresets, saveFramePresets } from '../services/tauri/framePresets';
+import { loadUIState, saveLastFramePresetId } from '../services/tauri/uiState';
 import { useProjectStore } from '../stores/projectStore';
-import { DEFAULT_BORDER, type BorderSpec, type BorderStyle } from '../types/renderSpec';
+import type { FramePreset } from '../types/frame';
+import { DEFAULT_BORDER, type BorderSpec } from '../types/renderSpec';
+import { framePresetToBorderSpec } from './FrameMiniPreview';
+import { FramePresetActions, type FramePresetActionTarget } from './FramePresetActions';
+import { FramePresetSelect } from './FramePresetSelect';
+import { makeUniqueFramePresetName, SaveFramePresetDialog } from './SaveFramePresetDialog';
+import { motionTokens } from '../theme/tokens';
 
-const STYLES: { value: BorderStyle; label: string }[] = [
-  { value: 'solid', label: 'Solid' },
-  { value: 'gradient', label: 'Gradient' },
-  { value: 'polaroid', label: 'Polaroid' },
-  { value: 'film', label: 'Film' },
-];
 const PRESET_COLORS = ['#FFFFFF', '#F5F0E8', '#D8E7DE', '#BEDBE7', '#F3C6C2', '#F0D28C', '#D8C6E8', '#A8A8A8', '#555555', '#171717', '#B64236', '#2E6450'];
 
 export function FrameControls() {
@@ -34,33 +37,154 @@ export function FrameControls() {
   const photoCount = useProjectStore((state) => state.photos.length);
   const applyBorderToAll = useProjectStore((state) => state.applyBorderToAll);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [presetActionTarget, setPresetActionTarget] = useState<FramePresetActionTarget | null>(null);
+  const [userPresets, setUserPresets] = useState<FramePreset[]>([]);
+  const [currentFramePresetId, setCurrentFramePresetId] = useState(DEFAULT_FRAME_PRESET_ID);
+  const [presetsLoaded, setPresetsLoaded] = useState(false);
+  const selectionChangedDuringLoad = useRef(false);
+  const presets = useMemo<FramePreset[]>(() => [
+    ...BUILTIN_FRAME_PRESETS.map((preset) => structuredClone(preset)),
+    ...userPresets,
+  ], [userPresets]);
+  const selectedPreset = presets.find((preset) => preset.id === currentFramePresetId)
+    ?? presets.find((preset) => preset.id === DEFAULT_FRAME_PRESET_ID)
+    ?? presets[0];
   const frameApplied = Boolean(spec?.border);
   const frame = spec?.border ?? DEFAULT_BORDER;
   const change = (patch: Partial<BorderSpec>) => update({ border: { ...frame, ...patch } });
   const dimensionValue = frame.width;
+
+  useEffect(() => {
+    let disposed = false;
+    void Promise.all([loadFramePresets(), loadUIState()])
+      .then(([storedPresets, uiState]) => {
+        if (disposed) return;
+        setUserPresets(storedPresets);
+        const availableIds = new Set([
+          ...BUILTIN_FRAME_PRESETS.map((preset) => preset.id),
+          ...storedPresets.map((preset) => preset.id),
+        ]);
+        if (!selectionChangedDuringLoad.current) {
+          setCurrentFramePresetId(
+            uiState.lastFramePresetId && availableIds.has(uiState.lastFramePresetId)
+              ? uiState.lastFramePresetId
+              : DEFAULT_FRAME_PRESET_ID,
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('Unable to restore frame presets', error);
+      })
+      .finally(() => {
+        if (!disposed) setPresetsLoaded(true);
+      });
+    return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!presetsLoaded || !selectedId || !photo || spec?.border || !selectedPreset) return;
+    update({ border: framePresetToBorderSpec(selectedPreset) });
+  }, [photo, presetsLoaded, selectedId, selectedPreset, spec?.border, update]);
+
+  const selectPreset = (preset: FramePreset) => {
+    selectionChangedDuringLoad.current = true;
+    setCurrentFramePresetId(preset.id);
+    update({ border: framePresetToBorderSpec(preset) });
+    void saveLastFramePresetId(preset.id).catch((error: unknown) => {
+      console.warn('Unable to persist the selected frame preset', error);
+    });
+  };
+
+  const presetModified = selectedPreset
+    ? !borderMatchesPreset(frame, selectedPreset)
+    : false;
+  const currentPreviewPreset = selectedPreset
+    ? framePreviewPreset(frame, selectedPreset)
+    : undefined;
+
+  const saveCurrentPreset = async (requestedName: string) => {
+    if (!selectedPreset || !currentPreviewPreset) return;
+    const name = makeUniqueFramePresetName(requestedName, presets.map((preset) => preset.name));
+    const preset: FramePreset = {
+      id: createUserPresetId(),
+      name,
+      style: currentPreviewPreset.style,
+      params: structuredClone(currentPreviewPreset.params),
+      builtin: false,
+      createdAt: Date.now(),
+    };
+    const nextUserPresets = [...userPresets, preset];
+    await saveFramePresets(nextUserPresets);
+    await saveLastFramePresetId(preset.id);
+    setUserPresets(nextUserPresets);
+    setCurrentFramePresetId(preset.id);
+    selectionChangedDuringLoad.current = true;
+    setNotice('Saved to My Presets');
+  };
+
+  const renameUserPreset = async (preset: FramePreset, requestedName: string) => {
+    if (preset.builtin) return;
+    const otherNames = presets.filter((entry) => entry.id !== preset.id).map((entry) => entry.name);
+    const name = makeUniqueFramePresetName(requestedName, otherNames);
+    const nextUserPresets = userPresets.map((entry) => (
+      entry.id === preset.id ? { ...entry, name } : entry
+    ));
+    await saveFramePresets(nextUserPresets);
+    setUserPresets(nextUserPresets);
+    setNotice('Preset renamed');
+  };
+
+  const duplicateUserPreset = async (preset: FramePreset) => {
+    if (preset.builtin) return;
+    const copy: FramePreset = {
+      ...structuredClone(preset),
+      id: createUserPresetId(),
+      name: makeUniqueFramePresetName(`${preset.name} Copy`, presets.map((entry) => entry.name)),
+      createdAt: Date.now(),
+    };
+    const nextUserPresets = [...userPresets, copy];
+    await saveFramePresets(nextUserPresets);
+    setUserPresets(nextUserPresets);
+    setNotice('Preset duplicated');
+  };
+
+  const deleteUserPreset = async (preset: FramePreset) => {
+    if (preset.builtin) return;
+    const nextUserPresets = userPresets.filter((entry) => entry.id !== preset.id);
+    await saveFramePresets(nextUserPresets);
+    setUserPresets(nextUserPresets);
+    if (currentFramePresetId === preset.id) {
+      const fallback = presets.find((entry) => entry.id === DEFAULT_FRAME_PRESET_ID);
+      if (fallback) {
+        setCurrentFramePresetId(fallback.id);
+        update({ border: framePresetToBorderSpec(fallback) });
+        void saveLastFramePresetId(fallback.id).catch((error: unknown) => {
+          console.warn('Unable to persist the fallback frame preset', error);
+        });
+      }
+    }
+    setNotice('Preset deleted');
+  };
 
   if (!selectedId || !photo) {
     return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a frame.</p>;
   }
 
   return <div className="space-y-4">
-    <div>
-      <span className="mb-2 block text-xs font-medium text-secondary">Style</span>
-      {!frameApplied && <span className="mb-2 block text-[10px] text-secondary">Choose a style to enable the frame.</span>}
-      <div className="filmstrip-scroll flex gap-2 overflow-x-auto pb-1" role="radiogroup" aria-label="Frame style">
-        {STYLES.map(({ value, label }) => <button
-          type="button"
-          role="radio"
-          aria-checked={frameApplied && frame.style === value}
-          className={`min-w-[62px] rounded-lg border p-1.5 text-[10px] transition-colors ${frameApplied && frame.style === value ? 'border-accent bg-app-elevated text-primary' : 'border-subtle text-secondary hover:text-primary'}`}
-          key={value}
-          onClick={() => change({ style: value })}
-        >
-          <StylePreview src={photo.thumbUrl} config={{ ...frame, style: value }} originalWidth={photo.width} originalHeight={photo.height} />
-          <span className="mt-1 block truncate">{label}</span>
-        </button>)}
-      </div>
-    </div>
+    <FramePresetSelect
+      presets={presets}
+      selectedPresetId={selectedPreset.id}
+      currentPreviewPreset={currentPreviewPreset}
+      modified={presetModified}
+      previewSource={photo.thumbUrl}
+      originalWidth={photo.width}
+      originalHeight={photo.height}
+      onSelect={selectPreset}
+      onSaveCurrent={() => setSaveDialogOpen(true)}
+      onPresetActions={(preset, position) => setPresetActionTarget({ preset, position })}
+    />
 
     <NumberSlider
       label="Width"
@@ -107,29 +231,46 @@ export function FrameControls() {
         <Button variant="contained" onClick={() => { applyBorderToAll(frame); setConfirmOpen(false); }}>Apply</Button>
       </DialogActions>
     </Dialog>
+    {currentPreviewPreset && <SaveFramePresetDialog
+      open={saveDialogOpen}
+      preset={currentPreviewPreset}
+      existingNames={presets.map((preset) => preset.name)}
+      previewSource={photo.thumbUrl}
+      originalWidth={photo.width}
+      originalHeight={photo.height}
+      onClose={() => setSaveDialogOpen(false)}
+      onSave={saveCurrentPreset}
+    />}
+    <FramePresetActions
+      target={presetActionTarget}
+      onCloseMenu={() => setPresetActionTarget(null)}
+      onRename={renameUserPreset}
+      onDuplicate={duplicateUserPreset}
+      onDelete={deleteUserPreset}
+      onError={setNotice}
+    />
+    <Snackbar
+      open={Boolean(notice)}
+      autoHideDuration={motionTokens.duration.slow * 8}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      onClose={(_, reason) => {
+        if (reason !== 'clickaway') setNotice(null);
+      }}
+    >
+      <SnackbarContent
+        role="status"
+        message={notice ?? ''}
+        sx={(theme) => ({
+          minWidth: 0,
+          color: theme.still.colors[theme.palette.mode].text.primary,
+          backgroundColor: theme.still.colors[theme.palette.mode].bg.elevated,
+          borderColor: theme.still.colors[theme.palette.mode].border.subtle,
+          borderRadius: `${theme.still.radius.lg}px`,
+          boxShadow: theme.still.shadow.elev3,
+        })}
+      />
+    </Snackbar>
   </div>;
-}
-
-function StylePreview({ src, config, originalWidth, originalHeight }: { src: string; config: BorderSpec; originalWidth: number; originalHeight: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-  useEffect(() => {
-    let disposed = false;
-    const next = new Image();
-    next.src = cacheAssetUrl(src);
-    void next.decode().then(() => { if (!disposed) setImage(next); }).catch(() => undefined);
-    return () => { disposed = true; next.removeAttribute('src'); setImage(null); };
-  }, [src]);
-  useEffect(() => {
-    if (!image) return;
-    const timer = window.setTimeout(() => {
-      if (canvasRef.current) renderBorderPreview(canvasRef.current, image, config, originalWidth, originalHeight);
-    }, 16);
-    return () => window.clearTimeout(timer);
-  }, [config, image, originalHeight, originalWidth]);
-  return <span className="grid h-9 place-items-center overflow-hidden rounded bg-app-base">
-    <canvas ref={canvasRef} className="block max-h-full max-w-full" aria-hidden="true" />
-  </span>;
 }
 
 function NumberSlider({ label, value, min, max, suffix, onChange, after }: {
@@ -226,3 +367,36 @@ function GradientStops({ frame, onChange }: { frame: BorderSpec; onChange: (patc
 }
 
 const clamp = (value: number, min: number, max: number) => Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : min;
+
+function borderMatchesPreset(border: BorderSpec, preset: FramePreset): boolean {
+  return JSON.stringify(border) === JSON.stringify(framePresetToBorderSpec(preset));
+}
+
+function framePreviewPreset(border: BorderSpec, preset: FramePreset): Pick<FramePreset, 'style' | 'params'> {
+  const gradient = preset.style === 'gradient'
+    ? {
+        stops: border.colors.map((color, index) => ({
+          offset: border.colors.length > 1 ? index / (border.colors.length - 1) : 0,
+          color,
+        })),
+        angle: border.angle,
+      }
+    : preset.params.gradient;
+  return {
+    style: preset.style,
+    params: {
+      ...preset.params,
+      width: border.width,
+      unit: border.unit,
+      color: border.color,
+      radius: border.radius,
+      gradient,
+    },
+  };
+}
+
+function createUserPresetId(): string {
+  const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz-';
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return `user-${Array.from(bytes, (byte) => alphabet[byte & 63]).join('')}`;
+}

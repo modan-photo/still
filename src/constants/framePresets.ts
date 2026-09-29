@@ -1,13 +1,10 @@
 import type { FramePreset } from '../types/frame';
 
-/**
- * Built-in presets are immutable application defaults. Persist only their ids,
- * never these objects, in user-owned preset storage.
- */
+/** Application defaults are immutable and never written to user preset storage. */
 export const BUILTIN_FRAME_PRESETS = [
   {
     id: 'builtin-solid',
-    name: '内置 · 纯白边',
+    name: 'White Border',
     style: 'solid',
     params: {
       width: 40,
@@ -20,7 +17,7 @@ export const BUILTIN_FRAME_PRESETS = [
   },
   {
     id: 'builtin-minimal-black',
-    name: '内置 · 极简黑框',
+    name: 'Minimal Black Frame',
     style: 'solid',
     params: {
       width: 24,
@@ -33,7 +30,7 @@ export const BUILTIN_FRAME_PRESETS = [
   },
   {
     id: 'builtin-rounded-white-card',
-    name: '内置 · 圆角白卡',
+    name: 'Rounded White Card',
     style: 'solid',
     params: {
       width: 60,
@@ -46,7 +43,7 @@ export const BUILTIN_FRAME_PRESETS = [
   },
   {
     id: 'builtin-gradient',
-    name: '内置 · 渐变边',
+    name: 'Gradient Border',
     style: 'gradient',
     params: {
       width: 48,
@@ -66,7 +63,7 @@ export const BUILTIN_FRAME_PRESETS = [
   },
   {
     id: 'builtin-shadow',
-    name: '内置 · 悬浮投影',
+    name: 'Floating Shadow',
     style: 'shadow',
     params: {
       width: 0,
@@ -86,4 +83,3 @@ export const BUILTIN_FRAME_PRESETS = [
 ] as const satisfies readonly FramePreset[];
 
 export const DEFAULT_FRAME_PRESET_ID = 'builtin-solid';
-
