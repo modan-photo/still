@@ -30,27 +30,27 @@ export function TitleBar({ onOpenSettings, onToggleTheme, themeMode }: TitleBarP
 
   return (
     <header className="flex h-10 w-full select-none items-center bg-app-surface text-secondary" data-tauri-drag-region>
-      <div className="flex h-full shrink-0 items-center gap-1 pl-3" data-tauri-drag-region>
+      <div className="flex h-full shrink-0 items-center pl-3" data-tauri-drag-region>
         <div className="mr-1 flex items-center gap-2 pr-2 text-[13px] font-medium" data-tauri-drag-region>
           <StillMark size={18} />
           <span data-tauri-drag-region>Still</span>
         </div>
+      </div>
 
-        <span className="mx-1 h-4 w-px bg-subtle" aria-hidden="true" />
+      <div className="h-full min-w-8 flex-1" data-tauri-drag-region />
+
+      <div className="flex h-full shrink-0 items-center">
         <Tooltip title={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} arrow>
           <MuiIconButton aria-label={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} onClick={onToggleTheme} size="small" sx={titleBarActionSx}>
             <Icon name={themeMode === "light" ? "moon" : "sun"} size={16} />
           </MuiIconButton>
         </Tooltip>
-        <span className="mx-1 h-4 w-px bg-subtle" aria-hidden="true" />
         <Tooltip title="Application settings" arrow>
           <MuiIconButton aria-label="Open application settings" onClick={onOpenSettings} size="small" sx={titleBarActionSx}>
             <Icon name="settings" size={16} />
           </MuiIconButton>
         </Tooltip>
       </div>
-
-      <div className="h-full min-w-8 flex-1" data-tauri-drag-region />
 
       <div className="flex h-full shrink-0 items-center">
         <MuiIconButton aria-label="Minimize window" disableRipple onClick={windowAction("minimize")} sx={windowButtonSx}>
@@ -83,9 +83,9 @@ const windowButtonSx = {
 } as const;
 
 const titleBarActionSx = {
-  width: 30,
-  height: 30,
-  borderRadius: "var(--radius-sm)",
+  width: 46,
+  height: 40,
+  borderRadius: 0,
   color: "text.secondary",
   transition: "background-color var(--motion-fast) var(--motion-easing), color var(--motion-fast) var(--motion-easing)",
   "&:hover": { bgcolor: "action.hover", color: "text.primary" },
