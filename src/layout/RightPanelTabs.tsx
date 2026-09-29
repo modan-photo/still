@@ -1,5 +1,6 @@
 import { Tab, Tabs } from "@mui/material";
 import { Icon } from "../components/Icons";
+import { enterCollageMode } from "../services/collageMode";
 import { useUIStore } from "../stores/uiStore";
 import { RIGHT_PANEL_TABS, type RightPanelTabId } from "./rightPanelTabs";
 
@@ -11,7 +12,10 @@ export function RightPanelTabs({ excludeCollage = false }: { excludeCollage?: bo
     <Tabs
       aria-label="Inspector panel"
       value={activeRightTab}
-      onChange={(_, value: RightPanelTabId) => setActiveRightTab(value)}
+      onChange={(_, value: RightPanelTabId) => {
+        if (value === "collage") enterCollageMode();
+        else setActiveRightTab(value);
+      }}
       variant="fullWidth"
       TabIndicatorProps={{
         children: <span className="right-panel-tab-indicator" />,
