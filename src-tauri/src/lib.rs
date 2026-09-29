@@ -23,6 +23,8 @@ pub fn run() {
             commands::watermark::watermark_presets_list,
             commands::watermark::watermark_preset_save,
             commands::watermark::watermark_preset_delete,
+            commands::frame::frame_presets_load,
+            commands::frame::frame_presets_save,
             commands::task::task_cancel,
             commands::task::task_list,
             commands::ui::ui_state_load,

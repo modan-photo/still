@@ -7,6 +7,7 @@ import {
 
 export interface PersistedUIState {
   activeRightTab: RightPanelTabId;
+  lastFramePresetId?: string;
 }
 
 const BROWSER_STORAGE_KEY = "still.ui-state";
@@ -15,16 +16,24 @@ const DEFAULT_UI_STATE: PersistedUIState = {
 };
 
 function normalizeUIState(value: unknown): PersistedUIState {
-  if (typeof value !== "object" || value === null || !("activeRightTab" in value)) {
+  if (typeof value !== "object" || value === null) {
     return DEFAULT_UI_STATE;
   }
 
-  const { activeRightTab } = value;
-  if (isRightPanelTabId(activeRightTab)) return { activeRightTab };
-  if (activeRightTab === "border") return { activeRightTab: "frame" };
-  if (activeRightTab === "watermark") return { activeRightTab: "stamp" };
+  const { activeRightTab, lastFramePresetId } = value as Record<string, unknown>;
+  const normalizedPresetId = typeof lastFramePresetId === "string" && lastFramePresetId.trim()
+    ? lastFramePresetId
+    : undefined;
+  const withPresetId = (tab: RightPanelTabId): PersistedUIState => ({
+    activeRightTab: tab,
+    ...(normalizedPresetId ? { lastFramePresetId: normalizedPresetId } : {}),
+  });
 
-  return DEFAULT_UI_STATE;
+  if (isRightPanelTabId(activeRightTab)) return withPresetId(activeRightTab);
+  if (activeRightTab === "border") return withPresetId("frame");
+  if (activeRightTab === "watermark") return withPresetId("stamp");
+
+  return withPresetId(DEFAULT_RIGHT_PANEL_TAB);
 }
 
 export async function loadUIState(): Promise<PersistedUIState> {
@@ -42,11 +51,16 @@ export async function loadUIState(): Promise<PersistedUIState> {
   }
 }
 
-export async function saveUIState(state: PersistedUIState): Promise<void> {
+export async function saveUIState(state: Partial<PersistedUIState>): Promise<void> {
   if (isTauri()) {
     await invoke("ui_state_save", { state });
     return;
   }
 
-  localStorage.setItem(BROWSER_STORAGE_KEY, JSON.stringify(state));
+  const current = await loadUIState();
+  localStorage.setItem(BROWSER_STORAGE_KEY, JSON.stringify({ ...current, ...state }));
+}
+
+export async function saveLastFramePresetId(lastFramePresetId: string): Promise<void> {
+  await saveUIState({ lastFramePresetId });
 }
