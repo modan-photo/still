@@ -189,17 +189,10 @@ export function FrameControls() {
   };
 
   const resetFrame = useCallback(() => {
-    if (!selectedId || !photo) return;
-    const fallback = presets.find((preset) => preset.id === DEFAULT_FRAME_PRESET_ID);
-    if (!fallback) return;
-    selectionChangedDuringLoad.current = true;
-    setCurrentFramePresetId(fallback.id);
-    update({ border: framePresetToBorderSpec(fallback) });
-    setNotice('Reset to default');
-    void saveLastFramePresetId(fallback.id).catch((error: unknown) => {
-      console.warn('Unable to persist the default frame preset', error);
-    });
-  }, [photo, presets, selectedId, update]);
+    if (!selectedId || !photo || !frameApplied) return;
+    update({ border: undefined });
+    setNotice('Reset to no frame');
+  }, [frameApplied, photo, selectedId, update]);
 
   useEffect(() => {
     const resetWithShortcut = (event: KeyboardEvent) => {
@@ -233,10 +226,10 @@ export function FrameControls() {
           onPresetActions={(preset, position) => setPresetActionTarget({ preset, position })}
         />
       </div>
-      <Tooltip title="Reset to default (White Border)">
+      <Tooltip title="Reset to default (No Frame)">
         <IconButton
           type="button"
-          aria-label="Reset frame to default"
+          aria-label="Reset frame to no frame"
           onClick={resetFrame}
           sx={(theme) => ({
             width: 32,
