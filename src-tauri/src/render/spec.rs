@@ -7,6 +7,8 @@ pub const RENDER_SPEC_VERSION: u8 = 1;
 pub struct RenderSpec {
     pub version: u8,
     pub source: SourceSpec,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crop: Option<CropSpec>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub border: Option<BorderConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -50,6 +52,59 @@ pub struct SourceSpec {
     pub path: String,
     pub width: u32,
     pub height: u32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct CropSpec {
+    pub aspect: CropAspect,
+    pub rect: CropRect,
+    pub enabled: bool,
+}
+
+/// Coordinates in 0..=1 relative to the EXIF-normalized display orientation.
+/// Fixed aspects constrain the pixel rectangle's ratio, not width / height here.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct CropRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+impl Default for CropRect {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            width: 1.0,
+            height: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CropAspect {
+    #[default]
+    #[serde(rename = "original")]
+    Original,
+    #[serde(rename = "free")]
+    Free,
+    #[serde(rename = "1:1")]
+    Square,
+    #[serde(rename = "4:3")]
+    FourThree,
+    #[serde(rename = "3:2")]
+    ThreeTwo,
+    #[serde(rename = "16:9")]
+    SixteenNine,
+    #[serde(rename = "2:3")]
+    TwoThree,
+    #[serde(rename = "3:4")]
+    ThreeFour,
+    #[serde(rename = "9:16")]
+    NineSixteen,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -327,6 +382,50 @@ mod tests {
     };
 
     #[test]
+    fn old_specs_without_crop_remain_compatible() {
+        let value = serde_json::json!({
+            "version": 1,
+            "source": { "path": "photo.jpg", "width": 4000, "height": 3000 }
+        });
+        let spec: RenderSpec = serde_json::from_value(value).expect("read old spec");
+        assert!(spec.crop.is_none());
+        spec.validate().expect("validate old spec");
+        assert!(serde_json::to_value(spec).unwrap().get("crop").is_none());
+    }
+
+    #[test]
+    fn crop_defaults_and_aspects_match_the_typescript_contract() {
+        use super::{CropAspect, CropSpec};
+
+        let default = serde_json::json!({
+            "aspect": "original",
+            "rect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+            "enabled": false
+        });
+        let crop: CropSpec = serde_json::from_str("{}").expect("default crop");
+        assert_eq!(crop, CropSpec::default());
+        assert_eq!(serde_json::to_value(crop).unwrap(), default);
+
+        for aspect in [
+            "original", "free", "1:1", "4:3", "3:2", "16:9", "2:3", "3:4", "9:16",
+        ] {
+            let parsed: CropAspect = serde_json::from_value(serde_json::json!(aspect)).unwrap();
+            assert_eq!(serde_json::to_value(parsed).unwrap(), aspect);
+            let value = serde_json::json!({
+                "version": 1,
+                "source": { "path": "photo.jpg", "width": 4000, "height": 3000 },
+                "crop": {
+                    "aspect": aspect,
+                    "rect": { "x": 0.125, "y": 0.25, "width": 0.5, "height": 0.5 },
+                    "enabled": true
+                }
+            });
+            let spec: RenderSpec = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(serde_json::to_value(spec).unwrap(), value);
+        }
+    }
+
+    #[test]
     fn serializes_with_the_typescript_field_names() {
         let spec = RenderSpec {
             version: RENDER_SPEC_VERSION,
@@ -336,6 +435,7 @@ mod tests {
                 height: 3_000,
             },
             border: None,
+            crop: None,
             watermark: None,
             adjustments: None,
             output: Some(OutputSpec {

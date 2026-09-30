@@ -67,8 +67,9 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         onImport();
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && /^[1-4]$/.test(event.key)) {
-        // The compact/mobile inspector does not expose the same four-tab layout.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && /^[1-9]$/.test(event.key)
+        && Number(event.key) <= RIGHT_PANEL_TABS.length) {
+        // The compact/mobile inspector omits collage from this tab layout.
         if (window.matchMedia('(max-width: 767px)').matches) return;
         const tab = RIGHT_PANEL_TABS[Number(event.key) - 1];
         if (tab) {

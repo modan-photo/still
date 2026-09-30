@@ -2,12 +2,29 @@
 export interface RenderSpec {
   version: 1;
   source: SourceSpec;
+  crop?: CropSpec;
   border?: BorderSpec;
   watermark?: WatermarkSpec;
   adjustments?: AdjustmentsSpec;
   output?: OutputSpec;
 }
 export interface SourceSpec { path: string; width: number; height: number }
+
+export type CropAspect = 'original' | 'free' | '1:1' | '4:3' | '3:2' | '16:9' | '2:3' | '3:4' | '9:16';
+/** Normalized to 0–1 relative to the EXIF-normalized, display-oriented source. */
+export interface CropRect { x: number; y: number; width: number; height: number }
+export interface CropSpec {
+  aspect: CropAspect;
+  /** Fixed aspects constrain (width * source.width) / (height * source.height). */
+  rect: CropRect;
+  enabled: boolean;
+}
+
+export const DEFAULT_CROP: CropSpec = {
+  aspect: 'original',
+  rect: { x: 0, y: 0, width: 1, height: 1 },
+  enabled: false,
+};
 export type BorderStyle = 'solid' | 'gradient' | 'polaroid' | 'film';
 export type BorderUnit = 'px' | 'percent';
 export interface BorderSpec {

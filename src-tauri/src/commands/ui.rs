@@ -11,6 +11,7 @@ pub enum RightPanelTab {
     #[default]
     #[serde(alias = "border")]
     Frame,
+    Crop,
     #[serde(alias = "watermark")]
     Stamp,
     Exif,

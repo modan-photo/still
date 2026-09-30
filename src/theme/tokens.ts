@@ -46,6 +46,14 @@ export const shadowTokens = {
   panelUp: "0 -8px 24px rgba(0, 0, 0, 0.12)",
 } as const;
 
+/** Crop guides retain the same contrast over photo pixels in either app theme. */
+export const cropOverlayTokens = {
+  mask: 'rgba(0, 0, 0, 0.6)',
+  grid: 'rgba(255, 255, 255, 0.3)',
+  handle: colorTokens.light.bg.surface,
+  handleHitSize: 44,
+} as const;
+
 export const spacingTokens = {
   xs: 4,
   sm: 8,

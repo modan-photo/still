@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { hasPendingExifSaves, waitForPendingExifSaves } from '../services/exifSaveCoordinator';
 import { getCachedImage, invalidateCache, normalizeError } from '../services/tauri/image';
 import type { ImageMeta } from '../types/image';
-import type { BorderSpec, RenderSpec } from '../types/renderSpec';
+import type { BorderSpec, CropAspect, RenderSpec } from '../types/renderSpec';
+import { cropForAspect } from '../render/crop';
+import { loadPhotoCrop, savePhotoCrop } from '../services/cropStorage';
 import { colorTokens } from '../theme/tokens';
 import { applyRenderSettings, syncRenderSettings, type SyncModule } from '../render/spec';
 
@@ -56,6 +58,7 @@ export interface ProjectState {
   applySpecToPhotos: (sourceId: string, targetIds: string[]) => void;
   syncSpecModules: (sourceId: string, targetIds: string[], modules: SyncModule[]) => void;
   applyBorderToAll: (border: BorderSpec) => void;
+  applyCropToAll: (sourceId: string, expectedAspect: CropAspect) => number;
   markClean: (id: string, exportedSpec: RenderSpec) => void;
   removePhotos: (ids: string[]) => RemovePhotosSnapshot;
   restorePhotos: (snapshot: RemovePhotosSnapshot) => void;
@@ -118,8 +121,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (known.has(photo.path)) return false;
       known.add(photo.path);
       return true;
-    }).map((meta): ProjectPhoto => ({ ...meta, id: meta.path, dirty: false, thumbRevision: 0,
-      spec: { version: 1, source: { path: meta.path, width: meta.width, height: meta.height } } }));
+    }).map((meta): ProjectPhoto => {
+      const crop = loadPhotoCrop(meta);
+      return { ...meta, id: meta.path, dirty: Boolean(crop?.enabled), thumbRevision: 0,
+        spec: { version: 1, source: { path: meta.path, width: meta.width, height: meta.height }, ...(crop ? { crop } : {}) } };
+    });
     const currentPhotoId = state.currentPhotoId ?? state.selectedId ?? added[0]?.id ?? null;
     return { photos: [...state.photos, ...added], currentPhotoId, selectedId: currentPhotoId };
   }),
@@ -185,6 +191,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     spec: { ...photo.spec, border: structuredClone(border) },
     dirty: true,
   })) })),
+  applyCropToAll: (sourceId, expectedAspect) => {
+    const source = get().photos.find(photo => photo.id === sourceId);
+    const crop = source?.spec.crop;
+    if (!crop?.enabled || crop.aspect !== expectedAspect || crop.aspect === 'free' || crop.aspect === 'original') return 0;
+    const count = get().photos.length - 1;
+    if (count < 1) return 0;
+    set(state => ({ photos: state.photos.map(photo => photo.id === sourceId
+      ? { ...photo, dirty: true }
+      : { ...photo, dirty: true, spec: {
+        ...photo.spec,
+        crop: cropForAspect(crop.aspect, photo.spec.source.width, photo.spec.source.height),
+      } }) }));
+    return count;
+  },
   // Export completion must not clear edits made while the export was running.
   markClean: (id, exportedSpec) => set((state) => ({ photos: state.photos.map((photo) =>
     photo.id === id && JSON.stringify(photo.spec) === JSON.stringify(exportedSpec) ? { ...photo, dirty: false } : photo) })),
@@ -259,3 +279,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   removePhoto: (id) => { get().removePhotos([id]); },
   clear: () => { get().clearAll(); },
 }));
+
+// Only committed crop changes persist. Removal keeps the saved edit for later reimport;
+// unrelated spec changes and transient pointer previews never write to storage.
+useProjectStore.subscribe((state, previous) => {
+  if (state.photos === previous.photos) return;
+  const oldPhotos = new Map(previous.photos.map(photo => [photo.id, photo]));
+  for (const photo of state.photos) {
+    const old = oldPhotos.get(photo.id);
+    if (old && JSON.stringify(old.spec.crop) !== JSON.stringify(photo.spec.crop)) savePhotoCrop(photo, photo.spec.crop);
+  }
+});

@@ -9,6 +9,7 @@ import { useProjectStore } from '../stores/projectStore';
 import type { ExportMode, ExportOptions, ExportRequest, NamingMode, ResizeMode } from '../types/export';
 import type { OutputFormat, RenderSpec } from '../types/renderSpec';
 import { getCollageCanvasSize } from './collage/collageModel';
+import { cropPixelRect } from '../render/crop';
 
 type ExportScope = 'all' | 'current' | 'selected';
 type Props = { open: boolean; exportMode: ExportMode; onClose: () => void; onExport: (request: ExportRequest) => void };
@@ -55,7 +56,9 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
   const patch = <K extends keyof ExportOptions>(key: K, value: ExportOptions[K]) => setOptions((current) => ({ ...current, [key]: value }));
   const patchSize = (value: Partial<ExportOptions['size']>) => patch('size', { ...options.size, ...value });
   const patchNaming = (value: Partial<ExportOptions['naming']>) => patch('naming', { ...options.naming, ...value });
-  const aspect = targetPhotos[0] ? targetPhotos[0].width / targetPhotos[0].height : 1.5;
+  const firstPhoto = targetPhotos[0];
+  const croppedSize = firstPhoto ? cropPixelRect(firstPhoto.width, firstPhoto.height, firstPhoto.spec.crop) : null;
+  const aspect = croppedSize ? croppedSize.width / croppedSize.height : 1.5;
   const estimate = useMemo(() => estimateBytes(targetPhotos.map((photo) => photo.spec), options), [targetPhotos, options]);
   const collagePhotoCount = collageDraft.photoIds.filter((id) => photos.some((photo) => photo.id === id)).length;
   const collageSize = getCollageCanvasSize(collageDraft, collagePhotoCount);
@@ -203,7 +206,7 @@ function withOutputExtension(path: string, format: OutputFormat) {
 }
 function estimateBytes(specs: RenderSpec[], options: ExportOptions) {
   return specs.reduce((sum, spec) => {
-    let width = spec.source.width; let height = spec.source.height;
+    let { width, height } = cropPixelRect(spec.source.width, spec.source.height, spec.crop);
     if (spec.border) { const edge = Math.max(width, height); const border = spec.border.unit === 'percent' ? edge * spec.border.width / 100 : spec.border.width; width += border * 2; height += border * (spec.border.style === 'polaroid' && spec.border.caption ? 4 : 2); }
     if (options.size.mode === 'longEdge') { const factor = (options.size.longEdge ?? Math.max(width, height)) / Math.max(width, height); width *= factor; height *= factor; }
     if (options.size.mode === 'percent') { const factor = (options.size.percent ?? 100) / 100; width *= factor; height *= factor; }

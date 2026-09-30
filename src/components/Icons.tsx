@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 /** Supported icon names used by buttons and settings sections. */
 export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
-  | "check" | "chevron" | "sidebar" | "frame" | "stamp" | "info"
+  | "check" | "chevron" | "sidebar" | "frame" | "crop" | "stamp" | "info"
   | "transform" | "rotate-left" | "rotate-right" | "reset" | "minimize" | "maximize" | "plus" | "copy"
   | "grid" | "single" | "trash" | "select" | "image-off" | "more" | "save"
   | "gap" | "radius" | "background" | "aspect" | "photos";
@@ -47,6 +47,7 @@ const paths: Record<IconName, ReactNode> = {
   sidebar: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></>,
   // Photo-property sections and rotation actions.
   frame: <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>,
+  crop: <><path d="M6 3v12a3 3 0 0 0 3 3h12"/><path d="M3 6h12a3 3 0 0 1 3 3v12"/></>,
   stamp: <><path d="M4 18V8l4-3 4 3v10"/><path d="M12 18V8l4-3 4 3v10M2 18h20"/></>,
   info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></>,
   transform: <><path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5"/><rect x="7" y="7" width="10" height="10" rx="1"/></>,

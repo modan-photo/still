@@ -1,5 +1,6 @@
 import { Box } from "@mui/material";
 import { FrameControls } from "../components/FrameControls";
+import { CropTab } from "./RightPanel/tabs/CropTab";
 import { ExifPanel } from "../components/exif/ExifPanel";
 import { StampControls } from "../components/StampControls";
 import { useUIStore } from "../stores/uiStore";
@@ -67,6 +68,8 @@ function renderTabContent(tab: RightPanelTabId) {
   switch (tab) {
     case "frame":
       return <FrameControls />;
+    case "crop":
+      return <CropTab />;
     case "stamp":
       return <StampControls />;
     case "exif":

@@ -5,7 +5,7 @@ use image::DynamicImage;
 use crate::{
     error::AppError,
     render::{
-        adjustments::apply_adjustments, border::apply_border, spec::RenderSpec,
+        adjustments::apply_adjustments, border::apply_border, crop::apply_crop, spec::RenderSpec,
         watermark::apply_watermark,
     },
 };
@@ -15,6 +15,14 @@ use crate::{
 pub fn apply_render_spec(path: &Path, spec: &RenderSpec) -> Result<DynamicImage, AppError> {
     spec.validate().map_err(AppError::InvalidInput)?;
     let mut image = crate::image_io::load::decode_image(path)?;
+    // decode_image already normalizes EXIF orientation before these coordinates apply.
+    if let Some(crop) = spec.crop.as_ref().filter(|crop| crop.enabled) {
+        let cropped = apply_crop(&image.to_rgba8(), crop);
+        if cropped.width() < 16 || cropped.height() < 16 {
+            return Err(AppError::InvalidInput("Crop dimensions are too small".into()));
+        }
+        image = DynamicImage::ImageRgba8(cropped);
+    }
     if let Some(adjustments) = &spec.adjustments {
         let mut rgba = image.to_rgba8();
         apply_adjustments(&mut rgba, adjustments);
@@ -57,6 +65,83 @@ mod tests {
     use super::apply_render_spec;
 
     #[test]
+    fn crops_after_exif_orientation_and_before_border() {
+        use crate::render::spec::{CropAspect, CropRect, CropSpec};
+
+        let directory = std::env::temp_dir().join(format!(
+            "still-crop-pipeline-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("oriented.jpg");
+        RgbImage::from_fn(80, 40, |x, y| Rgb([x as u8, y as u8, 80]))
+            .save(&source)
+            .unwrap();
+        // Add an EXIF APP1 segment carrying orientation 6 (90 degrees clockwise).
+        let jpeg = fs::read(&source).unwrap();
+        let tiff = b"II\x2a\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\x06\0\0\0\0\0\0\0";
+        let mut oriented = jpeg[..2].to_vec();
+        oriented.extend_from_slice(&[0xff, 0xe1]);
+        oriented.extend_from_slice(&((2 + 6 + tiff.len()) as u16).to_be_bytes());
+        oriented.extend_from_slice(b"Exif\0\0");
+        oriented.extend_from_slice(tiff);
+        oriented.extend_from_slice(&jpeg[2..]);
+        fs::write(&source, oriented).unwrap();
+
+        let mut spec: RenderSpec = serde_json::from_value(serde_json::json!({
+            "version": 1,
+            "source": { "path": source.to_string_lossy(), "width": 40, "height": 80 },
+            "border": {
+                "style": "solid", "width": 2, "unit": "px", "color": "#FF0000",
+                "radius": 0, "colors": ["#FF0000"], "angle": 0, "caption": false
+            }
+        }))
+        .unwrap();
+        spec.crop = Some(CropSpec {
+            aspect: CropAspect::Square,
+            rect: CropRect {
+                x: 0.0,
+                y: 0.5,
+                width: 1.0,
+                height: 0.5,
+            },
+            enabled: true,
+        });
+        let decoded = crate::image_io::load::decode_image(&source)
+            .unwrap()
+            .to_rgba8();
+        assert_eq!(decoded.dimensions(), (40, 80));
+        let result = apply_render_spec(&source, &spec).unwrap().to_rgba8();
+        assert_eq!(result.dimensions(), (44, 44));
+        assert_eq!(result.get_pixel(0, 0), &image::Rgba([255, 0, 0, 255]));
+        for y in 0..40 {
+            for x in 0..40 {
+                assert_eq!(result.get_pixel(x + 2, y + 2), decoded.get_pixel(x, y + 40));
+            }
+        }
+
+        // A border cannot conceal a crop smaller than the export minimum.
+        spec.crop.as_mut().unwrap().rect.width = 0.1;
+        assert!(matches!(
+            apply_render_spec(&source, &spec),
+            Err(crate::error::AppError::InvalidInput(message)) if message == "Crop dimensions are too small"
+        ));
+        spec.crop.as_mut().unwrap().enabled = false;
+        assert_eq!(
+            apply_render_spec(&source, &spec)
+                .unwrap()
+                .to_rgba8()
+                .dimensions(),
+            (44, 84)
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn renders_multiline_chinese_and_emoji_watermark_through_pipeline() {
         let directory = std::env::temp_dir().join(format!(
             "still-watermark-pipeline-{}-{}",
@@ -80,6 +165,7 @@ mod tests {
                 width: 400,
                 height: 300,
             },
+            crop: None,
             border: None,
             watermark: Some(WatermarkSpec {
                 kind: WatermarkType::Text,
@@ -137,6 +223,7 @@ mod tests {
                 width: 10,
                 height: 10,
             },
+            crop: None,
             border: Some(BorderConfig {
                 style: BorderStyle::Solid,
                 width: 1.0,
@@ -192,6 +279,7 @@ mod tests {
                 width: 6_000,
                 height: 4_000,
             },
+            crop: None,
             border: Some(BorderConfig {
                 style: BorderStyle::Solid,
                 width: 100.0,

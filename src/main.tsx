@@ -7,6 +7,7 @@ import App from "./App";
 import { useTheme } from "./hooks/useTheme";
 import { createStillTheme } from "./theme/muiTheme";
 import { getCssVariables } from "./theme/tokens";
+import { CropEditProvider } from "./hooks/useCropEdit";
 import "./theme/global.css";
 
 function Root() {
@@ -24,7 +25,7 @@ function Root() {
           ":root": getCssVariables(themeController.resolvedTheme),
         }}
       />
-      <App theme={themeController} />
+      <CropEditProvider><App theme={themeController} /></CropEditProvider>
     </ThemeProvider>
   );
 }
