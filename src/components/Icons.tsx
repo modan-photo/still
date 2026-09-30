@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "open" | "sun" | "moon" | "system" | "settings" | "export" | "close"
   | "check" | "chevron" | "sidebar" | "frame" | "crop" | "stamp" | "info"
-  | "transform" | "rotate-left" | "rotate-right" | "reset" | "minimize" | "maximize" | "plus" | "copy"
+  | "transform" | "rotate-left" | "rotate-right" | "flip-horizontal" | "flip-vertical" | "reset" | "minimize" | "maximize" | "plus" | "copy"
   | "grid" | "single" | "trash" | "select" | "image-off" | "more" | "save"
   | "gap" | "radius" | "background" | "aspect" | "photos";
 
@@ -53,6 +53,8 @@ const paths: Record<IconName, ReactNode> = {
   transform: <><path d="M8 3H3v5M16 21h5v-5M3 8l5-5M21 16l-5 5"/><rect x="7" y="7" width="10" height="10" rx="1"/></>,
   "rotate-left": <><path d="M4 8V3m0 0h5M4 3l4 4"/><path d="M5.2 11a7 7 0 1 0 2-4"/></>,
   "rotate-right": <><path d="M20 8V3m0 0h-5m5 0-4 4"/><path d="M18.8 11a7 7 0 1 1-2-4"/></>,
+  "flip-horizontal": <><path d="M12 3v18" strokeDasharray="2 2"/><path d="m3 7 6 5-6 5V7ZM21 7l-6 5 6 5V7Z"/></>,
+  "flip-vertical": <><path d="M3 12h18" strokeDasharray="2 2"/><path d="m7 3 5 6 5-6H7ZM7 21l5-6 5 6H7Z"/></>,
   reset: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></>,
 };
 

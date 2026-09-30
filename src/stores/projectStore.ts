@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { hasPendingExifSaves, waitForPendingExifSaves } from '../services/exifSaveCoordinator';
 import { getCachedImage, invalidateCache, normalizeError } from '../services/tauri/image';
 import type { ImageMeta } from '../types/image';
-import type { BorderSpec, CropAspect, RenderSpec } from '../types/renderSpec';
+import { DEFAULT_CROP, DEFAULT_ROTATION, type BorderSpec, type CropAspect, type RenderSpec, type RotationSpec } from '../types/renderSpec';
 import { cropForAspect } from '../render/crop';
-import { loadPhotoCrop, savePhotoCrop } from '../services/cropStorage';
+import { isDefaultRotation, rotatedDimensions, transformBatchDisabledReason } from '../render/rotation';
+import { loadPhotoTransform, savePhotoTransform } from '../services/cropStorage';
 import { colorTokens } from '../theme/tokens';
 import { applyRenderSettings, syncRenderSettings, type SyncModule } from '../render/spec';
 
@@ -59,6 +60,7 @@ export interface ProjectState {
   syncSpecModules: (sourceId: string, targetIds: string[], modules: SyncModule[]) => void;
   applyBorderToAll: (border: BorderSpec) => void;
   applyCropToAll: (sourceId: string, expectedAspect: CropAspect) => number;
+  applyTransformToAll: (sourceId: string, expectedAspect: CropAspect, includeRotation?: boolean, expectedRotation?: RotationSpec) => number;
   markClean: (id: string, exportedSpec: RenderSpec) => void;
   removePhotos: (ids: string[]) => RemovePhotosSnapshot;
   restorePhotos: (snapshot: RemovePhotosSnapshot) => void;
@@ -122,9 +124,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       known.add(photo.path);
       return true;
     }).map((meta): ProjectPhoto => {
-      const crop = loadPhotoCrop(meta);
-      return { ...meta, id: meta.path, dirty: Boolean(crop?.enabled), thumbRevision: 0,
-        spec: { version: 1, source: { path: meta.path, width: meta.width, height: meta.height }, ...(crop ? { crop } : {}) } };
+      const transform = loadPhotoTransform(meta);
+      return { ...meta, id: meta.path, dirty: Boolean(transform?.crop?.enabled) || !isDefaultRotation(transform?.rotation), thumbRevision: 0,
+        spec: { version: 1, source: { path: meta.path, width: meta.width, height: meta.height }, ...transform } };
     });
     const currentPhotoId = state.currentPhotoId ?? state.selectedId ?? added[0]?.id ?? null;
     return { photos: [...state.photos, ...added], currentPhotoId, selectedId: currentPhotoId };
@@ -205,6 +207,30 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       } }) }));
     return count;
   },
+  applyTransformToAll: (sourceId, expectedAspect, includeRotation = false, expectedRotation) => {
+    const state = get();
+    const source = state.photos.find(photo => photo.id === sourceId);
+    if (!source) return 0;
+    const crop = source.spec.crop ?? DEFAULT_CROP;
+    const rotation = source.spec.rotation ?? DEFAULT_ROTATION;
+    if (crop.aspect !== expectedAspect || transformBatchDisabledReason(crop, rotation, state.photos.length)) return 0;
+    if (expectedRotation && (rotation.angle !== expectedRotation.angle
+      || rotation.flipH !== expectedRotation.flipH || rotation.flipV !== expectedRotation.flipV)) return 0;
+    set({ photos: state.photos.map(photo => {
+      const targetRotation = includeRotation ? rotation : photo.spec.rotation;
+      const size = rotatedDimensions(photo.spec.source.width, photo.spec.source.height, targetRotation);
+      return {
+        ...photo, dirty: true,
+        spec: {
+          ...photo.spec,
+          ...(includeRotation ? { rotation: structuredClone(rotation) } : {}),
+          // Omitting the current crop produces the maximal centered rectangle.
+          crop: cropForAspect(crop.aspect, size.width, size.height),
+        },
+      };
+    }) });
+    return state.photos.length;
+  },
   // Export completion must not clear edits made while the export was running.
   markClean: (id, exportedSpec) => set((state) => ({ photos: state.photos.map((photo) =>
     photo.id === id && JSON.stringify(photo.spec) === JSON.stringify(exportedSpec) ? { ...photo, dirty: false } : photo) })),
@@ -280,13 +306,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   clear: () => { get().clearAll(); },
 }));
 
-// Only committed crop changes persist. Removal keeps the saved edit for later reimport;
+// Only committed transform changes persist. Removal keeps the saved edit for later reimport;
 // unrelated spec changes and transient pointer previews never write to storage.
 useProjectStore.subscribe((state, previous) => {
   if (state.photos === previous.photos) return;
   const oldPhotos = new Map(previous.photos.map(photo => [photo.id, photo]));
   for (const photo of state.photos) {
     const old = oldPhotos.get(photo.id);
-    if (old && JSON.stringify(old.spec.crop) !== JSON.stringify(photo.spec.crop)) savePhotoCrop(photo, photo.spec.crop);
+    if (old && (JSON.stringify(old.spec.crop) !== JSON.stringify(photo.spec.crop)
+      || JSON.stringify(old.spec.rotation) !== JSON.stringify(photo.spec.rotation))) {
+      savePhotoTransform(photo, { crop: photo.spec.crop, rotation: photo.spec.rotation });
+    }
   }
 });

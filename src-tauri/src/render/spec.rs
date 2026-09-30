@@ -8,6 +8,8 @@ pub struct RenderSpec {
     pub version: u8,
     pub source: SourceSpec,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<RotationSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crop: Option<CropSpec>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub border: Option<BorderConfig>,
@@ -33,6 +35,9 @@ impl RenderSpec {
         if self.source.width == 0 || self.source.height == 0 {
             return Err("source dimensions must be greater than zero".into());
         }
+        if let Some(rotation) = &self.rotation {
+            rotation.validate()?;
+        }
         if let Some(border) = &self.border {
             border.validate()?;
         }
@@ -54,6 +59,24 @@ pub struct SourceSpec {
     pub height: u32,
 }
 
+/// Clockwise quarter turns followed by flips in the rotated display space.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct RotationSpec {
+    pub angle: u16,
+    pub flip_h: bool,
+    pub flip_v: bool,
+}
+
+impl RotationSpec {
+    fn validate(&self) -> Result<(), String> {
+        if !matches!(self.angle, 0 | 90 | 180 | 270) {
+            return Err("rotation.angle must be 0, 90, 180 or 270".into());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct CropSpec {
@@ -62,7 +85,7 @@ pub struct CropSpec {
     pub enabled: bool,
 }
 
-/// Coordinates in 0..=1 relative to the EXIF-normalized display orientation.
+/// Coordinates in 0..=1 after EXIF normalization, rotation and flips.
 /// Fixed aspects constrain the pixel rectangle's ratio, not width / height here.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -382,6 +405,73 @@ mod tests {
     };
 
     #[test]
+    fn old_specs_without_rotation_remain_compatible() {
+        let value = serde_json::json!({
+            "version": 1,
+            "source": { "path": "photo.jpg", "width": 4000, "height": 3000 }
+        });
+        let spec: RenderSpec = serde_json::from_value(value.clone()).expect("read old spec");
+        assert!(spec.rotation.is_none());
+        assert_eq!(
+            spec.rotation.unwrap_or_default(),
+            super::RotationSpec::default()
+        );
+        spec.validate().expect("validate old spec");
+        assert_eq!(serde_json::to_value(spec).unwrap(), value);
+    }
+
+    #[test]
+    fn rotation_defaults_match_the_typescript_contract() {
+        let rotation: super::RotationSpec = serde_json::from_str("{}").expect("default rotation");
+        assert_eq!(rotation, super::RotationSpec::default());
+        assert_eq!(
+            serde_json::to_value(rotation).unwrap(),
+            serde_json::json!({
+                "angle": 0, "flipH": false, "flipV": false
+            })
+        );
+    }
+
+    #[test]
+    fn rotation_angles_and_flips_round_trip_with_typescript_field_names() {
+        for angle in [0, 90, 180, 270] {
+            for flip_h in [false, true] {
+                for flip_v in [false, true] {
+                    let value = serde_json::json!({
+                        "version": 1,
+                        "source": { "path": "photo.jpg", "width": 4000, "height": 3000 },
+                        "rotation": { "angle": angle, "flipH": flip_h, "flipV": flip_v }
+                    });
+                    let spec: RenderSpec = serde_json::from_value(value.clone()).unwrap();
+                    spec.validate().expect("validate rotation");
+                    assert_eq!(serde_json::to_value(spec).unwrap(), value);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_non_quarter_turn_rotation_angles() {
+        for angle in [1, 45, 91, 360] {
+            let spec: RenderSpec = serde_json::from_value(serde_json::json!({
+                "version": 1,
+                "source": { "path": "photo.jpg", "width": 4000, "height": 3000 },
+                "rotation": { "angle": angle }
+            }))
+            .expect("deserialize integer angle");
+            assert!(spec.validate().is_err());
+        }
+        for angle in [serde_json::json!(-90), serde_json::json!(90.5)] {
+            assert!(
+                serde_json::from_value::<super::RotationSpec>(serde_json::json!({
+                    "angle": angle
+                }))
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
     fn old_specs_without_crop_remain_compatible() {
         let value = serde_json::json!({
             "version": 1,
@@ -435,6 +525,7 @@ mod tests {
                 height: 3_000,
             },
             border: None,
+            rotation: None,
             crop: None,
             watermark: None,
             adjustments: None,

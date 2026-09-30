@@ -1,5 +1,5 @@
 import { Button, CircularProgress, IconButton, Tooltip } from '@mui/material';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useImagePreview } from '../hooks/useImagePreview';
 import { useCropEdit } from '../hooks/useCropEdit';
 import { useProjectStore, type ProjectPhoto } from '../stores/projectStore';
@@ -8,7 +8,8 @@ import { Icon } from '../components/Icons';
 import { EmptyState } from '../components/EmptyState';
 import { cropOverlayTokens, motionTokens } from '../theme/tokens';
 import { renderBorderPreview } from '../render/border';
-import type { AdjustmentsSpec, BorderSpec, CropSpec, WatermarkSpec } from '../types/renderSpec';
+import type { AdjustmentsSpec, BorderSpec, CropSpec, RotationSpec, WatermarkSpec } from '../types/renderSpec';
+import { renderRotatedPreview, rotatedDimensions } from '../render/rotation';
 import { renderWatermarkPreview } from '../render/watermark';
 import { applyAdjustmentsToImageData, renderAdjustedPreview } from '../render/adjustments';
 import { cropPixelRect, renderCroppedPreview } from '../render/crop';
@@ -124,7 +125,7 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
             </Tooltip>
           </div>
         </div>
-        <Preview key={renderedPhoto.id} photoId={renderedPhoto.id} path={renderedPhoto.path} crop={renderedPhoto.spec.crop} frame={renderedPhoto.spec.border} stamp={renderedPhoto.spec.watermark} adjustments={renderedPhoto.spec.adjustments} originalWidth={renderedPhoto.width} originalHeight={renderedPhoto.height} focusedLayout={focusedLayout} editable={Boolean(photo)} />
+        <Preview key={renderedPhoto.id} photoId={renderedPhoto.id} path={renderedPhoto.path} rotation={renderedPhoto.spec.rotation} crop={renderedPhoto.spec.crop} frame={renderedPhoto.spec.border} stamp={renderedPhoto.spec.watermark} adjustments={renderedPhoto.spec.adjustments} originalWidth={renderedPhoto.width} originalHeight={renderedPhoto.height} focusedLayout={focusedLayout} editable={Boolean(photo)} />
         <div className="mt-2 truncate text-center text-xs text-secondary" title={renderedPhoto.path}>{renderedPhoto.path.split(/[\\/]/).pop()} · {renderedPhoto.width} × {renderedPhoto.height}</div>
       </div>
     )}
@@ -133,21 +134,23 @@ export function MainCanvas({ onImport, onImportFolder, showFolderImport, dragAct
 }
 
 /** Draws the decoded photo and all non-destructive edits onto one preview canvas. */
-function Preview({ photoId, path, crop, frame, stamp, adjustments, originalWidth, originalHeight, focusedLayout, editable }: { photoId: string; path: string; crop?: CropSpec; frame?: BorderSpec; stamp?: WatermarkSpec; adjustments?: AdjustmentsSpec; originalWidth: number; originalHeight: number; focusedLayout: boolean; editable: boolean }) {
+function Preview({ photoId, path, rotation, crop, frame, stamp, adjustments, originalWidth, originalHeight, focusedLayout, editable }: { photoId: string; path: string; rotation?: RotationSpec; crop?: CropSpec; frame?: BorderSpec; stamp?: WatermarkSpec; adjustments?: AdjustmentsSpec; originalWidth: number; originalHeight: number; focusedLayout: boolean; editable: boolean }) {
   const { image, loading, error } = useImagePreview(path);
   const cropEdit = useCropEdit();
   const cropSession = cropEdit.session?.photoId === photoId ? cropEdit.session : null;
   const draftCrop = cropSession?.draft;
   const previewCrop = draftCrop ?? crop;
+  const rotatedSourceSize = rotatedDimensions(originalWidth, originalHeight, rotation);
   const canvas = useRef<HTMLCanvasElement>(null);
   const cropCanvas = useRef<HTMLCanvasElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const activeRightTab = useUIStore((state) => state.activeRightTab);
-  const cropEditing = editable && activeRightTab === 'crop' && Boolean(crop?.enabled) && Boolean(image) && !cropSession?.dismissed;
+  const cropEditing = editable && activeRightTab === 'transform' && Boolean(crop?.enabled) && Boolean(image) && !cropSession?.dismissed;
   const lastCrop = useRef(crop);
   if (crop?.enabled) lastCrop.current = crop;
   const [retainCropContext, setRetainCropContext] = useState(false);
-  const showCropContext = editable && (cropEditing || retainCropContext);
+  // Reset and Original leave crop mode immediately; only tab exits retain its fade.
+  const showCropContext = editable && Boolean(crop?.enabled) && (cropEditing || retainCropContext);
   const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const [renderSize, setRenderSize] = useState({ width: originalWidth, height: originalHeight });
   const dragging = useRef(false);
@@ -168,24 +171,29 @@ function Preview({ photoId, path, crop, frame, stamp, adjustments, originalWidth
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const target = cropCanvas.current;
     if (!target || !image || !showCropContext) return;
-    const source = adjustments ? renderAdjustedPreview(image, adjustments) : image;
-    target.width = image.naturalWidth;
-    target.height = image.naturalHeight;
+    const source = renderRotatedPreview(image, rotation);
+    const size = rotatedDimensions(image.naturalWidth, image.naturalHeight, rotation);
+    target.width = size.width;
+    target.height = size.height;
     target.getContext('2d')?.drawImage(source, 0, 0);
-  }, [adjustments, image, showCropContext]);
-  useEffect(() => {
+    const context = target.getContext('2d');
+    if (adjustments && context) {
+      const pixels = context.getImageData(0, 0, target.width, target.height);
+      context.putImageData(applyAdjustmentsToImageData(pixels, adjustments), 0, 0);
+    }
+  }, [adjustments, image, rotation, showCropContext]);
+  useLayoutEffect(() => {
     const target = canvas.current;
     if (!target || !image) return;
     let cancelled = false;
-    // Coalesce rapid slider changes into the next frame-sized interval instead of
-    // redrawing synchronously for every input event.
-    const timer = window.setTimeout(() => { void (async () => {
-      let source: HTMLImageElement | HTMLCanvasElement = image;
-      const croppedSize = cropPixelRect(originalWidth, originalHeight, previewCrop);
-      if (previewCrop?.enabled) source = renderCroppedPreview(image, previewCrop);
+    // Rotation, flips and reset redraw before paint, without a timer or CSS transform.
+    void (async () => {
+      let source = renderRotatedPreview(image, rotation);
+      const croppedSize = cropPixelRect(rotatedSourceSize.width, rotatedSourceSize.height, previewCrop);
+      if (previewCrop?.enabled) source = renderCroppedPreview(source, previewCrop);
       if (adjustments) {
         if (source instanceof HTMLImageElement) source = renderAdjustedPreview(source, adjustments);
         else {
@@ -206,7 +214,15 @@ function Preview({ photoId, path, crop, frame, stamp, adjustments, originalWidth
         target.getContext('2d')?.drawImage(source, 0, 0);
       }
       setRenderSize({ width: target.width, height: target.height });
+      markSize.current = null;
       if (stamp) {
+        // Async watermark work uses a private snapshot so old renders cannot paint
+        // over a newer orientation while an image watermark is still loading.
+        const stamped = document.createElement('canvas');
+        stamped.width = target.width;
+        stamped.height = target.height;
+        stamped.getContext('2d')?.drawImage(target, 0, 0);
+        const pixelScale = previewPixelScale.current;
         // Font discovery must complete before text measurement and rendering.
         await listWatermarkFonts();
         if (!cancelled) {
@@ -216,15 +232,20 @@ function Preview({ photoId, path, crop, frame, stamp, adjustments, originalWidth
             ? { ...stamp, font: { ...stamp.font, sizeUnit: 'px' as const, size: Math.max(originalWidth, originalHeight) * stamp.font.size / 100 } }
             : stamp;
           const watermarkReference = previewCrop?.enabled
-            ? Math.max(target.width, target.height) / previewPixelScale.current
+            ? Math.max(stamped.width, stamped.height) / pixelScale
             : Math.max(originalWidth, originalHeight);
-          const bounds = await renderWatermarkPreview(target, previewStamp, watermarkReference);
-          markSize.current = bounds ? { width: bounds.width, height: bounds.height } : null;
+          const bounds = await renderWatermarkPreview(stamped, previewStamp, watermarkReference);
+          if (!cancelled) {
+            const context = target.getContext('2d');
+            context?.clearRect(0, 0, target.width, target.height);
+            context?.drawImage(stamped, 0, 0);
+            markSize.current = bounds ? { width: bounds.width, height: bounds.height } : null;
+          }
         }
       }
-    })(); }, 16);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [adjustments, previewCrop, frame, image, originalHeight, originalWidth, stamp]);
+    })();
+    return () => { cancelled = true; };
+  }, [adjustments, previewCrop, frame, image, originalHeight, originalWidth, rotatedSourceSize.height, rotatedSourceSize.width, rotation, stamp]);
   // Explicitly release the canvas backing store and its potentially large pixel buffer.
   useEffect(() => () => {
     if (canvas.current) { canvas.current.width = 0; canvas.current.height = 0; }
@@ -255,7 +276,7 @@ function Preview({ photoId, path, crop, frame, stamp, adjustments, originalWidth
     updateSpec(photoId, { watermark: { ...stamp, offsetX: 0, offsetY: 0, freePosition: { x, y } } });
   };
   const viewSize = showCropContext && image
-    ? { width: image.naturalWidth, height: image.naturalHeight }
+    ? rotatedDimensions(image.naturalWidth, image.naturalHeight, rotation)
     : renderSize;
   const paddingFactor = focusedLayout ? 0.9 : 1;
   const handleGutter = showCropContext ? cropOverlayTokens.handleHitSize : 0;
@@ -275,18 +296,19 @@ function Preview({ photoId, path, crop, frame, stamp, adjustments, originalWidth
         <span className="text-xs">{error.message}</span>
       </div>
     )}
-    <div className="relative shrink-0" style={{ width: viewSize.width * displayScale, height: viewSize.height * displayScale }}>
+    <div className="relative shrink-0" style={{ width: viewSize.width * displayScale, height: viewSize.height * displayScale, transitionProperty: 'none', animation: 'none' }}>
       <canvas ref={canvas} aria-label="Photo preview" data-preview-long-edge={image ? Math.max(image.naturalWidth, image.naturalHeight) : undefined}
         aria-hidden={showCropContext}
         onPointerDown={(event) => { if (!stamp?.freePosition || stamp.tiled) return; dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); move(event); }}
         onPointerMove={move}
         onPointerUp={(event) => { dragging.current = false; setGuides({}); event.currentTarget.releasePointerCapture(event.pointerId); }}
         onLostPointerCapture={() => { dragging.current = false; setGuides({}); }}
-        style={{ display: image && !showCropContext ? 'block' : 'none', width: '100%', height: '100%', touchAction: stamp?.freePosition ? 'none' : undefined, cursor: stamp?.freePosition && !stamp.tiled ? 'grab' : undefined }} />
+        style={{ display: image && !showCropContext ? 'block' : 'none', width: '100%', height: '100%', transitionProperty: 'none', animation: 'none', touchAction: stamp?.freePosition ? 'none' : undefined, cursor: stamp?.freePosition && !stamp.tiled ? 'grab' : undefined }} />
       <canvas ref={cropCanvas} aria-label="Crop source image" aria-hidden={!showCropContext}
-        style={{ display: showCropContext && image ? 'block' : 'none', width: '100%', height: '100%' }} />
+        style={{ display: showCropContext && image ? 'block' : 'none', width: '100%', height: '100%', transitionProperty: 'none', animation: 'none' }} />
       {showCropContext && image && lastCrop.current && <CropOverlay rect={lastCrop.current.rect}
-        aspect={lastCrop.current.aspect} sourceWidth={originalWidth} sourceHeight={originalHeight} visible={cropEditing}
+        aspect={lastCrop.current.aspect} sourceWidth={rotatedSourceSize.width} sourceHeight={rotatedSourceSize.height} visible={cropEditing}
+        coordinateSpaceKey={`${rotation?.angle ?? 0}:${Boolean(rotation?.flipH)}:${Boolean(rotation?.flipV)}`}
         onPreviewChange={rect => cropEdit.preview(photoId, rect && lastCrop.current ? { ...lastCrop.current, rect } : null)}
         onCommit={(rect, aspect) => {
           const current = useProjectStore.getState().photos.find(photo => photo.id === photoId)?.spec.crop;

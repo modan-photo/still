@@ -1,5 +1,5 @@
 import { Box, Fade } from '@mui/material';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { moveCropRect, resizeCropRect, type CropHandle } from '../render/cropGeometry';
 import { cropOverlayTokens, motionTokens } from '../theme/tokens';
 import type { CropAspect, CropRect } from '../types/renderSpec';
@@ -21,6 +21,8 @@ interface CropOverlayProps {
   sourceWidth: number;
   sourceHeight: number;
   visible: boolean;
+  /** Changes when rotation or flips invalidate a pointer's coordinate snapshot. */
+  coordinateSpaceKey?: string;
   onPreviewChange: (rect: CropRect | null) => void;
   onCommit: (rect: CropRect, aspect: CropAspect) => void;
   onCancel: () => void;
@@ -29,7 +31,7 @@ interface CropOverlayProps {
 }
 
 /** Pointer capture keeps edits local until release, cancellation, or panel exit. */
-export function CropOverlay({ rect, aspect, sourceWidth, sourceHeight, visible, onPreviewChange, onCommit, onCancel, onConfirm, onExited }: CropOverlayProps) {
+export function CropOverlay({ rect, aspect, sourceWidth, sourceHeight, visible, coordinateSpaceKey, onPreviewChange, onCommit, onCancel, onConfirm, onExited }: CropOverlayProps) {
   const photoRegion = useRef<HTMLDivElement>(null);
   const cropFrame = useRef<HTMLDivElement>(null);
   const session = useRef<{
@@ -52,6 +54,17 @@ export function CropOverlay({ rect, aspect, sourceWidth, sourceHeight, visible, 
   useEffect(() => { if (!visible) finish(); }, [visible]);
   useEffect(() => { if (visible) cropFrame.current?.focus({ preventScroll: true }); }, [visible]);
   useEffect(() => () => finish(true), []);
+  useLayoutEffect(() => {
+    // A transform or external crop edit invalidates the drag's old bounds. Discard
+    // it before paint, without committing old coordinates into the new image space.
+    const drag = session.current;
+    if (!drag) return;
+    session.current = null;
+    setDraft(null);
+    callbacks.current.onPreviewChange(null);
+    const frame = cropFrame.current;
+    if (frame?.hasPointerCapture(drag.pointerId)) frame.releasePointerCapture(drag.pointerId);
+  }, [aspect, coordinateSpaceKey, rect, sourceWidth, sourceHeight]);
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!visible || session.current || !event.isPrimary || event.button !== 0) return;
     const bounds = photoRegion.current?.getBoundingClientRect();
@@ -94,6 +107,7 @@ export function CropOverlay({ rect, aspect, sourceWidth, sourceHeight, visible, 
   return <Fade in={visible} timeout={motionTokens.duration.fast} easing={motionTokens.easing} onExited={onExited}>
     <Box ref={photoRegion} data-crop-overlay sx={{
       position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
+      transitionProperty: 'opacity',
     }}>
       {/* Clip only the mask to the photo. Handle hit areas can extend beyond its edges. */}
       <Box sx={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
@@ -144,6 +158,7 @@ export function CropOverlay({ rect, aspect, sourceWidth, sourceHeight, visible, 
           onCommit(moveCropRect(rect, direction[0] * step / sourceWidth, direction[1] * step / sourceHeight), aspect);
         }} sx={{
         position: 'absolute', ...position, pointerEvents: visible ? 'auto' : 'none',
+        transitionProperty: 'none', animation: 'none',
         touchAction: 'none', userSelect: 'none', cursor: draft ? 'grabbing' : 'move',
       }}>
         {HANDLES.map(({ id, x, y, cursor }) => {

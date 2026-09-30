@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { cropForAspect } from '../src/render/crop';
+import { computeTransformEdit, rotatedDimensions } from '../src/render/rotation';
+import { DEFAULT_ROTATION } from '../src/types/renderSpec';
 import { moveCropRect, resizeCropRect, type CropHandle } from '../src/render/cropGeometry';
 import type { CropRect } from '../src/types/renderSpec';
 
 const handles: CropHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 const initial = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
 const center = (rect: CropRect) => [rect.x + rect.width / 2, rect.y + rect.height / 2];
+
+describe('rotated crop handle geometry', () => {
+  it.each(handles)('resizes %s using the rotated source dimensions and aspect', handle => {
+    const initial = cropForAspect('16:9', 4000, 3000);
+    for (const action of ['right', 'left'] as const) {
+      const transformed = computeTransformEdit(DEFAULT_ROTATION, initial, action);
+      const size = rotatedDimensions(4000, 3000, transformed.rotation);
+      const resized = resizeCropRect(transformed.crop.rect, handle, 0.02, -0.03,
+        transformed.crop.aspect, size.width, size.height);
+      expectBounded(resized);
+      expect(resized.width * size.width / (resized.height * size.height)).toBeCloseTo(9 / 16, 12);
+    }
+  });
+});
 
 function expectBounded(rect: CropRect) {
   expect(rect.x).toBeGreaterThanOrEqual(-1e-12);

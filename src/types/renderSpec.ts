@@ -2,6 +2,7 @@
 export interface RenderSpec {
   version: 1;
   source: SourceSpec;
+  rotation?: RotationSpec;
   crop?: CropSpec;
   border?: BorderSpec;
   watermark?: WatermarkSpec;
@@ -10,12 +11,25 @@ export interface RenderSpec {
 }
 export interface SourceSpec { path: string; width: number; height: number }
 
+/** Clockwise quarter turns followed by flips in the rotated display space. */
+export interface RotationSpec {
+  angle: 0 | 90 | 180 | 270;
+  flipH: boolean;
+  flipV: boolean;
+}
+
+export const DEFAULT_ROTATION: RotationSpec = {
+  angle: 0,
+  flipH: false,
+  flipV: false,
+};
+
 export type CropAspect = 'original' | 'free' | '1:1' | '4:3' | '3:2' | '16:9' | '2:3' | '3:4' | '9:16';
-/** Normalized to 0–1 relative to the EXIF-normalized, display-oriented source. */
+/** Normalized to 0–1 after EXIF normalization, rotation and flips. */
 export interface CropRect { x: number; y: number; width: number; height: number }
 export interface CropSpec {
   aspect: CropAspect;
-  /** Fixed aspects constrain (width * source.width) / (height * source.height). */
+  /** Fixed aspects constrain the pixel ratio using the rotated image dimensions. */
   rect: CropRect;
   enabled: boolean;
 }

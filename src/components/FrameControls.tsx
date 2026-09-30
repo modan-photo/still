@@ -194,15 +194,7 @@ export function FrameControls() {
     setNotice('Reset to no frame');
   }, [frameApplied, photo, selectedId, update]);
 
-  useEffect(() => {
-    const resetWithShortcut = (event: KeyboardEvent) => {
-      if (event.altKey || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== 'r') return;
-      event.preventDefault();
-      resetFrame();
-    };
-    window.addEventListener('keydown', resetWithShortcut);
-    return () => window.removeEventListener('keydown', resetWithShortcut);
-  }, [resetFrame]);
+  // Ctrl/Cmd+Shift+R reset shortcut disabled per requirements; reset is button-only.
 
   if (!selectedId || !photo) {
     return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a frame.</p>;

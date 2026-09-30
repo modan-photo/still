@@ -56,7 +56,7 @@ function pixelBounds(start: number, length: number, extent: number) {
 /** Source pixels are already normalized to their EXIF display orientation by the cache. */
 export function applyCropToCanvas(
   ctx: CanvasRenderingContext2D,
-  src: HTMLImageElement | ImageBitmap,
+  src: HTMLImageElement | ImageBitmap | HTMLCanvasElement,
   crop: CropSpec,
   destWidth: number,
   destHeight: number,
@@ -69,8 +69,10 @@ export function applyCropToCanvas(
 }
 
 /** Retains cached pixel density; only the subsequent canvas display scales the preview. */
-export function renderCroppedPreview(image: HTMLImageElement, crop: CropSpec): HTMLCanvasElement {
-  const rect = cropPixelRect(image.naturalWidth, image.naturalHeight, crop);
+export function renderCroppedPreview(image: HTMLImageElement | HTMLCanvasElement, crop: CropSpec): HTMLCanvasElement {
+  const width = 'naturalWidth' in image ? image.naturalWidth : image.width;
+  const height = 'naturalHeight' in image ? image.naturalHeight : image.height;
+  const rect = cropPixelRect(width, height, crop);
   const layer = document.createElement('canvas');
   layer.width = rect.width;
   layer.height = rect.height;

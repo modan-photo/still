@@ -2,7 +2,36 @@ import { describe, expect, it } from 'vitest';
 import { borderGeometry } from '../src/render/border';
 import { applyRenderSettings, syncRenderSettings } from '../src/render/spec';
 import { applyAdjustmentsToImageData } from '../src/render/adjustments';
-import type { RenderSpec } from '../src/types/renderSpec';
+import { DEFAULT_ROTATION, type RenderSpec, type RotationSpec } from '../src/types/renderSpec';
+
+describe('rotation wire contract', () => {
+  it('treats an absent rotation as the default without adding it to old specs', () => {
+    const spec: RenderSpec = {
+      version: 1,
+      source: { path: 'old.jpg', width: 4000, height: 3000 },
+    };
+    expect(spec.rotation ?? DEFAULT_ROTATION).toEqual({ angle: 0, flipH: false, flipV: false });
+    expect(JSON.parse(JSON.stringify(spec))).not.toHaveProperty('rotation');
+  });
+
+  it('preserves every quarter turn and flip combination when copying settings', () => {
+    const target: RenderSpec = { version: 1, source: { path: 'target.jpg', width: 3000, height: 4000 } };
+    for (const angle of [0, 90, 180, 270] as const) {
+      for (const flipH of [false, true]) {
+        for (const flipV of [false, true]) {
+          const rotation: RotationSpec = { angle, flipH, flipV };
+          const template: RenderSpec = {
+            version: 1, source: { path: 'source.jpg', width: 4000, height: 3000 }, rotation,
+          };
+          const applied = applyRenderSettings(target, template);
+          expect(JSON.parse(JSON.stringify(applied)).rotation).toEqual(rotation);
+          expect(applied.source).toEqual(target.source);
+          expect(applied.rotation).not.toBe(rotation);
+        }
+      }
+    }
+  });
+});
 
 const template: RenderSpec = {
   version: 1,

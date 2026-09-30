@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -11,7 +14,8 @@ pub enum RightPanelTab {
     #[default]
     #[serde(alias = "border")]
     Frame,
-    Crop,
+    #[serde(alias = "crop")]
+    Transform,
     #[serde(alias = "watermark")]
     Stamp,
     Exif,
@@ -37,9 +41,26 @@ pub struct UiStatePatch {
 #[tauri::command]
 pub fn ui_state_load(app: AppHandle) -> Result<UiStateFile, AppError> {
     let path = ui_state_path(&app)?;
+    load_ui_state_file(&path)
+}
+
+fn load_ui_state_file(path: &Path) -> Result<UiStateFile, AppError> {
     match fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes)
-            .map_err(|error| AppError::InvalidInput(format!("invalid ui-state.json: {error}"))),
+        Ok(bytes) => {
+            let raw: serde_json::Value = serde_json::from_slice(&bytes).map_err(|error| {
+                AppError::InvalidInput(format!("invalid ui-state.json: {error}"))
+            })?;
+            let needs_migration = raw["activeRightTab"] == "crop";
+            let state: UiStateFile = serde_json::from_value(raw).map_err(|error| {
+                AppError::InvalidInput(format!("invalid ui-state.json: {error}"))
+            })?;
+            if needs_migration {
+                let migrated = serde_json::to_vec_pretty(&state)
+                    .map_err(|error| AppError::InvalidInput(error.to_string()))?;
+                fs::write(path, migrated)?;
+            }
+            Ok(state)
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(UiStateFile::default()),
         Err(error) => Err(error.into()),
     }
@@ -79,6 +100,32 @@ fn ui_state_path(app: &AppHandle) -> Result<PathBuf, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ui_state_migrates_legacy_crop_file_on_load() {
+        let path = std::env::temp_dir().join(format!(
+            "still-ui-state-migration-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        fs::write(
+            &path,
+            br#"{"activeRightTab":"crop","lastFramePresetId":"user-example"}"#,
+        )
+        .expect("write legacy UI state");
+        let state = load_ui_state_file(&path).expect("load and migrate UI state");
+        assert!(matches!(state.active_right_tab, RightPanelTab::Transform));
+        let migrated = fs::read(&path).expect("read migrated UI state");
+        let value: serde_json::Value = serde_json::from_slice(&migrated).expect("parse UI state");
+        assert_eq!(value["activeRightTab"], "transform");
+        assert_eq!(value["lastFramePresetId"], "user-example");
+        load_ui_state_file(&path).expect("reload migrated UI state");
+        assert_eq!(fs::read(&path).expect("read reloaded UI state"), migrated);
+        fs::remove_file(path).expect("remove test UI state");
+    }
 
     #[test]
     fn ui_state_uses_the_frontend_field_and_tab_names() {

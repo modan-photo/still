@@ -5,8 +5,8 @@ use image::DynamicImage;
 use crate::{
     error::AppError,
     render::{
-        adjustments::apply_adjustments, border::apply_border, crop::apply_crop, spec::RenderSpec,
-        watermark::apply_watermark,
+        adjustments::apply_adjustments, border::apply_border, crop::apply_crop,
+        rotation::apply_rotation, spec::RenderSpec, watermark::apply_watermark,
     },
 };
 
@@ -16,10 +16,20 @@ pub fn apply_render_spec(path: &Path, spec: &RenderSpec) -> Result<DynamicImage,
     spec.validate().map_err(AppError::InvalidInput)?;
     let mut image = crate::image_io::load::decode_image(path)?;
     // decode_image already normalizes EXIF orientation before these coordinates apply.
+    // Skip identity transforms to retain the decoded buffer and its original format.
+    if let Some(rotation) = spec
+        .rotation
+        .as_ref()
+        .filter(|rotation| rotation.angle != 0 || rotation.flip_h || rotation.flip_v)
+    {
+        image = DynamicImage::ImageRgba8(apply_rotation(&image.to_rgba8(), rotation));
+    }
     if let Some(crop) = spec.crop.as_ref().filter(|crop| crop.enabled) {
         let cropped = apply_crop(&image.to_rgba8(), crop);
         if cropped.width() < 16 || cropped.height() < 16 {
-            return Err(AppError::InvalidInput("Crop dimensions are too small".into()));
+            return Err(AppError::InvalidInput(
+                "Crop dimensions are too small".into(),
+            ));
         }
         image = DynamicImage::ImageRgba8(cropped);
     }
@@ -124,6 +134,58 @@ mod tests {
             }
         }
 
+        // User rotation and flips apply after EXIF, before normalized crop and border.
+        spec.rotation = Some(crate::render::spec::RotationSpec {
+            angle: 90,
+            flip_h: true,
+            flip_v: false,
+        });
+        let transformed = apply_render_spec(&source, &spec).unwrap();
+        let rotated_result = transformed.to_rgba8();
+        assert_eq!(rotated_result.dimensions(), (84, 24));
+        assert_eq!(
+            rotated_result.get_pixel(0, 0),
+            &image::Rgba([255, 0, 0, 255])
+        );
+        for y in 0..20 {
+            for x in 0..80 {
+                assert_eq!(
+                    rotated_result.get_pixel(x + 2, y + 2),
+                    decoded.get_pixel(y + 20, x)
+                );
+            }
+        }
+        let destination = directory.join("rotated.png");
+        save_image_atomic(
+            &transformed,
+            &destination,
+            &OutputSpec {
+                format: OutputFormat::Png,
+                quality: 100,
+            },
+            &CancellationToken::new(),
+        )
+        .unwrap();
+        assert_eq!(
+            image::open(&destination).unwrap().to_rgba8(),
+            rotated_result
+        );
+        spec.crop.as_mut().unwrap().enabled = false;
+        assert_eq!(
+            apply_render_spec(&source, &spec)
+                .unwrap()
+                .to_rgba8()
+                .dimensions(),
+            (84, 44)
+        );
+        spec.crop.as_mut().unwrap().enabled = true;
+        spec.rotation = Some(crate::render::spec::RotationSpec::default());
+        assert_eq!(
+            apply_render_spec(&source, &spec).unwrap().to_rgba8(),
+            result
+        );
+        spec.rotation = None;
+
         // A border cannot conceal a crop smaller than the export minimum.
         spec.crop.as_mut().unwrap().rect.width = 0.1;
         assert!(matches!(
@@ -165,6 +227,7 @@ mod tests {
                 width: 400,
                 height: 300,
             },
+            rotation: None,
             crop: None,
             border: None,
             watermark: Some(WatermarkSpec {
@@ -223,6 +286,7 @@ mod tests {
                 width: 10,
                 height: 10,
             },
+            rotation: None,
             crop: None,
             border: Some(BorderConfig {
                 style: BorderStyle::Solid,
@@ -279,6 +343,7 @@ mod tests {
                 width: 6_000,
                 height: 4_000,
             },
+            rotation: None,
             crop: None,
             border: Some(BorderConfig {
                 style: BorderStyle::Solid,

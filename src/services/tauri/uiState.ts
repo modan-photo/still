@@ -30,6 +30,8 @@ function normalizeUIState(value: unknown): PersistedUIState {
   });
 
   if (isRightPanelTabId(activeRightTab)) return withPresetId(activeRightTab);
+  // Legacy crop tab IDs are accepted only at the persistence boundary.
+  if (activeRightTab === "crop") return withPresetId("transform");
   if (activeRightTab === "border") return withPresetId("frame");
   if (activeRightTab === "watermark") return withPresetId("stamp");
 
@@ -45,7 +47,17 @@ export async function loadUIState(): Promise<PersistedUIState> {
   if (!stored) return DEFAULT_UI_STATE;
 
   try {
-    return normalizeUIState(JSON.parse(stored));
+    const raw: unknown = JSON.parse(stored);
+    const state = normalizeUIState(raw);
+    if (typeof raw === "object" && raw !== null
+      && (raw as Record<string, unknown>).activeRightTab === "crop") {
+      try {
+        localStorage.setItem(BROWSER_STORAGE_KEY, JSON.stringify(state));
+      } catch (error: unknown) {
+        console.warn("Unable to persist the migrated inspector tab", error);
+      }
+    }
+    return state;
   } catch {
     return DEFAULT_UI_STATE;
   }
