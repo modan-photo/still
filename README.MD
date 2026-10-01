@@ -16,7 +16,7 @@ It provides a simple way to inspect metadata, refine presentation, process image
 - Create simple collages and contact sheets
 - Organize and manage photography collections
 
-For a more detailed feature overview, see [FEATURES.md](./FEATURES.md).
+For the current implementation and its boundaries, see [System Status](./docs/overview/SYSTEM-STATUS.md). [docs/overview/FEATURES.md](./docs/overview/FEATURES.md) describes the broader feature roadmap.
 
 ## Philosophy
 
@@ -30,7 +30,7 @@ Still is designed around a few principles:
 
 ## Status
 
-Still is currently in early development. The Tauri 2 + React + TypeScript foundation is initialized, targeting Windows and Android. Photography features remain planned.
+Still is in active development. The Tauri 2 + React + TypeScript application implements local image import and preview, frames, watermarks, EXIF inspection and selected metadata edits, crop/rotation/flip, batch export, and collage. The workspace is session-only; presets and selected preferences persist. Android support has mobile code paths but still requires platform validation.
 
 The feature set, interface, and internal architecture may evolve as the project grows.
 
@@ -56,7 +56,7 @@ For Android development, run:
 npm run tauri android dev
 ```
 
-See the [Development Guide](./docs/DEVELOPMENT.md) for prerequisites, Android setup, and build commands.
+See the [Development Guide](./docs/development/DEVELOPMENT.md) for prerequisites, Android setup, and build commands.
 
 The app uses Tauri-generated icons stored in `src-tauri/icons/`. Run the following command if:
 
@@ -69,10 +69,12 @@ npm run tauri icon assets/branding/still-icon-master.png
 
 ## Documentation
 
-- [Features](./FEATURES.md)
-- [Design Language](./docs/DESIGN.md)
-- Architecture — coming soon
-- [Development Guide](./docs/DEVELOPMENT.md)
+- [Wiki Home — 中文](./docs/Home.md) · [English](./docs/Home-English.md)
+- [System Status](./docs/overview/SYSTEM-STATUS.md)
+- [Feature Roadmap](./docs/overview/FEATURES.md)
+- [Design Language](./docs/design/DESIGN.md)
+- [Architecture and Code Map](./docs/overview/SYSTEM-STATUS.md#3-代码结构与职责)
+- [Development Guide](./docs/development/DEVELOPMENT.md)
 - Contributing Guide — coming soon
 
 ## Name

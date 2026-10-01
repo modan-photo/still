@@ -32,3 +32,4 @@ keystore.properties
 
 # Customed config
 src-tauri/icons
+docs/*
