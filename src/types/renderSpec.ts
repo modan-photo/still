@@ -39,6 +39,15 @@ export const DEFAULT_CROP: CropSpec = {
   rect: { x: 0, y: 0, width: 1, height: 1 },
   enabled: false,
 };
+
+/** Clone for each imported photo, then replace source with its metadata. */
+export const DEFAULT_RENDER_SPEC: RenderSpec = {
+  version: 1,
+  source: { path: '', width: 0, height: 0 },
+  crop: { ...DEFAULT_CROP, rect: { ...DEFAULT_CROP.rect } },
+  rotation: { ...DEFAULT_ROTATION },
+};
+
 export type BorderStyle = 'solid' | 'gradient' | 'polaroid' | 'film';
 export type BorderUnit = 'px' | 'percent';
 export interface BorderSpec {

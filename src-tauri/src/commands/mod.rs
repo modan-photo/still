@@ -3,6 +3,7 @@ pub mod exif;
 pub mod export;
 pub mod frame;
 pub mod image;
+pub mod preferences;
+pub mod session;
 pub mod task;
-pub mod ui;
 pub mod watermark;

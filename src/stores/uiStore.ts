@@ -1,9 +1,8 @@
-import { create } from 'zustand';
+import { createSessionStore } from './createSessionStore';
 import {
   DEFAULT_RIGHT_PANEL_TAB,
   type RightPanelTabId,
 } from '../layout/rightPanelTabs';
-import { loadUIState, saveUIState } from '../services/tauri/uiState';
 
 export interface UIState {
   inspectorOpen: boolean;
@@ -17,12 +16,12 @@ export interface UIState {
   setActiveRightTab: (tab: UIState['activeRightTab']) => void;
   setGridPanelOpen: (open: boolean) => void;
   toggleGridPanel: () => void;
+  resetSession: () => void;
 }
 const SYSTEM_FONTS_KEY = 'still.use-system-fonts';
 const storedSystemFontsEnabled = () => typeof localStorage !== 'undefined' && localStorage.getItem(SYSTEM_FONTS_KEY) === 'true';
-let activeRightTabChangedSinceLaunch = false;
 
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = createSessionStore<UIState>((set) => ({
   inspectorOpen: true,
   theme: 'system',
   systemFontsEnabled: storedSystemFontsEnabled(),
@@ -34,23 +33,17 @@ export const useUIStore = create<UIState>((set) => ({
     if (typeof localStorage !== 'undefined') localStorage.setItem(SYSTEM_FONTS_KEY, String(systemFontsEnabled));
     set({ systemFontsEnabled });
   },
-  setActiveRightTab: (activeRightTab) => {
-    activeRightTabChangedSinceLaunch = true;
-    set({ activeRightTab });
-    void saveUIState({ activeRightTab }).catch((error: unknown) => {
-      console.warn('Unable to persist the active inspector tab', error);
-    });
-  },
+  setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
   setGridPanelOpen: (gridPanelOpen) => set({ gridPanelOpen }),
   toggleGridPanel: () => set((state) => ({ gridPanelOpen: !state.gridPanelOpen })),
-}));
+  resetSession: () => set({
+    activeRightTab: DEFAULT_RIGHT_PANEL_TAB,
+    inspectorOpen: true,
+    gridPanelOpen: false,
+  }),
+}), import.meta.hot?.data.uiStore);
 
-void loadUIState()
-  .then(({ activeRightTab }) => {
-    if (!activeRightTabChangedSinceLaunch) {
-      useUIStore.setState({ activeRightTab });
-    }
-  })
-  .catch((error: unknown) => {
-    console.warn('Unable to restore the active inspector tab', error);
-  });
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  import.meta.hot.dispose((data) => { data.uiStore = useUIStore; });
+}

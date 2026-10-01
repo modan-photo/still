@@ -48,7 +48,7 @@ describe('batch crop application', () => {
     expect(useProjectStore.getState().photos[2].spec).toEqual(before[2]);
     useProjectStore.getState().addPhotos([photo('new.jpg', 5000, 3000)]);
     const imported = useProjectStore.getState().photos.find(photo => photo.id === 'new.jpg')!;
-    expect(imported.spec.crop).toBeUndefined();
+    expect(imported.spec.crop).toEqual(DEFAULT_CROP);
     expect(imported.dirty).toBe(false);
   });
 

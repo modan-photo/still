@@ -1,11 +1,10 @@
-import { create } from 'zustand';
+import { createSessionStore } from './createSessionStore';
 import { hasPendingExifSaves, waitForPendingExifSaves } from '../services/exifSaveCoordinator';
 import { getCachedImage, invalidateCache, normalizeError } from '../services/tauri/image';
 import type { ImageMeta } from '../types/image';
-import { DEFAULT_CROP, DEFAULT_ROTATION, type BorderSpec, type CropAspect, type RenderSpec, type RotationSpec } from '../types/renderSpec';
+import { DEFAULT_CROP, DEFAULT_RENDER_SPEC, DEFAULT_ROTATION, type BorderSpec, type CropAspect, type RenderSpec, type RotationSpec } from '../types/renderSpec';
 import { cropForAspect } from '../render/crop';
-import { isDefaultRotation, rotatedDimensions, transformBatchDisabledReason } from '../render/rotation';
-import { loadPhotoTransform, savePhotoTransform } from '../services/cropStorage';
+import { rotatedDimensions, transformBatchDisabledReason } from '../render/rotation';
 import { colorTokens } from '../theme/tokens';
 import { applyRenderSettings, syncRenderSettings, type SyncModule } from '../render/spec';
 
@@ -67,10 +66,11 @@ export interface ProjectState {
   clearAll: () => RemovePhotosSnapshot;
   removePhoto: (id: string) => void;
   clear: () => void;
+  resetSession: () => void;
 }
 
-const pendingCacheInvalidations = new Map<string, Promise<void>>();
-let photoSelectionRequest = 0;
+const pendingCacheInvalidations: Map<string, Promise<void>> = import.meta.hot?.data.pendingCacheInvalidations ?? new Map();
+let photoSelectionRequest: number = import.meta.hot?.data.photoSelectionRequest ?? 0;
 
 function invalidatePhotoCaches(photos: ProjectPhoto[]) {
   const hashes = [...new Set(photos.map((photo) => photo.hash).filter(Boolean))];
@@ -114,19 +114,23 @@ async function regenerateRestoredThumbnails(photos: ProjectPhoto[]) {
   }
 }
 
-export const useProjectStore = create<ProjectState>((set, get) => ({
+export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
   photos: [], selectedIds: [], currentPhotoId: null, selectedId: null,
   collageDraft: structuredClone(DEFAULT_COLLAGE_DRAFT),
   addPhotos: (incoming) => set((state) => {
-    const known = new Set(state.photos.map((photo) => photo.path));
+    const known = new Set<string>();
+    const usedIds = new Set(state.photos.map((photo) => photo.id));
     const added = incoming.filter((photo) => {
       if (known.has(photo.path)) return false;
       known.add(photo.path);
       return true;
     }).map((meta): ProjectPhoto => {
-      const transform = loadPhotoTransform(meta);
-      return { ...meta, id: meta.path, dirty: Boolean(transform?.crop?.enabled) || !isDefaultRotation(transform?.rotation), thumbRevision: 0,
-        spec: { version: 1, source: { path: meta.path, width: meta.width, height: meta.height }, ...transform } };
+      let id = meta.path;
+      while (usedIds.has(id)) id = crypto.randomUUID();
+      usedIds.add(id);
+      const spec = structuredClone(DEFAULT_RENDER_SPEC);
+      spec.source = { path: meta.path, width: meta.width, height: meta.height };
+      return { ...meta, id, dirty: false, thumbRevision: 0, spec };
     });
     const currentPhotoId = state.currentPhotoId ?? state.selectedId ?? added[0]?.id ?? null;
     return { photos: [...state.photos, ...added], currentPhotoId, selectedId: currentPhotoId };
@@ -304,18 +308,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   clearAll: () => get().removePhotos(get().photos.map((photo) => photo.id)),
   removePhoto: (id) => { get().removePhotos([id]); },
   clear: () => { get().clearAll(); },
-}));
+  resetSession: () => {
+    photoSelectionRequest++;
+    set({
+      photos: [], selectedIds: [], currentPhotoId: null, selectedId: null,
+      collageDraft: structuredClone(DEFAULT_COLLAGE_DRAFT),
+    });
+  },
+}), import.meta.hot?.data.projectStore);
 
-// Only committed transform changes persist. Removal keeps the saved edit for later reimport;
-// unrelated spec changes and transient pointer previews never write to storage.
-useProjectStore.subscribe((state, previous) => {
-  if (state.photos === previous.photos) return;
-  const oldPhotos = new Map(previous.photos.map(photo => [photo.id, photo]));
-  for (const photo of state.photos) {
-    const old = oldPhotos.get(photo.id);
-    if (old && (JSON.stringify(old.spec.crop) !== JSON.stringify(photo.spec.crop)
-      || JSON.stringify(old.spec.rotation) !== JSON.stringify(photo.spec.rotation))) {
-      savePhotoTransform(photo, { crop: photo.spec.crop, rotation: photo.spec.rotation });
-    }
-  }
-});
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  import.meta.hot.dispose((data) => {
+    data.projectStore = useProjectStore;
+    data.pendingCacheInvalidations = pendingCacheInvalidations;
+    data.photoSelectionRequest = photoSelectionRequest;
+  });
+}

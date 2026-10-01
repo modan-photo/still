@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import type { Root as ReactRoot } from "react-dom/client";
 import { CssBaseline, GlobalStyles } from "@mui/material";
 import { ThemeProvider } from "@mui/material/styles";
 import { useMemo } from "react";
@@ -8,6 +9,8 @@ import { useTheme } from "./hooks/useTheme";
 import { createStillTheme } from "./theme/muiTheme";
 import { getCssVariables } from "./theme/tokens";
 import { CropEditProvider } from "./hooks/useCropEdit";
+import { initializeWorkspace } from "./services/workspaceInitialization";
+import { installWorkspaceCloseHandler } from "./services/workspaceShutdown";
 import "./theme/global.css";
 
 function Root() {
@@ -30,8 +33,39 @@ function Root() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <Root />
-  </React.StrictMode>,
-);
+let disposed = false;
+let removeCloseHandler: (() => void) | undefined;
+let reactRoot: ReactRoot | undefined = import.meta.hot?.data.reactRoot;
+
+void initializeWorkspace().then(async () => {
+  if (disposed) return;
+  const root = reactRoot ??= ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
+  let stopped = false;
+  try {
+    removeCloseHandler = await installWorkspaceCloseHandler(() => {
+      stopped = true;
+      root.unmount();
+    });
+  } catch (error) {
+    console.warn('Unable to register the workspace close handler', error);
+  }
+  if (disposed) {
+    removeCloseHandler?.();
+    return;
+  }
+  if (stopped) return;
+  root.render(
+    <React.StrictMode>
+      <Root />
+    </React.StrictMode>,
+  );
+});
+
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  import.meta.hot.dispose((data) => {
+    disposed = true;
+    removeCloseHandler?.();
+    data.reactRoot = reactRoot;
+  });
+}

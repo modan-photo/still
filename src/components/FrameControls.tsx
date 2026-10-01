@@ -19,7 +19,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { BUILTIN_FRAME_PRESETS, DEFAULT_FRAME_PRESET_ID } from '../constants/framePresets';
 import { useRenderSpec } from '../hooks/useRenderSpec';
 import { loadFramePresets, saveFramePresets } from '../services/tauri/framePresets';
-import { loadUIState, saveLastFramePresetId } from '../services/tauri/uiState';
 import { useProjectStore } from '../stores/projectStore';
 import type { FramePreset, FrameStyle } from '../types/frame';
 import { DEFAULT_BORDER, type BorderSpec } from '../types/renderSpec';
@@ -44,7 +43,6 @@ export function FrameControls() {
   const [presetActionTarget, setPresetActionTarget] = useState<FramePresetActionTarget | null>(null);
   const [userPresets, setUserPresets] = useState<FramePreset[]>([]);
   const [currentFramePresetId, setCurrentFramePresetId] = useState(DEFAULT_FRAME_PRESET_ID);
-  const selectionChangedDuringLoad = useRef(false);
   const presets = useMemo<FramePreset[]>(() => [
     ...BUILTIN_FRAME_PRESETS.map((preset) => structuredClone(preset)),
     ...userPresets,
@@ -58,25 +56,10 @@ export function FrameControls() {
 
   useEffect(() => {
     let disposed = false;
-    void Promise.all([loadFramePresets(), loadUIState()])
-      .then(([storedPresets, uiState]) => {
+    void loadFramePresets()
+      .then((storedPresets) => {
         if (disposed) return;
         setUserPresets(storedPresets);
-        const availableIds = new Set([
-          ...BUILTIN_FRAME_PRESETS.map((preset) => preset.id),
-          ...storedPresets.map((preset) => preset.id),
-        ]);
-        if (!selectionChangedDuringLoad.current) {
-          const restoredId = uiState.lastFramePresetId && availableIds.has(uiState.lastFramePresetId)
-            ? uiState.lastFramePresetId
-            : DEFAULT_FRAME_PRESET_ID;
-          setCurrentFramePresetId(restoredId);
-          if (uiState.lastFramePresetId !== restoredId) {
-            void saveLastFramePresetId(restoredId).catch((error: unknown) => {
-              console.warn('Unable to repair the selected frame preset', error);
-            });
-          }
-        }
       })
       .catch((error: unknown) => {
         console.warn('Unable to restore frame presets', error);
@@ -86,13 +69,9 @@ export function FrameControls() {
 
   const selectPreset = (preset: FramePreset) => {
     const discardedUnsavedChanges = preset.id !== currentFramePresetId && presetModified;
-    selectionChangedDuringLoad.current = true;
     setCurrentFramePresetId(preset.id);
     update({ border: framePresetToBorderSpec(preset) });
     if (discardedUnsavedChanges) setNotice('Unsaved frame changes discarded');
-    void saveLastFramePresetId(preset.id).catch((error: unknown) => {
-      console.warn('Unable to persist the selected frame preset', error);
-    });
   };
 
   const presetModified = frameApplied && selectedPreset
@@ -115,10 +94,8 @@ export function FrameControls() {
     };
     const nextUserPresets = [...userPresets, preset];
     await saveFramePresets(nextUserPresets);
-    await saveLastFramePresetId(preset.id);
     setUserPresets(nextUserPresets);
     setCurrentFramePresetId(preset.id);
-    selectionChangedDuringLoad.current = true;
     setNotice('Saved to My Presets');
   };
 
@@ -180,9 +157,6 @@ export function FrameControls() {
       if (fallback) {
         setCurrentFramePresetId(fallback.id);
         update({ border: framePresetToBorderSpec(fallback) });
-        void saveLastFramePresetId(fallback.id).catch((error: unknown) => {
-          console.warn('Unable to persist the fallback frame preset', error);
-        });
       }
     }
     setNotice('Preset deleted');

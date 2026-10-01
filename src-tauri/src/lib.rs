@@ -27,8 +27,8 @@ pub fn run() {
             commands::frame::frame_presets_save,
             commands::task::task_cancel,
             commands::task::task_list,
-            commands::ui::ui_state_load,
-            commands::ui::ui_state_save,
+            commands::session::cleanup_legacy_session_files,
+            commands::preferences::migrate_preferences_if_needed,
         ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

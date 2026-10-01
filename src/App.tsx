@@ -26,6 +26,7 @@ import { MobileCollageEditor } from './layout/MobileCollageEditor';
 import type { RightPanelTabId } from './layout/rightPanelTabs';
 import { motionTokens } from './theme/tokens';
 import { restoreViewAfterCollage } from './services/collageMode';
+import { markExportedPhotosClean } from './services/exportCompletion';
 
 /**
  * Application composition root.
@@ -164,12 +165,7 @@ function App({ theme }: { theme: ThemeController }) {
       const report = await exportImageBatch(request.specs, request.options);
       // Mark successful photos clean only when their current spec still matches what
       // was exported; `markClean` protects edits made during the async operation.
-      const exportedByPath = new Map(request.specs.map((spec) => [spec.source.path, spec]));
-      for (const success of report.successes) {
-        const spec = exportedByPath.get(success.sourcePath);
-        const photo = useProjectStore.getState().photos.find((entry) => entry.path === success.sourcePath);
-        if (spec && photo) useProjectStore.getState().markClean(photo.id, spec);
-      }
+      markExportedPhotosClean(request, report);
       setExportReport(report);
       setExportNoticeOpen(true);
     } catch (reason) {

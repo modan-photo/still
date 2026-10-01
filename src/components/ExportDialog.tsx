@@ -72,7 +72,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
     const nextRecent = [options.outputDirectory, ...recent.filter((entry) => entry !== options.outputDirectory)].slice(0, 5);
     localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
     setRecent(nextRecent);
-    const request: ExportRequest = { exportMode: 'photos', specs: targetPhotos.map((photo) => structuredClone(photo.spec)), options: structuredClone(options) };
+    const request: ExportRequest = { exportMode: 'photos', specs: targetPhotos.map((photo) => structuredClone(photo.spec)), options: structuredClone(options), photoIds: targetPhotos.map((photo) => photo.id) };
     onClose();
     onExport(request);
   };

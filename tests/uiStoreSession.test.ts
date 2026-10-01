@@ -1,0 +1,47 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke }));
+
+let getItem: ReturnType<typeof vi.fn>;
+let setItem: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+  vi.resetModules();
+  invoke.mockReset();
+  getItem = vi.fn((key: string) => key === 'still.ui-state'
+    ? JSON.stringify({ activeRightTab: 'collage', lastFramePresetId: 'old-preset' })
+    : null);
+  setItem = vi.fn();
+  vi.stubGlobal('localStorage', { getItem, setItem });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+describe('in-memory inspector state', () => {
+  it('starts on the frame tab with expanded inspector and closed grid despite legacy state', async () => {
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState()).toMatchObject({ activeRightTab: 'frame', inspectorOpen: true, gridPanelOpen: false });
+    expect(getItem).not.toHaveBeenCalledWith('still.ui-state');
+    expect(setItem).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('changes tabs and panels without writing storage or invoking persistence', async () => {
+    const { useUIStore } = await import('../src/stores/uiStore');
+    const store = useUIStore.getState();
+    store.setActiveRightTab('collage');
+    store.setInspectorOpen(false);
+    store.toggleGridPanel();
+    expect(useUIStore.getState()).toMatchObject({ activeRightTab: 'collage', inspectorOpen: false, gridPanelOpen: true });
+    expect(setItem).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('continues to persist the system-font preference', async () => {
+    getItem.mockImplementation((key: string) => key === 'still.use-system-fonts' ? 'true' : null);
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState().systemFontsEnabled).toBe(true);
+    useUIStore.getState().setSystemFontsEnabled(false);
+    expect(setItem).toHaveBeenCalledExactlyOnceWith('still.use-system-fonts', 'false');
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
