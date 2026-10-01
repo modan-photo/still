@@ -16,7 +16,7 @@ It provides a simple way to inspect metadata, refine presentation, process image
 - Create simple collages and contact sheets
 - Organize and manage photography collections
 
-For the current implementation and its boundaries, see [System Status](./docs/overview/SYSTEM-STATUS.md). [docs/overview/FEATURES.md](./docs/overview/FEATURES.md) describes the broader feature roadmap.
+For the current implementation and its boundaries, see [System Status](https://github.com/modan-photo/still/wiki/SYSTEM-STATUS). [Feature Roadmap](https://github.com/modan-photo/still/wiki/FEATURES) describes the broader feature roadmap.
 
 ## Philosophy
 
@@ -56,7 +56,7 @@ For Android development, run:
 npm run tauri android dev
 ```
 
-See the [Development Guide](./docs/development/DEVELOPMENT.md) for prerequisites, Android setup, and build commands.
+See the [Development Guide](https://github.com/modan-photo/still/wiki/DEVELOPMENT) for prerequisites, Android setup, and build commands.
 
 The app uses Tauri-generated icons stored in `src-tauri/icons/`. Run the following command if:
 
@@ -69,12 +69,14 @@ npm run tauri icon assets/branding/still-icon-master.png
 
 ## Documentation
 
-- [Wiki Home — 中文](./docs/Home.md) · [English](./docs/Home-English.md)
-- [System Status](./docs/overview/SYSTEM-STATUS.md)
-- [Feature Roadmap](./docs/overview/FEATURES.md)
-- [Design Language](./docs/design/DESIGN.md)
-- [Architecture and Code Map](./docs/overview/SYSTEM-STATUS.md#3-代码结构与职责)
-- [Development Guide](./docs/development/DEVELOPMENT.md)
+Project documentation is maintained in the [GitHub Wiki](https://github.com/modan-photo/still/wiki).
+
+- [Wiki Home — 中文](https://github.com/modan-photo/still/wiki/Home) · [English](https://github.com/modan-photo/still/wiki/Home-English)
+- [System Status](https://github.com/modan-photo/still/wiki/SYSTEM-STATUS)
+- [Feature Roadmap](https://github.com/modan-photo/still/wiki/FEATURES)
+- [Design Language](https://github.com/modan-photo/still/wiki/DESIGN)
+- [Architecture and Code Map](https://github.com/modan-photo/still/wiki/SYSTEM-STATUS#3-代码结构与职责)
+- [Development Guide](https://github.com/modan-photo/still/wiki/DEVELOPMENT)
 - Contributing Guide — coming soon
 
 ## Name
