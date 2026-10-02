@@ -127,6 +127,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"crop": crop, "border": border, "watermark": percent_mark}),
         false,
     ));
+    for (id, angle, tiled) in [
+        ("rotate-45", 45, false),
+        ("rotate-90", 90, false),
+        ("rotate-negative-90", -90, false),
+        ("rotate-tiled", 45, true),
+    ] {
+        let mut mark = watermark.clone();
+        mark["content"] = json!("Still 测试");
+        mark["rotation"] = json!(angle);
+        mark["tiled"] = json!(tiled);
+        cases.push((
+            format!("transparent-{id}"),
+            json!({"fixtureSource": "transparent.png", "watermark": mark}),
+            false,
+        ));
+    }
     let mut manifest = Vec::new();
     for (id, mut value, exact) in cases {
         value["version"] = json!(1);

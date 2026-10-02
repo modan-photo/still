@@ -5,7 +5,6 @@ use image::{
     imageops::{self, FilterType},
     Rgba, RgbaImage,
 };
-use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
 
 use crate::{
     error::AppError,
@@ -46,12 +45,7 @@ pub fn apply_watermark(
     }
 
     if spec.rotation.abs() > f32::EPSILON {
-        mark = rotate_about_center(
-            &mark,
-            spec.rotation.to_radians(),
-            Interpolation::Bicubic,
-            Rgba([0, 0, 0, 0]),
-        );
+        mark = rotate_expanded(&mark, spec.rotation);
     }
     apply_opacity(&mut mark, spec.opacity);
 
@@ -80,6 +74,65 @@ fn render_image(spec: &WatermarkSpec) -> Result<RgbaImage, AppError> {
         height,
         FilterType::Lanczos3,
     ))
+}
+
+/// Rotate around pixel centers into the complete bounding box, as Canvas does.
+/// Arbitrary angles sample premultiplied RGBA to avoid dark transparent edges.
+fn rotate_expanded(source: &RgbaImage, degrees: f32) -> RgbaImage {
+    let angle = degrees.rem_euclid(360.0);
+    match angle {
+        0.0 => return source.clone(),
+        90.0 => return imageops::rotate90(source),
+        180.0 => return imageops::rotate180(source),
+        270.0 => return imageops::rotate270(source),
+        _ => {}
+    }
+    let radians = (angle as f64).to_radians();
+    let (sin, cos) = radians.sin_cos();
+    let width =
+        (source.width() as f64 * cos.abs() + source.height() as f64 * sin.abs()).ceil() as u32;
+    let height =
+        (source.width() as f64 * sin.abs() + source.height() as f64 * cos.abs()).ceil() as u32;
+    RgbaImage::from_fn(width, height, |x, y| {
+        let dx = x as f64 + 0.5 - width as f64 / 2.0;
+        let dy = y as f64 + 0.5 - height as f64 / 2.0;
+        let sx = cos * dx + sin * dy + source.width() as f64 / 2.0 - 0.5;
+        let sy = -sin * dx + cos * dy + source.height() as f64 / 2.0 - 0.5;
+        let left = sx.floor() as i64;
+        let top = sy.floor() as i64;
+        let fx = sx - left as f64;
+        let fy = sy - top as f64;
+        let mut alpha = 0.0;
+        let mut rgb = [0.0; 3];
+        for (ox, oy, weight) in [
+            (0, 0, (1.0 - fx) * (1.0 - fy)),
+            (1, 0, fx * (1.0 - fy)),
+            (0, 1, (1.0 - fx) * fy),
+            (1, 1, fx * fy),
+        ] {
+            let px = left + ox;
+            let py = top + oy;
+            if px < 0 || py < 0 || px >= source.width() as i64 || py >= source.height() as i64 {
+                continue;
+            }
+            let pixel = source.get_pixel(px as u32, py as u32);
+            let coverage = weight * pixel[3] as f64;
+            alpha += coverage;
+            for c in 0..3 {
+                rgb[c] += coverage * pixel[c] as f64;
+            }
+        }
+        let opacity = alpha.round().clamp(0.0, 255.0) as u8;
+        if opacity == 0 {
+            return Rgba([0, 0, 0, 0]);
+        }
+        Rgba([
+            (rgb[0] / alpha).round() as u8,
+            (rgb[1] / alpha).round() as u8,
+            (rgb[2] / alpha).round() as u8,
+            opacity,
+        ])
+    })
 }
 
 fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage, AppError> {
@@ -375,6 +428,40 @@ mod tests {
                 "color": "#78C828", "strokeColor": "#000000", "strokeWidth": 0,
                 "shadow": {"color": "#00000000", "blur": 0, "offsetX": 0, "offsetY": 0}}
         })).unwrap()
+    }
+
+    #[test]
+    fn quarter_turn_watermarks_keep_every_pixel_and_swap_dimensions() {
+        let source = RgbaImage::from_fn(3, 2, |x, y| Rgba([(y * 3 + x + 1) as u8, 0, 0, 180]));
+        let rotated = super::rotate_expanded(&source, 90.0);
+        assert_eq!(rotated.dimensions(), (2, 3));
+        assert_eq!(
+            rotated.pixels().map(|p| p[0]).collect::<Vec<_>>(),
+            vec![4, 1, 5, 2, 6, 3]
+        );
+        assert!(rotated.pixels().all(|p| p[3] == 180));
+        assert_eq!(super::rotate_expanded(&rotated, -90.0), source);
+        assert_eq!(super::rotate_expanded(&source, 360.0), source);
+    }
+
+    #[test]
+    fn arbitrary_rotation_keeps_long_mark_and_straight_edge_colors() {
+        let source = RgbaImage::from_pixel(120, 20, Rgba([120, 200, 40, 255]));
+        let rotated = super::rotate_expanded(&source, 45.0);
+        assert_eq!(rotated.dimensions(), (99, 99));
+        let area = rotated.pixels().map(|p| p[3] as f64 / 255.0).sum::<f64>();
+        assert!(
+            (area - 2400.0).abs() < 24.0,
+            "rotation lost image area: {area}"
+        );
+        let edges: Vec<_> = rotated
+            .pixels()
+            .filter(|p| p[3] > 0 && p[3] < 255)
+            .collect();
+        assert!(!edges.is_empty());
+        assert!(edges
+            .iter()
+            .all(|p| p[0] == 120 && p[1] == 200 && p[2] == 40));
     }
 
     #[test]

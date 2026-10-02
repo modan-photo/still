@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { watermarkTextLayout } from '../src/render/watermark';
+import { watermarkRotationSize, watermarkTextLayout } from '../src/render/watermark';
 import { DEFAULT_WATERMARK } from '../src/types/renderSpec';
 
 describe('watermark source-pixel layout', () => {
+  it('avoids phantom pixels at quarter turns and contains arbitrary rotations', () => {
+    expect(watermarkRotationSize(120, 20, 90)).toEqual({ width: 20, height: 120 });
+    expect(watermarkRotationSize(120, 20, -90)).toEqual({ width: 20, height: 120 });
+    expect(watermarkRotationSize(120, 20, 360)).toEqual({ width: 120, height: 20 });
+    expect(watermarkRotationSize(120, 20, 45)).toEqual({ width: 99, height: 99 });
+  });
   it('keeps px size independent of crop and border-expanded canvas dimensions', () => {
     const spec = structuredClone(DEFAULT_WATERMARK);
     spec.font!.size = 32;

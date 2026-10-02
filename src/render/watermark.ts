@@ -123,14 +123,27 @@ async function renderImage(spec: WatermarkSpec, ratio: number): Promise<HTMLCanv
   return layer;
 }
 
-function rotate(source: HTMLCanvasElement, degrees: number): HTMLCanvasElement {
-  if (!degrees) return source;
-  const radians = (degrees * Math.PI) / 180;
+export function watermarkRotationSize(width: number, height: number, degrees: number) {
+  const angle = ((degrees % 360) + 360) % 360;
+  if (angle === 0 || angle === 180) return { width, height };
+  if (angle === 90 || angle === 270) return { width: height, height: width };
+  const radians = (angle * Math.PI) / 180;
   const sin = Math.abs(Math.sin(radians));
   const cos = Math.abs(Math.cos(radians));
+  return {
+    width: Math.ceil(width * cos + height * sin),
+    height: Math.ceil(width * sin + height * cos),
+  };
+}
+
+function rotate(source: HTMLCanvasElement, degrees: number): HTMLCanvasElement {
+  const angle = ((degrees % 360) + 360) % 360;
+  if (!angle) return source;
+  const radians = (angle * Math.PI) / 180;
+  const size = watermarkRotationSize(source.width, source.height, angle);
   const layer = document.createElement('canvas');
-  layer.width = Math.ceil(source.width * cos + source.height * sin);
-  layer.height = Math.ceil(source.width * sin + source.height * cos);
+  layer.width = size.width;
+  layer.height = size.height;
   const context = layer.getContext('2d')!;
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
