@@ -1,26 +1,45 @@
 import { useProjectStore } from '../stores/projectStore';
 import type { BatchExportReport, PhotoExportRequest } from '../types/export';
 
-/** Match export snapshots to workspace identities, including repeated source paths. */
+/** Item identity is independent of source path and of the task running it. */
 export function markExportedPhotosClean(request: PhotoExportRequest, report: BatchExportReport) {
-  const requested = new Map<string, number>();
-  const succeeded = new Map<string, number>();
-  for (const spec of request.specs) {
-    const path = spec.source.path;
-    requested.set(path, (requested.get(path) ?? 0) + 1);
-  }
-  for (const success of report.successes) {
-    succeeded.set(success.sourcePath, (succeeded.get(success.sourcePath) ?? 0) + 1);
-  }
-  request.specs.forEach((spec, index) => {
-    const path = spec.source.path;
-    // Reports have no per-item ID. A partially successful repeated path is ambiguous.
-    if (succeeded.get(path) !== requested.get(path)) return;
+  const submitted = new Map(request.items.map((item) => [item.itemId, item]));
+  for (const result of report.results) {
+    if (result.status !== 'success') continue;
+    const item = submitted.get(result.itemId);
+    if (!item || item.spec.source.path !== result.sourcePath) continue;
     const project = useProjectStore.getState();
-    const id = request.photoIds?.[index];
-    const photo = id !== undefined
-      ? project.photos.find((entry) => entry.id === id && entry.path === path)
-      : project.photos.find((entry) => entry.path === path && JSON.stringify(entry.spec) === JSON.stringify(spec));
-    if (photo) project.markClean(photo.id, spec);
-  });
+    const photo = project.photos.find(
+      (entry) => entry.id === item.photoId && entry.path === result.sourcePath,
+    );
+    if (photo) project.markClean(photo.id, item.spec);
+  }
+}
+
+/** Retry original snapshots, retaining sequence numbers; re-plan paths safely. */
+export function createExportRetry(
+  request: PhotoExportRequest,
+  report: BatchExportReport,
+): PhotoExportRequest | null {
+  const retryIds = new Set(
+    report.results
+      .filter((item) => item.status === 'failed' || item.status === 'cancelled')
+      .map((item) => item.itemId),
+  );
+  const project = useProjectStore.getState();
+  const items = request.items
+    .filter(
+      (item) =>
+        retryIds.has(item.itemId) &&
+        project.photos.some(
+          (photo) => photo.id === item.photoId && photo.path === item.spec.source.path,
+        ),
+    )
+    .map((item) => ({ ...structuredClone(item), itemId: crypto.randomUUID() }));
+  if (items.length === 0) return null;
+  return {
+    exportMode: 'photos',
+    items,
+    options: { ...structuredClone(request.options), conflict: 'rename' },
+  };
 }

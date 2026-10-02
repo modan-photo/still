@@ -28,6 +28,13 @@ pub enum AppError {
     #[error("The file is read-only and cannot be modified.")]
     FileReadOnly,
 
+    #[error("Export commit failed ({commit_error}). Original retained at {backup_path}; rollback failed ({rollback_error}). Keep this backup for recovery.")]
+    ExportRecoveryRequired {
+        backup_path: String,
+        commit_error: String,
+        rollback_error: String,
+    },
+
     #[error("task cancelled")]
     Cancelled,
 }
@@ -43,6 +50,7 @@ impl AppError {
             Self::Unsupported(_) => "unsupported",
             Self::FileBusy => "file_busy",
             Self::FileReadOnly => "file_read_only",
+            Self::ExportRecoveryRequired { .. } => "export_recovery_required",
             Self::Cancelled => "cancelled",
         }
     }

@@ -87,11 +87,14 @@ pub fn save_image_atomic_with_metadata(
         token: cancellation.clone(),
     });
 
-    match output.format {
-        OutputFormat::Jpeg => encode_jpeg(image, &mut writer, output.quality)?,
-        OutputFormat::Png => encode_png(image, &mut writer)?,
-        OutputFormat::Webp => encode_webp(image, &mut writer, output.quality)?,
-    }
+    let encoded = match output.format {
+        OutputFormat::Jpeg => encode_jpeg(image, &mut writer, output.quality),
+        OutputFormat::Png => encode_png(image, &mut writer),
+        OutputFormat::Webp => encode_webp(image, &mut writer, output.quality),
+    };
+    // A cancellable writer can surface cancellation as a codec or I/O error.
+    ensure_not_cancelled(cancellation)?;
+    encoded?;
 
     writer.flush()?;
     let file = writer.into_inner().map_err(|error| error.into_error())?;
@@ -120,14 +123,75 @@ pub fn save_image_atomic_with_metadata(
             let _ = fs::remove_file(temporary.path());
         }
         ExistingDestination::Replace => {
-            if destination.exists() {
-                fs::remove_file(destination)?;
-            }
-            fs::rename(temporary.path(), destination)?;
+            replace_with_rollback(temporary.path(), destination, |from, to| {
+                fs::rename(from, to)
+            })?;
         }
     }
     temporary.disarm();
     Ok(())
+}
+
+// The backup is deliberately not managed by a deletion-on-drop guard: it may be
+// the only remaining copy if both publication and rollback fail.
+fn replace_with_rollback(
+    staged: &Path,
+    destination: &Path,
+    publish: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), AppError> {
+    if !destination.exists() {
+        return publish(staged, destination).map_err(Into::into);
+    }
+    if !destination.is_file() {
+        return Err(AppError::InvalidInput(
+            "export destination is not a file".into(),
+        ));
+    }
+    let mut backup = TemporaryOutput::new(destination);
+    backup.path.set_extension(format!(
+        "still-backup-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    backup.disarm();
+    if backup.path().exists() {
+        return Err(AppError::InvalidInput(
+            "export backup already exists".into(),
+        ));
+    }
+    fs::rename(destination, backup.path())?;
+    match publish(staged, destination) {
+        Ok(()) => {
+            if let Err(error) = fs::remove_file(backup.path()) {
+                eprintln!(
+                    "unable to remove export backup {}: {error}",
+                    backup.path().display()
+                );
+            }
+            Ok(())
+        }
+        Err(commit_error) => {
+            // Never overwrite a file that appeared while the target was absent.
+            let rollback = if destination.exists() {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "destination appeared during rollback",
+                ))
+            } else {
+                fs::rename(backup.path(), destination)
+            };
+            match rollback {
+                Ok(()) => Err(commit_error.into()),
+                Err(rollback_error) => Err(AppError::ExportRecoveryRequired {
+                    backup_path: backup.path().to_string_lossy().into(),
+                    commit_error: commit_error.to_string(),
+                    rollback_error: rollback_error.to_string(),
+                }),
+            }
+        }
+    }
 }
 
 fn encode_jpeg(image: &DynamicImage, writer: &mut impl Write, quality: u8) -> Result<(), AppError> {
@@ -266,6 +330,120 @@ mod tests {
     use crate::render::spec::{OutputFormat, OutputSpec};
 
     use super::save_image_atomic;
+
+    fn replacement_fixture() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+        let directory = std::env::temp_dir().join(format!(
+            "still-replace-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let staged = directory.join("staged.png");
+        let target = directory.join("target.png");
+        fs::write(&staged, b"new image").unwrap();
+        fs::write(&target, b"old image").unwrap();
+        (directory, staged, target)
+    }
+
+    #[test]
+    fn replacement_commit_failure_restores_the_original() {
+        let (directory, staged, target) = replacement_fixture();
+        let result = super::replace_with_rollback(&staged, &target, |_, _| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "injected publish failure",
+            ))
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"old image");
+        assert_eq!(fs::read(&staged).unwrap(), b"new image");
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 2);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn replacement_rollback_failure_keeps_backup_and_concurrent_file() {
+        let (directory, staged, target) = replacement_fixture();
+        let result = super::replace_with_rollback(&staged, &target, |_, destination| {
+            fs::write(destination, b"concurrent image")?;
+            Err(std::io::Error::other("injected publish failure"))
+        });
+        let result_error = result.unwrap_err();
+        assert_eq!(result_error.code(), "export_recovery_required");
+        let error = result_error.to_string();
+        assert!(error.contains("Original retained at"));
+        assert!(error.contains("rollback failed"));
+        assert_eq!(fs::read(&target).unwrap(), b"concurrent image");
+        let backup = fs::read_dir(&directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| path != &staged && path != &target)
+            .unwrap();
+        assert_eq!(fs::read(backup).unwrap(), b"old image");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn replacement_success_removes_backup() {
+        let (directory, staged, target) = replacement_fixture();
+        super::replace_with_rollback(&staged, &target, |from, to| fs::rename(from, to)).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"new image");
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn metadata_failure_keeps_old_target_and_cleans_staging() {
+        let (directory, staged, target) = replacement_fixture();
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_pixel(4, 4, Rgba([10, 20, 30, 255])));
+        let result = super::save_image_atomic_with_metadata(
+            &image,
+            &target,
+            &OutputSpec {
+                format: OutputFormat::Png,
+                quality: 100,
+            },
+            &CancellationToken::new(),
+            super::ExistingDestination::Replace,
+            Some(&directory.join("missing-source.png")),
+            true,
+            false,
+        );
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"old image");
+        assert!(staged.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 2);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn cancelled_overwrite_preserves_existing_destination() {
+        let (directory, staged, target) = replacement_fixture();
+        let token = CancellationToken::new();
+        token.cancel();
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_pixel(4, 4, Rgba([10, 20, 30, 255])));
+        assert!(super::save_image_atomic_with_metadata(
+            &image,
+            &target,
+            &OutputSpec {
+                format: OutputFormat::Png,
+                quality: 100
+            },
+            &token,
+            super::ExistingDestination::Replace,
+            None,
+            false,
+            false
+        )
+        .is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"old image");
+        assert!(staged.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 2);
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn cancellation_after_first_write_rejects_more_bytes_and_cleans_partial() {

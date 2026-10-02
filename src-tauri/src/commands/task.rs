@@ -68,6 +68,7 @@ impl TaskManager {
                 }
                 if let Some(result) = result {
                     event.status = match result {
+                        Ok(()) if token.is_cancelled() => "cancelled",
                         Ok(()) => "completed",
                         Err(_) if token.is_cancelled() => "cancelled",
                         Err(_) => "failed",

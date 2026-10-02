@@ -86,16 +86,21 @@ pub enum ConflictPolicy {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExportFailure {
+pub struct ExportItemResult {
+    pub item_id: String,
     pub source_path: String,
-    pub reason: String,
+    pub output_path: Option<String>,
+    pub status: String,
+    pub code: Option<String>,
+    pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportSuccess {
-    pub source_path: String,
-    pub output_path: String,
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportItem {
+    pub item_id: String,
+    pub sequence_index: u32,
+    pub spec: RenderSpec,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -104,13 +109,14 @@ pub struct BatchExportReport {
     pub succeeded: usize,
     pub failed: usize,
     pub skipped: usize,
+    pub cancelled: usize,
+    pub cancellation_requested: bool,
     pub output_directory: String,
-    pub successes: Vec<ExportSuccess>,
-    pub failures: Vec<ExportFailure>,
+    pub results: Vec<ExportItemResult>,
 }
 
 struct PlannedExport {
-    spec: RenderSpec,
+    item: ExportItem,
     destination: PathBuf,
 }
 
@@ -119,7 +125,7 @@ pub async fn image_export_batch(
     window: Window,
     state: State<'_, TaskManager>,
     task_id: String,
-    specs: Vec<RenderSpec>,
+    items: Vec<ExportItem>,
     opts: ExportOptions,
 ) -> Result<BatchExportReport, AppError> {
     task::run(
@@ -127,91 +133,77 @@ pub async fn image_export_batch(
         state.inner().clone(),
         task_id,
         "image_export_batch",
-        move |token, report| {
-            validate_options(&opts, &specs)?;
-            let output_directory = std::fs::canonicalize(&opts.output_directory)?;
-            if !output_directory.is_dir() {
-                return Err(AppError::InvalidInput(
-                    "outputDirectory must be a directory".into(),
-                ));
-            }
-            let (planned, skipped) = plan_exports(specs, &opts, &output_directory)?;
-            let total = planned.len() + skipped;
-            if total == 0 {
-                return Ok(BatchExportReport {
-                    succeeded: 0,
-                    failed: 0,
-                    skipped: 0,
-                    output_directory: output_directory.to_string_lossy().into(),
-                    successes: vec![],
-                    failures: vec![],
-                });
-            }
-            report(&format!("Preparing 0/{total}"), 0);
-            let completed = AtomicUsize::new(skipped);
-            let workers = std::thread::available_parallelism()
-                .map_or(1, usize::from)
-                .min(4);
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(workers)
-                .thread_name(|index| format!("still-export-{index}"))
-                .build()
-                .map_err(|error| {
-                    AppError::InvalidInput(format!("unable to start export workers: {error}"))
-                })?;
-            let results = pool.install(|| {
-                planned
-                    .par_iter()
-                    .map(|job| {
-                        let result = export_one(job, &opts, &token);
-                        let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
-                        report(
-                            &format!("Exporting {done}/{total}"),
-                            ((done * 100) / total) as u8,
-                        );
-                        (job, result)
-                    })
-                    .collect::<Vec<_>>()
-            });
-
-            if token.is_cancelled() {
-                return Err(AppError::Cancelled);
-            }
-            let mut successes = Vec::new();
-            let mut failures = Vec::new();
-            for (job, result) in results {
-                match result {
-                    Ok(()) => successes.push(ExportSuccess {
-                        source_path: job.spec.source.path.clone(),
-                        output_path: job.destination.to_string_lossy().into(),
-                    }),
-                    Err(error) => failures.push(ExportFailure {
-                        source_path: job.spec.source.path.clone(),
-                        reason: error.to_string(),
-                    }),
-                }
-            }
-            Ok(BatchExportReport {
-                succeeded: successes.len(),
-                failed: failures.len(),
-                skipped,
-                output_directory: output_directory.to_string_lossy().into(),
-                successes,
-                failures,
-            })
-        },
+        move |token, report| export_batch(items, opts, token, report.as_ref()),
     )
     .await
 }
 
-fn validate_options(opts: &ExportOptions, specs: &[RenderSpec]) -> Result<(), AppError> {
-    if specs.is_empty() {
+fn export_batch(
+    items: Vec<ExportItem>,
+    opts: ExportOptions,
+    token: tokio_util::sync::CancellationToken,
+    report: &(dyn Fn(&str, u8) + Send + Sync),
+) -> Result<BatchExportReport, AppError> {
+    validate_options(&opts, &items)?;
+    let output_directory = std::fs::canonicalize(&opts.output_directory)?;
+    if !output_directory.is_dir() {
+        return Err(AppError::InvalidInput(
+            "outputDirectory must be a directory".into(),
+        ));
+    }
+    let (planned, mut item_results) = plan_exports(items, &opts, &output_directory)?;
+    let total = planned.len() + item_results.len();
+    report(&format!("Preparing 0/{total}"), 0);
+    let completed = AtomicUsize::new(item_results.len());
+    let workers = std::thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(4);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(workers)
+        .thread_name(|index| format!("still-export-{index}"))
+        .build()
+        .map_err(|error| {
+            AppError::InvalidInput(format!("unable to start export workers: {error}"))
+        })?;
+    let results = pool.install(|| {
+        planned
+            .par_iter()
+            .map(|job| {
+                let result = export_one(job, &opts, &token);
+                let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                report(
+                    &format!("Exporting {done}/{total}"),
+                    ((done * 100) / total) as u8,
+                );
+                (job, result)
+            })
+            .collect::<Vec<_>>()
+    });
+
+    for (job, result) in results {
+        item_results.push(item_result(job, result));
+    }
+    Ok(batch_report(
+        item_results,
+        &output_directory,
+        token.is_cancelled(),
+    ))
+}
+
+fn validate_options(opts: &ExportOptions, items: &[ExportItem]) -> Result<(), AppError> {
+    if items.is_empty() {
         return Err(AppError::InvalidInput(
             "at least one RenderSpec is required".into(),
         ));
     }
-    for spec in specs {
-        spec.validate().map_err(AppError::InvalidInput)?;
+    let mut ids = HashSet::new();
+    for item in items {
+        if item.item_id.trim().is_empty() || !ids.insert(&item.item_id) {
+            return Err(AppError::InvalidInput(
+                "export item IDs must be nonempty and unique".into(),
+            ));
+        }
+        item.spec.validate().map_err(AppError::InvalidInput)?;
     }
     if matches!(opts.format, OutputFormat::Jpeg | OutputFormat::Webp)
         && !(1..=100).contains(&opts.quality)
@@ -240,10 +232,10 @@ fn validate_options(opts: &ExportOptions, specs: &[RenderSpec]) -> Result<(), Ap
 }
 
 fn plan_exports(
-    specs: Vec<RenderSpec>,
+    items: Vec<ExportItem>,
     opts: &ExportOptions,
     directory: &Path,
-) -> Result<(Vec<PlannedExport>, usize), AppError> {
+) -> Result<(Vec<PlannedExport>, Vec<ExportItemResult>), AppError> {
     let extension = match opts.format {
         OutputFormat::Jpeg => "jpg",
         OutputFormat::Png => "png",
@@ -251,14 +243,15 @@ fn plan_exports(
     };
     let mut reserved = HashSet::new();
     let mut planned = Vec::new();
-    let mut skipped = 0;
-    for (index, spec) in specs.into_iter().enumerate() {
+    let mut skipped = Vec::new();
+    for item in items {
+        let spec = &item.spec;
         let source = Path::new(&spec.source.path);
         let name = source
             .file_stem()
             .and_then(|value| value.to_str())
             .unwrap_or("image");
-        let number = opts.naming.start_number.saturating_add(index as u32);
+        let number = opts.naming.start_number.saturating_add(item.sequence_index);
         let stem = match opts.naming.mode {
             NamingMode::OriginalSuffix => format!("{name}{}", opts.naming.suffix),
             NamingMode::PrefixSequence => format!("{}{:04}", opts.naming.prefix, number),
@@ -280,7 +273,14 @@ fn plan_exports(
             ConflictPolicy::Skip
                 if destination.exists() || reserved.contains(&key(&destination)) =>
             {
-                skipped += 1;
+                skipped.push(ExportItemResult {
+                    item_id: item.item_id.clone(),
+                    source_path: spec.source.path.clone(),
+                    output_path: Some(destination.to_string_lossy().into()),
+                    status: "skipped".into(),
+                    code: None,
+                    message: None,
+                });
                 continue;
             }
             ConflictPolicy::Rename => {
@@ -308,9 +308,49 @@ fn plan_exports(
             ));
         }
         reserved.insert(key(&destination));
-        planned.push(PlannedExport { spec, destination });
+        planned.push(PlannedExport { item, destination });
     }
     Ok((planned, skipped))
+}
+
+fn item_result(job: &PlannedExport, result: Result<(), AppError>) -> ExportItemResult {
+    let (status, code, message) = match result {
+        Ok(()) => ("success", None, None),
+        Err(error) => (
+            if matches!(error, AppError::Cancelled) {
+                "cancelled"
+            } else {
+                "failed"
+            },
+            Some(error.code().to_owned()),
+            Some(error.to_string()),
+        ),
+    };
+    ExportItemResult {
+        item_id: job.item.item_id.clone(),
+        source_path: job.item.spec.source.path.clone(),
+        output_path: Some(job.destination.to_string_lossy().into()),
+        status: status.into(),
+        code,
+        message,
+    }
+}
+
+fn batch_report(
+    results: Vec<ExportItemResult>,
+    directory: &Path,
+    cancellation_requested: bool,
+) -> BatchExportReport {
+    let count = |status: &str| results.iter().filter(|item| item.status == status).count();
+    BatchExportReport {
+        succeeded: count("success"),
+        failed: count("failed"),
+        skipped: count("skipped"),
+        cancelled: count("cancelled"),
+        cancellation_requested,
+        output_directory: directory.to_string_lossy().into(),
+        results,
+    }
 }
 
 fn sanitize_stem(value: &str) -> String {
@@ -342,8 +382,8 @@ fn export_one(
     token: &tokio_util::sync::CancellationToken,
 ) -> Result<(), AppError> {
     task::check(token)?;
-    let source = Path::new(&job.spec.source.path);
-    let rendered = apply_render_spec(source, &job.spec)?;
+    let source = Path::new(&job.item.spec.source.path);
+    let rendered = apply_render_spec(source, &job.item.spec)?;
     task::check(token)?;
     let resized = resize(rendered, &opts.size);
     task::check(token)?;
@@ -412,7 +452,136 @@ fn resize(image: DynamicImage, size: &ExportSize) -> DynamicImage {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_stem;
+    use super::*;
+    use tokio_util::sync::CancellationToken;
+
+    fn fixture() -> (PathBuf, ExportOptions, Vec<ExportItem>) {
+        let directory = std::env::temp_dir().join(format!(
+            "still-batch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let source = directory.join("source.png");
+        image::RgbaImage::from_pixel(20, 20, image::Rgba([20, 30, 40, 255]))
+            .save(&source)
+            .unwrap();
+        let opts = serde_json::from_value(serde_json::json!({
+            "format": "png", "quality": 100, "outputDirectory": directory,
+            "size": { "mode": "original", "longEdge": null, "percent": null, "width": null, "height": null, "lockAspect": true },
+            "naming": { "mode": "prefixSequence", "suffix": "_export", "prefix": "still_", "template": "{name}_{n}", "startNumber": 3 },
+            "conflict": "rename", "preserveExif": false, "preserveIcc": false,
+        })).unwrap();
+        let spec: RenderSpec = serde_json::from_value(serde_json::json!({
+            "version": 1, "source": { "path": source, "width": 20, "height": 20 }
+        }))
+        .unwrap();
+        let items = vec![
+            ExportItem {
+                item_id: "first".into(),
+                sequence_index: 0,
+                spec: spec.clone(),
+            },
+            ExportItem {
+                item_id: "second".into(),
+                sequence_index: 1,
+                spec,
+            },
+        ];
+        (directory, opts, items)
+    }
+
+    #[test]
+    fn cancellation_after_commit_keeps_the_success_report() {
+        let (directory, opts, mut items) = fixture();
+        items.truncate(1);
+        let token = CancellationToken::new();
+        let result = export_batch(items, opts, token.clone(), &|stage, _| {
+            if stage.starts_with("Exporting") {
+                token.cancel();
+            }
+        })
+        .unwrap();
+        assert!(result.cancellation_requested);
+        assert_eq!(result.succeeded, 1);
+        assert_eq!(result.results[0].item_id, "first");
+        assert!(Path::new(result.results[0].output_path.as_ref().unwrap()).is_file());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn cancelled_items_are_reported_separately_from_failures() {
+        let (directory, opts, items) = fixture();
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = export_batch(items, opts, token, &|_, _| {}).unwrap();
+        assert_eq!(result.cancelled, 2);
+        assert_eq!(result.failed, 0);
+        assert!(result
+            .results
+            .iter()
+            .all(|item| item.code.as_deref() == Some("cancelled")));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn same_source_partial_failure_preserves_ids_and_error_codes() {
+        let (directory, opts, items) = fixture();
+        // A directory at one output path makes that item fail while its sibling succeeds.
+        let (planned, _) = plan_exports(items.clone(), &opts, &directory).unwrap();
+        std::fs::create_dir(&planned[1].destination).unwrap();
+        let mut opts = opts;
+        opts.conflict = ConflictPolicy::Overwrite;
+        let result = export_batch(items, opts, CancellationToken::new(), &|_, _| {}).unwrap();
+        assert_eq!(result.succeeded, 1);
+        assert_eq!(result.failed, 1);
+        let failed = result
+            .results
+            .iter()
+            .find(|item| item.status == "failed")
+            .unwrap();
+        assert_eq!(failed.item_id, "second");
+        assert_eq!(failed.code.as_deref(), Some("invalid_input"));
+        assert!(failed.message.is_some());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn retry_retains_original_sequence_number_and_skip_has_an_identity() {
+        let (directory, mut opts, mut items) = fixture();
+        items.remove(0);
+        items[0].sequence_index = 9;
+        let (planned, _) = plan_exports(items.clone(), &opts, &directory).unwrap();
+        assert!(planned[0].destination.ends_with("still_0012.png"));
+        std::fs::write(&planned[0].destination, b"existing").unwrap();
+        opts.conflict = ConflictPolicy::Skip;
+        let result = export_batch(items, opts, CancellationToken::new(), &|_, _| {}).unwrap();
+        assert_eq!(result.skipped, 1);
+        assert_eq!(result.results[0].item_id, "second");
+        assert_eq!(std::fs::read(&planned[0].destination).unwrap(), b"existing");
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn duplicate_item_ids_and_source_overwrite_are_rejected() {
+        let (directory, mut opts, mut items) = fixture();
+        items[1].item_id = items[0].item_id.clone();
+        assert!(validate_options(&opts, &items).is_err());
+        items.truncate(1);
+        items[0].item_id.clear();
+        assert!(validate_options(&opts, &items).is_err());
+        items[0].item_id = "valid".into();
+        opts.naming.mode = NamingMode::OriginalSuffix;
+        opts.naming.suffix.clear();
+        opts.conflict = ConflictPolicy::Overwrite;
+        let before = std::fs::read(&items[0].spec.source.path).unwrap();
+        assert!(plan_exports(items.clone(), &opts, &directory).is_err());
+        assert_eq!(std::fs::read(&items[0].spec.source.path).unwrap(), before);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
     #[test]
     fn filenames_cannot_escape_the_output_directory() {
         assert_eq!(sanitize_stem("../a:b?c"), ".._a_b_c");

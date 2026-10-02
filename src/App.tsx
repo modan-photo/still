@@ -21,12 +21,18 @@ import { listWatermarkFonts } from './services/tauri/watermark';
 import { SettingsDialog } from './components/SettingsDialog';
 import { ExportCompletionNotice } from './components/ExportCompletionNotice';
 import { ExportDialog } from './components/ExportDialog';
-import type { BatchExportReport, ExportMode, ExportRequest } from './types/export';
+import type {
+  BatchExportReport,
+  ExportMode,
+  ExportRequest,
+  PhotoExportRequest,
+} from './types/export';
 import { MobileCollageEditor } from './layout/MobileCollageEditor';
 import type { RightPanelTabId } from './layout/rightPanelTabs';
 import { motionTokens } from './theme/tokens';
 import { restoreViewAfterCollage } from './services/collageMode';
-import { markExportedPhotosClean } from './services/exportCompletion';
+import { createExportRetry, markExportedPhotosClean } from './services/exportCompletion';
+import { errorMessage } from './services/errorMessages';
 
 /**
  * Application composition root.
@@ -46,7 +52,9 @@ function App({ theme }: { theme: ThemeController }) {
       if (systemFontsEnabled) return;
       // Prefer the bundled Chinese-capable font for broad text coverage, retaining
       // another bundled font as a last-resort fallback.
-      const fallback = fonts.find((font) => font.builtin && font.family === 'Noto Sans SC') ?? fonts.find((font) => font.builtin);
+      const fallback =
+        fonts.find((font) => font.builtin && font.family === 'Noto Sans SC') ??
+        fonts.find((font) => font.builtin);
       if (!fallback) return;
       const project = useProjectStore.getState();
       for (const photo of project.photos) {
@@ -58,7 +66,9 @@ function App({ theme }: { theme: ThemeController }) {
         const bundled = fonts.find((entry) => entry.builtin && entry.family === font.family);
         const allowed = bundled ?? fallback;
         if (font.family !== allowed.family || font.path !== allowed.path) {
-          project.updateSpec(photo.id, { watermark: { ...stamp, font: { ...font, family: allowed.family, path: allowed.path } } });
+          project.updateSpec(photo.id, {
+            watermark: { ...stamp, font: { ...font, family: allowed.family, path: allowed.path } },
+          });
         }
       }
     });
@@ -87,6 +97,8 @@ function App({ theme }: { theme: ThemeController }) {
   // application shell rather than an individual canvas or inspector component.
   const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const exportInFlight = useRef(false);
+  const [lastPhotoRequest, setLastPhotoRequest] = useState<PhotoExportRequest | null>(null);
   const [exportReport, setExportReport] = useState<BatchExportReport | null>(null);
   const [exportNoticeOpen, setExportNoticeOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -97,7 +109,10 @@ function App({ theme }: { theme: ThemeController }) {
   const desktopFolderImport = isTauri() && platform() !== 'android';
   // Read the latest store value at invocation time so shortcut callbacks never
   // toggle from a stale captured `inspectorOpen` value.
-  const toggleInspector = useCallback(() => setInspectorOpen(!useUIStore.getState().inspectorOpen), [setInspectorOpen]);
+  const toggleInspector = useCallback(
+    () => setInspectorOpen(!useUIStore.getState().inspectorOpen),
+    [setInspectorOpen],
+  );
   useEditorShortcuts(toggleInspector, choosePhotos);
 
   useEffect(() => {
@@ -127,7 +142,8 @@ function App({ theme }: { theme: ThemeController }) {
     // leave collage mode when fewer than two usable photos remain.
     const availableIds = new Set(photos.map((photo) => photo.id));
     const validIds = collagePhotoIds.filter((id) => availableIds.has(id));
-    if (validIds.length !== collagePhotoIds.length) useProjectStore.getState().updateCollageDraft({ photoIds: validIds });
+    if (validIds.length !== collagePhotoIds.length)
+      useProjectStore.getState().updateCollageDraft({ photoIds: validIds });
     if (validIds.length < 2) setActiveRightTab(previousRightTab.current);
   }, [collagePhotoIds, isCollageMode, photos, setActiveRightTab]);
 
@@ -145,69 +161,181 @@ function App({ theme }: { theme: ThemeController }) {
   /** Execute either export workflow while enforcing one active export at a time. */
   const beginExport = async (request: ExportRequest) => {
     // Guard duplicate submissions and empty photo batches before entering busy state.
-    if (exporting) return;
-    if (request.exportMode === 'photos' && request.specs.length === 0) return;
+    if (exportInFlight.current) return;
+    if (request.exportMode === 'photos' && request.items.length === 0) return;
+    exportInFlight.current = true;
     setExporting(true);
     setExportError(null);
     setExportNoticeOpen(false);
+    if (request.exportMode === 'photos') setLastPhotoRequest(request);
     try {
       if (request.exportMode === 'collage') {
         // Snapshot current project state at submission time and translate the UI
         // draft into the renderer's wire format.
         const project = useProjectStore.getState();
-        const payload = createCollageExportPayload(project.collageDraft, project.photos, request.outputPath, request.quality);
+        const payload = createCollageExportPayload(
+          project.collageDraft,
+          project.photos,
+          request.outputPath,
+          request.quality,
+        );
         // Photo deletion can race with an already-open export dialog.
         if (payload.items.length < 2) return;
         const path = await composeCollage(payload.items, payload.config);
         setCollageExportPath(path);
         return;
       }
-      const report = await exportImageBatch(request.specs, request.options);
+      const report = await exportImageBatch(request.items, request.options);
       // Mark successful photos clean only when their current spec still matches what
       // was exported; `markClean` protects edits made during the async operation.
       markExportedPhotosClean(request, report);
       setExportReport(report);
       setExportNoticeOpen(true);
     } catch (reason) {
-      // Cancellation is expected user intent; all other failures remain visible.
       const error = normalizeError(reason);
-      if (error.code !== 'cancelled') setExportError(error.message);
+      if (request.exportMode === 'photos') {
+        const cancelled = error.code === 'cancelled';
+        setExportReport({
+          succeeded: 0,
+          failed: cancelled ? 0 : request.items.length,
+          skipped: 0,
+          cancelled: cancelled ? request.items.length : 0,
+          cancellationRequested: cancelled,
+          outputDirectory: request.options.outputDirectory,
+          results: request.items.map((item) => ({
+            itemId: item.itemId,
+            sourcePath: item.spec.source.path,
+            outputPath: null,
+            status: cancelled ? 'cancelled' : 'failed',
+            code: error.code,
+            message: error.message,
+          })),
+        });
+        setExportNoticeOpen(true);
+      } else setExportError(errorMessage(error));
+    } finally {
+      exportInFlight.current = false;
+      setExporting(false);
     }
-    finally { setExporting(false); }
   };
-  return <>
-    {/* Phones replace the full editor shell during collage editing. Wider layouts
+  const canRetry = Boolean(
+    lastPhotoRequest &&
+    exportReport &&
+    lastPhotoRequest.items.some(
+      (item) =>
+        photos.some((photo) => photo.id === item.photoId && photo.path === item.spec.source.path) &&
+        exportReport.results.some(
+          (result) =>
+            result.itemId === item.itemId &&
+            (result.status === 'failed' || result.status === 'cancelled'),
+        ),
+    ),
+  );
+  const retryExport = () => {
+    if (!lastPhotoRequest || !exportReport) return;
+    const request = createExportRetry(lastPhotoRequest, exportReport);
+    if (request) void beginExport(request);
+  };
+  return (
+    <>
+      {/* Phones replace the full editor shell during collage editing. Wider layouts
         keep collage inside the standard canvas and inspector composition. */}
-    {isMobile && isCollageMode ? (
-      <MobileCollageEditor onExit={() => setActiveRightTab(previousRightTab.current)} />
-    ) : <AppShell
-      titleBarVisible={!(isTauri() && platform() === 'android')}
-      titleBar={<><TitleBar onOpenSettings={() => setSettingsOpen(true)}
-        onToggleTheme={theme.toggleResolvedTheme} themeMode={theme.resolvedTheme} />
-        <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} /></>}
-      progress={<><TaskProgressBar />{error && <Alert severity="error" onClose={clearError}>{error}</Alert>}
-        {exportError && <Alert severity="error" onClose={() => setExportError(null)}>{exportError}</Alert>}</>}
-      mainCanvas={<MainCanvas onImport={choosePhotos} onImportFolder={chooseFolder} showFolderImport={desktopFolderImport}
-        dragActive={dragActive} onExport={() => { setExportMode('photos'); setExportDialogOpen(true); }} exporting={exporting} />}
-      rightPanel={photos.length === 0 ? null : mobileLayout ? <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
-        : <RightPanel collapsed={!inspectorOpen} onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)} />}
-      filmStrip={<FilmStrip items={photos.map((photo) => ({ id: photo.id, label: photo.path.split(/[\\/]/).pop() ?? photo.path,
-        thumbPath: photo.thumbUrl, thumbRevision: photo.thumbRevision }))}
-        selectedId={selectedId} onSelect={selectPhoto} onImport={choosePhotos} />}
-    />}
-    {/* Export UI remains outside the responsive shell so replacing the mobile layout
+      {isMobile && isCollageMode ? (
+        <MobileCollageEditor onExit={() => setActiveRightTab(previousRightTab.current)} />
+      ) : (
+        <AppShell
+          titleBarVisible={!(isTauri() && platform() === 'android')}
+          titleBar={
+            <>
+              <TitleBar
+                onOpenSettings={() => setSettingsOpen(true)}
+                onToggleTheme={theme.toggleResolvedTheme}
+                themeMode={theme.resolvedTheme}
+              />
+              <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+            </>
+          }
+          progress={
+            <>
+              <TaskProgressBar />
+              {error && (
+                <Alert severity="error" onClose={clearError}>
+                  {error}
+                </Alert>
+              )}
+              {exportError && (
+                <Alert severity="error" onClose={() => setExportError(null)}>
+                  {exportError}
+                </Alert>
+              )}
+            </>
+          }
+          mainCanvas={
+            <MainCanvas
+              onImport={choosePhotos}
+              onImportFolder={chooseFolder}
+              showFolderImport={desktopFolderImport}
+              dragActive={dragActive}
+              onExport={() => {
+                setExportMode('photos');
+                setExportDialogOpen(true);
+              }}
+              exporting={exporting}
+            />
+          }
+          rightPanel={
+            photos.length === 0 ? null : mobileLayout ? (
+              <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
+            ) : (
+              <RightPanel
+                collapsed={!inspectorOpen}
+                onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)}
+              />
+            )
+          }
+          filmStrip={
+            <FilmStrip
+              items={photos.map((photo) => ({
+                id: photo.id,
+                label: photo.path.split(/[\\/]/).pop() ?? photo.path,
+                thumbPath: photo.thumbUrl,
+                thumbRevision: photo.thumbRevision,
+              }))}
+              selectedId={selectedId}
+              onSelect={selectPhoto}
+              onImport={choosePhotos}
+            />
+          }
+        />
+      )}
+      {/* Export UI remains outside the responsive shell so replacing the mobile layout
         cannot interrupt an open dialog or completion notice. */}
-    <ExportDialog open={exportDialogOpen} exportMode={exportMode} onClose={() => setExportDialogOpen(false)} onExport={(request) => void beginExport(request)} />
-    <ExportCompletionNotice
-      report={exportReport}
-      open={exportNoticeOpen}
-      onClose={() => setExportNoticeOpen(false)}
-    />
-    {/* Collage produces one output path, so a lightweight success snackbar is enough;
+      <ExportDialog
+        open={exportDialogOpen}
+        exportMode={exportMode}
+        onClose={() => setExportDialogOpen(false)}
+        onExport={(request) => void beginExport(request)}
+      />
+      <ExportCompletionNotice
+        report={exportReport}
+        open={exportNoticeOpen}
+        onClose={() => setExportNoticeOpen(false)}
+        canRetry={canRetry && !exporting}
+        onRetry={retryExport}
+      />
+      {/* Collage produces one output path, so a lightweight success snackbar is enough;
         batch photo exports use the detailed completion notice above. */}
-    <Snackbar open={collageExportPath !== null} autoHideDuration={motionTokens.duration.slow * 16} onClose={() => setCollageExportPath(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-      <Alert severity="success" variant="filled" onClose={() => setCollageExportPath(null)}>Collage exported to {collageExportPath}</Alert>
-    </Snackbar>
-  </>;
+      <Snackbar
+        open={collageExportPath !== null}
+        autoHideDuration={motionTokens.duration.slow * 16}
+        onClose={() => setCollageExportPath(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setCollageExportPath(null)}>
+          Collage exported to {collageExportPath}
+        </Alert>
+      </Snackbar>
+    </>
+  );
 }
 export default App;

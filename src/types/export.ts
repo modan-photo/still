@@ -28,18 +28,42 @@ export interface ExportOptions {
   preserveIcc: boolean;
 }
 
-export interface ExportFailure { sourcePath: string; reason: string }
-export interface ExportSuccess { sourcePath: string; outputPath: string }
+export interface ExportItem {
+  itemId: string;
+  sequenceIndex: number;
+  spec: RenderSpec;
+}
+export interface PhotoExportItem extends ExportItem {
+  photoId: string;
+}
+export interface ExportItemResult {
+  itemId: string;
+  sourcePath: string;
+  outputPath: string | null;
+  status: 'success' | 'failed' | 'skipped' | 'cancelled';
+  code: string | null;
+  message: string | null;
+}
 export interface BatchExportReport {
   succeeded: number;
   failed: number;
   skipped: number;
+  cancelled: number;
+  cancellationRequested: boolean;
   outputDirectory: string;
-  successes: ExportSuccess[];
-  failures: ExportFailure[];
+  results: ExportItemResult[];
 }
 
 export type ExportMode = 'photos' | 'collage';
-export interface PhotoExportRequest { exportMode: 'photos'; specs: RenderSpec[]; options: ExportOptions; photoIds?: string[] }
-export interface CollageExportRequest { exportMode: 'collage'; outputPath: string; format: OutputFormat; quality: number }
+export interface PhotoExportRequest {
+  exportMode: 'photos';
+  items: PhotoExportItem[];
+  options: ExportOptions;
+}
+export interface CollageExportRequest {
+  exportMode: 'collage';
+  outputPath: string;
+  format: OutputFormat;
+  quality: number;
+}
 export type ExportRequest = PhotoExportRequest | CollageExportRequest;
