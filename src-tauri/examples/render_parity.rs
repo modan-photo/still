@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         image::Rgb([(x * 17 + y * 3) as u8, (y * 13 + x) as u8, (x ^ y) as u8])
     })
     .save(&source)?;
+    image::RgbaImage::new(128, 96).save(directory.join("transparent.png"))?;
     let mut cases: Vec<(String, Value, bool)> = Vec::new();
     for angle in [0, 90, 180, 270] {
         for flip_h in [false, true] {
@@ -103,15 +104,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"crop": crop, "watermark": watermark}),
         false,
     ));
+    for (id, content) in [
+        ("chinese", "测试"),
+        ("latin", "Still"),
+        ("emoji", "😀"),
+        ("multiline", "测试\nStill 😀\n"),
+    ] {
+        let mut mark = watermark.clone();
+        mark["content"] = json!(content);
+        mark["font"]["size"] = json!(24);
+        cases.push((
+            format!("transparent-{id}"),
+            json!({"fixtureSource": "transparent.png", "watermark": mark}),
+            false,
+        ));
+    }
+    let mut percent_mark = watermark.clone();
+    percent_mark["font"]["size"] = json!(8);
+    percent_mark["font"]["sizeUnit"] = json!("percent");
+    cases.push((
+        "crop-percent-text-watermark".into(),
+        json!({"crop": crop, "border": border, "watermark": percent_mark}),
+        false,
+    ));
     let mut manifest = Vec::new();
     for (id, mut value, exact) in cases {
         value["version"] = json!(1);
-        value["source"] = json!({"path": source.to_string_lossy(), "width": 128, "height": 96});
+        let source_file = value
+            .as_object_mut()
+            .unwrap()
+            .remove("fixtureSource")
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "source.png".into());
+        let case_source = directory.join(&source_file);
+        value["source"] =
+            json!({"path": case_source.to_string_lossy(), "width": 128, "height": 96});
         let spec: RenderSpec = serde_json::from_value(value)?;
-        let rendered = apply_render_spec(&source, &spec)?;
+        let rendered = apply_render_spec(&case_source, &spec)?;
         rendered.save(directory.join(format!("{id}.png")))?;
-        manifest.push(json!({"id": id, "spec": spec, "exact": exact,
-            "width": rendered.width(), "height": rendered.height()}));
+        manifest.push(
+            json!({"id": id, "sourceFile": source_file, "spec": spec, "exact": exact,
+            "width": rendered.width(), "height": rendered.height()}),
+        );
     }
     fs::write(
         directory.join("manifest.json"),

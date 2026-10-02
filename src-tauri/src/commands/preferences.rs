@@ -97,15 +97,18 @@ fn migrate_file(path: &Path, recover_invalid: bool) -> Result<(), AppError> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     fn test_directory() -> PathBuf {
+        static SEQUENCE: AtomicU64 = AtomicU64::new(0);
         std::env::temp_dir().join(format!(
-            "still-preference-migration-{}-{}",
+            "still-preference-migration-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system time")
-                .as_nanos()
+                .as_nanos(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ))
     }
 

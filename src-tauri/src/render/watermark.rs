@@ -1,14 +1,11 @@
 use std::{fs, path::PathBuf};
 
-use ab_glyph::{Font, FontArc, PxScale, ScaleFont};
+use ab_glyph::{point, Font, FontArc, FontVec, PxScale, ScaleFont, VariableFont};
 use image::{
     imageops::{self, FilterType},
     Rgba, RgbaImage,
 };
-use imageproc::{
-    drawing::draw_text_mut,
-    geometric_transformations::{rotate_about_center, Interpolation},
-};
+use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
 
 use crate::{
     error::AppError,
@@ -62,7 +59,7 @@ pub fn apply_watermark(
         tile(base, &mark, spec.tile_gap.max(0.0) as i64);
     } else {
         let (x, y) = placement(base, &mark, spec);
-        imageops::overlay(base, &mark, x, y);
+        overlay_rgba(base, &mark, x, y);
     }
     Ok(())
 }
@@ -96,12 +93,11 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
         FontSizeUnit::Percent => source_long_edge as f32 * font_spec.size / 100.0,
     } * spec.scale;
     let size = size.max(1.0);
-    let scale = PxScale::from(size);
-    let lines: Vec<&str> = spec.content.lines().collect();
-    let line_height = (size * 1.28).ceil();
+    let lines: Vec<&str> = spec.content.split('\n').collect();
+    let line_height = size * 1.28;
     let widths: Vec<f32> = lines
         .iter()
-        .map(|line| measure_line(line, &fonts, scale))
+        .map(|line| measure_line(line, &fonts, size))
         .collect();
     let shadow = &font_spec.shadow;
     let padding = (font_spec.stroke_width
@@ -128,7 +124,7 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
                             line,
                             padding as f32 + ox as f32,
                             y + oy as f32,
-                            scale,
+                            size,
                             stroke,
                             &fonts,
                         );
@@ -136,15 +132,7 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
                 }
             }
         }
-        draw_fallback_line(
-            &mut fill_layer,
-            line,
-            padding as f32,
-            y,
-            scale,
-            fill,
-            &fonts,
-        );
+        draw_fallback_line(&mut fill_layer, line, padding as f32, y, size, fill, &fonts);
     }
 
     let mut result = RgbaImage::new(width.max(1), height.max(1));
@@ -153,15 +141,15 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
         if shadow.blur > 0.0 {
             shadow_layer = imageops::blur(&shadow_layer, shadow.blur.min(64.0));
         }
-        imageops::overlay(
+        overlay_rgba(
             &mut result,
             &shadow_layer,
             shadow.offset_x.round() as i64,
             shadow.offset_y.round() as i64,
         );
     }
-    imageops::overlay(&mut result, &stroke_layer, 0, 0);
-    imageops::overlay(&mut result, &fill_layer, 0, 0);
+    overlay_rgba(&mut result, &stroke_layer, 0, 0);
+    overlay_rgba(&mut result, &fill_layer, 0, 0);
     Ok(result)
 }
 
@@ -179,7 +167,11 @@ fn load_fonts(spec: &FontSpec) -> Result<Vec<FontArc>, AppError> {
     let fonts: Vec<FontArc> = paths
         .into_iter()
         .filter_map(|path| fs::read(path).ok())
-        .filter_map(|bytes| FontArc::try_from_vec(bytes).ok())
+        .filter_map(|bytes| FontVec::try_from_vec(bytes).ok())
+        .map(|mut font| {
+            font.set_variation(b"wght", spec.weight as f32);
+            FontArc::new(font)
+        })
         .collect();
     if fonts.is_empty() {
         Err(AppError::Unsupported(
@@ -197,11 +189,20 @@ fn font_for(character: char, fonts: &[FontArc]) -> &FontArc {
         .unwrap_or(&fonts[0])
 }
 
-fn measure_line(line: &str, fonts: &[FontArc], scale: PxScale) -> f32 {
+// Canvas font sizes are pixels per em; ab_glyph PxScale instead describes
+// ascent minus descent. Convert separately for each fallback font.
+fn em_scale(font: &FontArc, size: f32) -> PxScale {
+    PxScale::from(
+        size * font.height_unscaled() / font.units_per_em().unwrap_or(font.height_unscaled()),
+    )
+}
+
+fn measure_line(line: &str, fonts: &[FontArc], size: f32) -> f32 {
     line.chars()
         .map(|character| {
             let font = font_for(character, fonts);
-            font.as_scaled(scale).h_advance(font.glyph_id(character))
+            font.as_scaled(em_scale(font, size))
+                .h_advance(font.glyph_id(character))
         })
         .sum()
 }
@@ -211,23 +212,31 @@ fn draw_fallback_line(
     text: &str,
     mut x: f32,
     y: f32,
-    scale: PxScale,
+    size: f32,
     color: Rgba<u8>,
     fonts: &[FontArc],
 ) {
     for character in text.chars() {
         let font = font_for(character, fonts);
+        let scale = em_scale(font, size);
         let advance = font.as_scaled(scale).h_advance(font.glyph_id(character));
-        let glyph = character.to_string();
-        draw_text_mut(
-            target,
-            color,
-            x.round() as i32,
-            y.round() as i32,
-            scale,
-            font,
-            &glyph,
-        );
+        // Both renderers use an alphabetic baseline one em below each line top.
+        // Keep subpixel positions and straight RGB; only coverage changes alpha.
+        let glyph = font
+            .glyph_id(character)
+            .with_scale_and_position(scale, point(x, y + size));
+        if let Some(outline) = font.outline_glyph(glyph) {
+            let bounds = outline.px_bounds();
+            outline.draw(|gx, gy, coverage| {
+                let px = bounds.min.x as i32 + gx as i32;
+                let py = bounds.min.y as i32 + gy as i32;
+                if px >= 0 && py >= 0 && px < target.width() as i32 && py < target.height() as i32 {
+                    let mut covered = color;
+                    covered[3] = (color[3] as f32 * coverage).round().clamp(0.0, 255.0) as u8;
+                    blend_rgba(target.get_pixel_mut(px as u32, py as u32), covered);
+                }
+            });
+        }
         x += advance;
     }
 }
@@ -242,6 +251,37 @@ fn alpha_tint(source: &RgbaImage, color: Rgba<u8>) -> RgbaImage {
 fn apply_opacity(image: &mut RgbaImage, opacity: f32) {
     for pixel in image.pixels_mut() {
         pixel[3] = (pixel[3] as f32 * opacity).round().clamp(0.0, 255.0) as u8;
+    }
+}
+
+// Integer source-over avoids floating-point truncation turning opaque pixels
+// into alpha 254, or darkening straight RGB when painting onto transparent layers.
+fn blend_rgba(background: &mut Rgba<u8>, foreground: Rgba<u8>) {
+    let source_alpha = foreground[3] as u32;
+    if source_alpha == 0 {
+        return;
+    }
+    let remaining = 255 - source_alpha;
+    let background_alpha = background[3] as u32;
+    let alpha = source_alpha * 255 + background_alpha * remaining;
+    for channel in 0..3 {
+        let numerator = foreground[channel] as u32 * source_alpha * 255
+            + background[channel] as u32 * background_alpha * remaining;
+        background[channel] = ((numerator + alpha / 2) / alpha) as u8;
+    }
+    background[3] = ((alpha + 127) / 255) as u8;
+}
+
+fn overlay_rgba(base: &mut RgbaImage, mark: &RgbaImage, x: i64, y: i64) {
+    let left = x.clamp(0, base.width() as i64) as u32;
+    let top = y.clamp(0, base.height() as i64) as u32;
+    let right = (x + mark.width() as i64).clamp(0, base.width() as i64) as u32;
+    let bottom = (y + mark.height() as i64).clamp(0, base.height() as i64) as u32;
+    for by in top..bottom {
+        for bx in left..right {
+            let foreground = *mark.get_pixel((bx as i64 - x) as u32, (by as i64 - y) as u32);
+            blend_rgba(base.get_pixel_mut(bx, by), foreground);
+        }
     }
 }
 
@@ -286,7 +326,7 @@ fn tile(base: &mut RgbaImage, mark: &RgbaImage, gap: i64) {
     while y < base.height() as i64 {
         let mut x = -(mark.width() as i64) - if row % 2 == 0 { 0 } else { step_x / 2 };
         while x < base.width() as i64 {
-            imageops::overlay(base, mark, x, y);
+            overlay_rgba(base, mark, x, y);
             x += step_x;
         }
         row += 1;
@@ -323,6 +363,86 @@ mod tests {
         fs,
         time::{Duration, Instant, SystemTime},
     };
+
+    fn text_fixture(content: &str, weight: u16) -> WatermarkSpec {
+        serde_json::from_value(serde_json::json!({
+            "type": "text", "content": content, "position": "center",
+            "offsetX": 0, "offsetY": 0, "opacity": 1, "rotation": 0,
+            "scale": 1, "tiled": false, "tileGap": 20,
+            "font": {"family": "Noto Sans SC", "path": std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("resources/fonts/NotoSansSC-VF.ttf").to_string_lossy(),
+                "size": 32, "sizeUnit": "px", "weight": weight, "italic": false,
+                "color": "#78C828", "strokeColor": "#000000", "strokeWidth": 0,
+                "shadow": {"color": "#00000000", "blur": 0, "offsetX": 0, "offsetY": 0}}
+        })).unwrap()
+    }
+
+    #[test]
+    fn css_em_size_preserves_a_full_width_chinese_glyph() {
+        let spec = text_fixture("中", 400);
+        let fonts = load_fonts(spec.font.as_ref().unwrap()).unwrap();
+        assert!((super::measure_line("中", &fonts, 32.0) - 32.0).abs() < 0.01);
+        let rendered = super::render_text(&spec, 128).unwrap();
+        assert_eq!(rendered.width(), 40); // 32px em plus two 4px pads.
+    }
+
+    #[test]
+    fn glyph_antialiasing_preserves_straight_rgb_at_partial_alpha() {
+        let rendered = super::render_text(&text_fixture("测试", 400), 128).unwrap();
+        let edges: Vec<_> = rendered
+            .pixels()
+            .filter(|p| p[3] > 0 && p[3] < 255)
+            .collect();
+        assert!(!edges.is_empty());
+        assert!(
+            edges
+                .iter()
+                .all(|p| p[0] == 120 && p[1] == 200 && p[2] == 40),
+            "edge channel ranges: {:?}",
+            (0..3)
+                .map(|c| (
+                    edges.iter().map(|p| p[c]).min(),
+                    edges.iter().map(|p| p[c]).max()
+                ))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn trailing_empty_lines_and_fractional_line_height_match_canvas() {
+        let rendered = super::render_text(&text_fixture("中\n", 400), 128).unwrap();
+        assert_eq!(rendered.height(), (32.0_f32 * 1.28 * 2.0).ceil() as u32 + 8);
+    }
+
+    #[test]
+    fn variable_font_weight_changes_the_rendered_glyphs() {
+        let light = super::render_text(&text_fixture("Still 测试", 100), 128).unwrap();
+        let bold = super::render_text(&text_fixture("Still 测试", 900), 128).unwrap();
+        let alpha_sum = |image: &RgbaImage| image.pixels().map(|p| p[3] as u64).sum::<u64>();
+        assert!(alpha_sum(&bold) > alpha_sum(&light));
+    }
+
+    #[test]
+    fn clipped_source_over_preserves_opaque_background_and_rounds_color() {
+        let mut base = RgbaImage::from_pixel(2, 1, Rgba([64, 64, 64, 255]));
+        let mark = RgbaImage::from_pixel(2, 1, Rgba([240, 240, 240, 128]));
+        super::overlay_rgba(&mut base, &mark, -1, 0);
+        assert_eq!(*base.get_pixel(0, 0), Rgba([152, 152, 152, 255]));
+        assert_eq!(*base.get_pixel(1, 0), Rgba([64, 64, 64, 255]));
+        let original = base.clone();
+        super::overlay_rgba(&mut base, &mark, 10, 10);
+        assert_eq!(base, original);
+    }
+
+    #[test]
+    fn text_watermark_never_makes_an_opaque_photo_translucent() {
+        let mut base = RgbaImage::from_pixel(128, 96, Rgba([12, 23, 34, 255]));
+        let mut spec = text_fixture("Still 测试", 400);
+        spec.opacity = 0.72;
+        apply_watermark(&mut base, &spec, 128).unwrap();
+        assert!(base.pixels().any(|p| p[0] != 12));
+        assert!(base.pixels().all(|p| p[3] == 255));
+    }
 
     #[test]
     fn opacity_multiplies_existing_alpha() {
