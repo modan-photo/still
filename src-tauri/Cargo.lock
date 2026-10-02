@@ -4185,6 +4185,7 @@ dependencies = [
  "kamadak-exif",
  "little_exif",
  "rayon",
+ "rustix",
  "serde",
  "serde_json",
  "tauri",
@@ -4198,6 +4199,7 @@ dependencies = [
  "tokio-util",
  "ttf-parser",
  "webp",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

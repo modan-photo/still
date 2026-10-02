@@ -15,6 +15,7 @@
     "android:build": "tauri android build",
     "check": "tsc --noEmit",
     "test": "vitest run",
+    "render:fixtures": "cargo run --manifest-path src-tauri/Cargo.toml --example render_parity --locked --offline -- verification-output",
     "lint": "eslint src tests scripts eslint.config.mjs vite.config.ts --max-warnings 0",
     "format:check": "node scripts/format.mjs",
     "format": "node scripts/format.mjs --write"

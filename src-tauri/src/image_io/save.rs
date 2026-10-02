@@ -82,6 +82,7 @@ pub fn save_image_atomic_with_metadata(
         .write(true)
         .create_new(true)
         .open(temporary.path())?;
+    temporary.arm();
     let mut writer = BufWriter::new(CancellableWriter {
         file,
         token: cancellation.clone(),
@@ -117,10 +118,7 @@ pub fn save_image_atomic_with_metadata(
 
     match existing {
         ExistingDestination::Reject => {
-            // A hard link publishes the complete file without overwriting a destination
-            // created concurrently. Both names are on the same filesystem.
-            fs::hard_link(temporary.path(), destination)?;
-            let _ = fs::remove_file(temporary.path());
+            publish_new(temporary.path(), destination, cancellation)?;
         }
         ExistingDestination::Replace => {
             replace_with_rollback(temporary.path(), destination, |from, to| {
@@ -161,7 +159,7 @@ fn replace_with_rollback(
             "export backup already exists".into(),
         ));
     }
-    fs::rename(destination, backup.path())?;
+    rename_no_replace(destination, backup.path())?;
     match publish(staged, destination) {
         Ok(()) => {
             if let Err(error) = fs::remove_file(backup.path()) {
@@ -173,15 +171,7 @@ fn replace_with_rollback(
             Ok(())
         }
         Err(commit_error) => {
-            // Never overwrite a file that appeared while the target was absent.
-            let rollback = if destination.exists() {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::AlreadyExists,
-                    "destination appeared during rollback",
-                ))
-            } else {
-                fs::rename(backup.path(), destination)
-            };
+            let rollback = rename_no_replace(backup.path(), destination);
             match rollback {
                 Ok(()) => Err(commit_error.into()),
                 Err(rollback_error) => Err(AppError::ExportRecoveryRequired {
@@ -265,12 +255,25 @@ pub fn copy_image_atomic(
     token: &CancellationToken,
 ) -> Result<(), AppError> {
     ensure_not_cancelled(token)?;
-    let mut input = File::open(source)?;
     let mut temporary = TemporaryOutput::new(destination);
+    copy_to_staging(source, &mut temporary, token)?;
+    publish_new(temporary.path(), destination, token)?;
+    temporary.disarm();
+    Ok(())
+}
+
+fn copy_to_staging(
+    source: &Path,
+    temporary: &mut TemporaryOutput,
+    token: &CancellationToken,
+) -> Result<(), AppError> {
+    ensure_not_cancelled(token)?;
+    let mut input = File::open(source)?;
     let mut output = File::options()
         .write(true)
         .create_new(true)
         .open(temporary.path())?;
+    temporary.arm();
     let mut buffer = vec![0; 256 * 1024];
     loop {
         ensure_not_cancelled(token)?;
@@ -283,10 +286,117 @@ pub fn copy_image_atomic(
     output.sync_all()?;
     drop(output);
     ensure_not_cancelled(token)?;
-    fs::hard_link(temporary.path(), destination)?;
-    let _ = fs::remove_file(temporary.path());
-    temporary.disarm();
     Ok(())
+}
+
+fn publish_new(
+    staged: &Path,
+    destination: &Path,
+    token: &CancellationToken,
+) -> Result<(), AppError> {
+    publish_new_with(
+        staged,
+        destination,
+        token,
+        |from, to| fs::hard_link(from, to),
+        rename_no_replace,
+    )
+}
+
+// Attempting the actual link probes the destination filesystem rather than
+// trusting a drive-wide cache. Only capability failures use the copy fallback.
+fn publish_new_with(
+    staged: &Path,
+    destination: &Path,
+    token: &CancellationToken,
+    link: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+    publish: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), AppError> {
+    ensure_not_cancelled(token)?;
+    match link(staged, destination) {
+        Ok(()) => {
+            let _ = fs::remove_file(staged);
+            Ok(())
+        }
+        Err(error) if link_capability_error(&error) => {
+            let mut copied = TemporaryOutput::new(destination);
+            copy_to_staging(staged, &mut copied, token)?;
+            ensure_not_cancelled(token)?;
+            publish(copied.path(), destination)?;
+            copied.disarm();
+            let _ = fs::remove_file(staged);
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn link_capability_error(error: &std::io::Error) -> bool {
+    if matches!(
+        error.kind(),
+        std::io::ErrorKind::Unsupported | std::io::ErrorKind::CrossesDevices
+    ) {
+        return true;
+    }
+    #[cfg(windows)]
+    return matches!(error.raw_os_error(), Some(1 | 17 | 50));
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    return matches!(error.raw_os_error(), Some(18 | 38 | 95));
+    #[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
+    false
+}
+
+#[cfg(windows)]
+fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+    let wide = |path: &Path| -> std::io::Result<Vec<u16>> {
+        let mut units: Vec<u16> = path.as_os_str().encode_wide().collect();
+        if units.contains(&0) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "path contains a NUL",
+            ));
+        }
+        units.push(0);
+        Ok(units)
+    };
+    let source = wide(source)?;
+    let destination = wide(destination)?;
+    // SAFETY: both buffers are live NUL-terminated UTF-16 paths. Omitting
+    // REPLACE_EXISTING and COPY_ALLOWED keeps publication on-volume/no-clobber.
+    if unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_WRITE_THROUGH,
+        )
+    } == 0
+    {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    rustix::fs::renameat_with(
+        rustix::fs::CWD,
+        source,
+        rustix::fs::CWD,
+        destination,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(Into::into)
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
+fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    // Preserve the existing hard-link capability on other desktop platforms.
+    // Link creation atomically rejects a target that appeared concurrently.
+    fs::hard_link(source, destination)?;
+    fs::remove_file(source)
 }
 
 impl TemporaryOutput {
@@ -300,7 +410,7 @@ impl TemporaryOutput {
             ".{file_name}.still-part-{}-{sequence}",
             std::process::id()
         ));
-        Self { path, armed: true }
+        Self { path, armed: false }
     }
 
     fn path(&self) -> &Path {
@@ -309,6 +419,10 @@ impl TemporaryOutput {
 
     fn disarm(&mut self) {
         self.armed = false;
+    }
+
+    fn arm(&mut self) {
+        self.armed = true;
     }
 }
 
@@ -346,6 +460,130 @@ mod tests {
         fs::write(&staged, b"new image").unwrap();
         fs::write(&target, b"old image").unwrap();
         (directory, staged, target)
+    }
+
+    #[test]
+    fn unsupported_link_falls_back_to_byte_preserving_copy_and_atomic_publish() {
+        let (directory, staged, target) = replacement_fixture();
+        fs::remove_file(&target).unwrap();
+        let bytes = vec![127; 600_000];
+        fs::write(&staged, &bytes).unwrap();
+        super::publish_new_with(
+            &staged,
+            &target,
+            &CancellationToken::new(),
+            |_, _| Err(std::io::ErrorKind::Unsupported.into()),
+            super::rename_no_replace,
+        )
+        .unwrap();
+        assert_eq!(fs::read(&target).unwrap(), bytes);
+        assert!(!staged.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn fallback_rejects_concurrent_target_and_cleans_its_copy() {
+        let (directory, staged, target) = replacement_fixture();
+        fs::remove_file(&target).unwrap();
+        let result = super::publish_new_with(
+            &staged,
+            &target,
+            &CancellationToken::new(),
+            |_, _| Err(std::io::ErrorKind::Unsupported.into()),
+            |from, to| {
+                fs::write(to, b"concurrent image")?;
+                super::rename_no_replace(from, to)
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"concurrent image");
+        assert_eq!(fs::read(&staged).unwrap(), b"new image");
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 2);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn fallback_publish_failure_cleans_copy_and_preserves_staged_data() {
+        let (directory, staged, target) = replacement_fixture();
+        fs::remove_file(&target).unwrap();
+        let result = super::publish_new_with(
+            &staged,
+            &target,
+            &CancellationToken::new(),
+            |_, _| Err(std::io::ErrorKind::Unsupported.into()),
+            |_, _| Err(std::io::ErrorKind::PermissionDenied.into()),
+        );
+        assert!(result.is_err());
+        assert!(!target.exists());
+        assert_eq!(fs::read(&staged).unwrap(), b"new image");
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn cancellation_after_link_probe_prevents_fallback_publication() {
+        let (directory, staged, target) = replacement_fixture();
+        fs::remove_file(&target).unwrap();
+        let token = CancellationToken::new();
+        let result = super::publish_new_with(
+            &staged,
+            &target,
+            &token,
+            |_, _| {
+                token.cancel();
+                Err(std::io::ErrorKind::Unsupported.into())
+            },
+            |_, _| panic!("cancelled fallback must not publish"),
+        );
+        assert_eq!(result.unwrap_err().code(), "cancelled");
+        assert!(!target.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn link_permission_failure_does_not_attempt_a_copy() {
+        let (directory, staged, target) = replacement_fixture();
+        fs::remove_file(&target).unwrap();
+        assert!(super::publish_new_with(
+            &staged,
+            &target,
+            &CancellationToken::new(),
+            |_, _| Err(std::io::ErrorKind::PermissionDenied.into()),
+            |_, _| panic!("permission failure must not trigger fallback"),
+        )
+        .is_err());
+        assert!(!target.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn staging_collision_never_deletes_an_unowned_file() {
+        let (directory, staged, target) = replacement_fixture();
+        let mut temporary = super::TemporaryOutput::new(&target);
+        let collision = temporary.path().to_path_buf();
+        fs::write(&collision, b"another writer's data").unwrap();
+        assert!(
+            super::copy_to_staging(&staged, &mut temporary, &CancellationToken::new()).is_err()
+        );
+        drop(temporary);
+        assert_eq!(fs::read(&collision).unwrap(), b"another writer's data");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn native_publication_handles_unicode_and_never_replaces() {
+        let (directory, staged, _) = replacement_fixture();
+        let target = directory.join("照片 🖼.png");
+        super::rename_no_replace(&staged, &target).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"new image");
+        fs::write(&staged, b"second image").unwrap();
+        assert!(super::rename_no_replace(&staged, &target).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"new image");
+        assert_eq!(fs::read(&staged).unwrap(), b"second image");
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
@@ -460,12 +698,13 @@ mod tests {
         let destination = directory.join("image.png");
         let token = CancellationToken::new();
         {
-            let temporary = super::TemporaryOutput::new(&destination);
+            let mut temporary = super::TemporaryOutput::new(&destination);
             let file = fs::File::options()
                 .write(true)
                 .create_new(true)
                 .open(temporary.path())
                 .unwrap();
+            temporary.arm();
             let mut writer = super::CancellableWriter {
                 file,
                 token: token.clone(),

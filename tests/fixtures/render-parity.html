@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Still Canvas / Rust pixel parity</title>
+    <style>
+      body {
+        font: 14px system-ui;
+        padding: 24px;
+        background: #f6f5f1;
+        color: #222;
+      }
+      table {
+        border-collapse: collapse;
+      }
+      td,
+      th {
+        padding: 8px;
+        border: 1px solid #ccc;
+        text-align: left;
+      }
+      canvas,
+      img {
+        max-width: 256px;
+        image-rendering: pixelated;
+      }
+      details {
+        margin: 16px 0;
+      }
+      pre {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Canvas / Rust pixel parity</h1>
+    <p>
+      Lossless synthetic images at full resolution. Discrete geometry requires exact pixels;
+      rasterization cases report differences for review.
+    </p>
+    <p id="status">Loading…</p>
+    <main id="results"></main>
+    <pre id="report"></pre>
+    <script type="module" src="./render-parity.ts"></script>
+  </body>
+</html>
