@@ -8,6 +8,7 @@ use image::{
 
 use crate::{
     error::AppError,
+    image_io::load::decode_image,
     render::spec::{Anchor, FontSizeUnit, FontSpec, WatermarkSpec, WatermarkType},
 };
 
@@ -63,9 +64,7 @@ fn render_image(spec: &WatermarkSpec) -> Result<RgbaImage, AppError> {
         .path
         .as_deref()
         .ok_or_else(|| AppError::InvalidInput("image watermark path is missing".into()))?;
-    let source = image::open(path)
-        .map_err(|error| AppError::InvalidInput(format!("cannot open watermark image: {error}")))?
-        .to_rgba8();
+    let source = decode_image(std::path::Path::new(path))?.to_rgba8();
     let width = ((source.width() as f32 * spec.scale).round() as u32).max(1);
     let height = ((source.height() as f32 * spec.scale).round() as u32).max(1);
     Ok(imageops::resize(
@@ -428,6 +427,50 @@ mod tests {
                 "color": "#78C828", "strokeColor": "#000000", "strokeWidth": 0,
                 "shadow": {"color": "#00000000", "blur": 0, "offsetX": 0, "offsetY": 0}}
         })).unwrap()
+    }
+
+    #[test]
+    fn image_watermark_normalizes_exif_before_scaling_without_changing_source() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-watermark-orientation-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("mark.jpg");
+        image::RgbImage::from_fn(80, 40, |x, y| image::Rgb([x as u8 * 3, y as u8 * 5, 80]))
+            .save(&path)
+            .unwrap();
+        let jpeg = fs::read(&path).unwrap();
+        let raw = image::open(&path).unwrap().to_rgba8();
+        for orientation in [6u8, 8] {
+            let mut tiff =
+                b"II\x2a\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\x06\0\0\0\0\0\0\0".to_vec();
+            tiff[18] = orientation;
+            let mut bytes = jpeg[..2].to_vec();
+            bytes.extend_from_slice(&[0xff, 0xe1]);
+            bytes.extend_from_slice(&((2 + 6 + tiff.len()) as u16).to_be_bytes());
+            bytes.extend_from_slice(b"Exif\0\0");
+            bytes.extend_from_slice(&tiff);
+            bytes.extend_from_slice(&jpeg[2..]);
+            fs::write(&path, &bytes).unwrap();
+            let mut spec = text_fixture("", 400);
+            spec.kind = crate::render::spec::WatermarkType::Image;
+            spec.path = Some(path.to_string_lossy().into_owned());
+            let expected = if orientation == 6 {
+                image::imageops::rotate90(&raw)
+            } else {
+                image::imageops::rotate270(&raw)
+            };
+            assert_eq!(super::render_image(&spec).unwrap(), expected);
+            spec.scale = 0.5;
+            assert_eq!(super::render_image(&spec).unwrap().dimensions(), (20, 40));
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+        }
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

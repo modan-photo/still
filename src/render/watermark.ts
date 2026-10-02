@@ -1,4 +1,4 @@
-import { cacheAssetUrl, getCachedImage } from '../services/tauri/image';
+import { cacheAssetUrl, getCachedImage, loadImage } from '../services/tauri/image';
 import type { Anchor, WatermarkSpec } from '../types/renderSpec';
 
 export interface WatermarkBounds {
@@ -7,7 +7,10 @@ export interface WatermarkBounds {
   width: number;
   height: number;
 }
-const watermarkImageCache = new Map<string, Promise<HTMLImageElement>>();
+const watermarkImageCache = new Map<
+  string,
+  Promise<{ image: HTMLImageElement; width: number; height: number }>
+>();
 
 export async function renderWatermarkPreview(
   canvas: HTMLCanvasElement,
@@ -107,18 +110,25 @@ async function renderImage(spec: WatermarkSpec, ratio: number): Promise<HTMLCanv
   if (!spec.path) return null;
   let request = watermarkImageCache.get(spec.path);
   if (!request) {
-    request = getCachedImage(spec.path, 'preview').then(async (cached) => {
-      const image = new Image();
-      image.src = cacheAssetUrl(cached.path);
-      await image.decode();
-      return image;
-    });
-    watermarkImageCache.set(spec.path, request);
+    const path = spec.path;
+    request = Promise.all([getCachedImage(path, 'preview'), loadImage(path)])
+      .then(async ([cached, source]) => {
+        const image = new Image();
+        image.src = cacheAssetUrl(cached.path);
+        await image.decode();
+        return { image, width: source.width, height: source.height };
+      })
+      .catch((error: unknown) => {
+        watermarkImageCache.delete(path);
+        throw error;
+      });
+    watermarkImageCache.set(path, request);
   }
-  const image = await request;
+  const { image, width, height } = await request;
   const layer = document.createElement('canvas');
-  layer.width = Math.max(1, Math.round(image.naturalWidth * spec.scale * ratio));
-  layer.height = Math.max(1, Math.round(image.naturalHeight * spec.scale * ratio));
+  // Cached pixels are bounded; layout uses the oriented source dimensions.
+  layer.width = Math.max(1, Math.round(Math.max(1, Math.round(width * spec.scale)) * ratio));
+  layer.height = Math.max(1, Math.round(Math.max(1, Math.round(height * spec.scale)) * ratio));
   layer.getContext('2d')?.drawImage(image, 0, 0, layer.width, layer.height);
   return layer;
 }
