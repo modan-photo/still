@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use ab_glyph::{point, Font, FontArc, FontVec, PxScale, ScaleFont, VariableFont};
+use ab_glyph::{point, Font, FontArc, FontVec, OutlineCurve, PxScale, ScaleFont, VariableFont};
 use image::{
     imageops::{self, FilterType},
     Rgba, RgbaImage,
@@ -160,22 +160,14 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
     let width = widths.iter().copied().fold(0.0, f32::max).ceil() as u32 + padding * 2;
     let height = (line_height * lines.len().max(1) as f32).ceil() as u32 + padding * 2;
     let mut fill_layer = RgbaImage::new(width.max(1), height.max(1));
-    let mut stroke_mask = RgbaImage::new(width.max(1), height.max(1));
+    let mut stroke_path = tiny_skia::PathBuilder::new();
     let fill = parse_color(&font_spec.color)?;
     let stroke = parse_color(&font_spec.stroke_color)?;
 
     for (line_index, line) in lines.iter().enumerate() {
         let y = padding as f32 + line_index as f32 * line_height;
         if font_spec.stroke_width > 0.0 {
-            draw_fallback_line(
-                &mut stroke_mask,
-                line,
-                padding as f32,
-                y,
-                size,
-                Rgba([255, 255, 255, 255]),
-                &fonts,
-            );
+            append_stroke_line(&mut stroke_path, line, padding as f32, y, size, &fonts);
         }
         draw_fallback_line(&mut fill_layer, line, padding as f32, y, size, fill, &fonts);
     }
@@ -194,36 +186,120 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
         );
     }
     if font_spec.stroke_width > 0.0 {
-        let stroke_layer = expand_stroke_mask(&stroke_mask, font_spec.stroke_width, stroke);
+        let stroke_layer = render_stroke_path(
+            stroke_path.finish().as_ref(),
+            width.max(1),
+            height.max(1),
+            font_spec.stroke_width,
+            stroke,
+        )?;
         overlay_rgba(&mut result, &stroke_layer, 0, 0);
     }
     overlay_rgba(&mut result, &fill_layer, 0, 0);
     Ok(result)
 }
 
-// Build the coverage union before applying color alpha. Repeated source-over
-// painting would increase opacity with every overlapping shifted glyph.
-fn expand_stroke_mask(mask: &RgbaImage, width: f32, color: Rgba<u8>) -> RgbaImage {
-    let radius = width.ceil().min(24.0) as i32;
-    let offsets: Vec<_> = (-radius..=radius)
-        .flat_map(|y| (-radius..=radius).map(move |x| (x, y)))
-        .filter(|(x, y)| x * x + y * y <= radius * radius)
-        .collect();
-    RgbaImage::from_fn(mask.width(), mask.height(), |x, y| {
-        let mut coverage = 0;
-        for &(ox, oy) in &offsets {
-            let sx = x as i64 + ox as i64;
-            let sy = y as i64 + oy as i64;
-            if sx >= 0 && sy >= 0 && sx < mask.width() as i64 && sy < mask.height() as i64 {
-                coverage = coverage.max(mask.get_pixel(sx as u32, sy as u32)[3]);
-                if coverage == 255 {
-                    break;
+fn append_stroke_line(
+    path: &mut tiny_skia::PathBuilder,
+    text: &str,
+    mut x: f32,
+    y: f32,
+    size: f32,
+    fonts: &[FontArc],
+) {
+    for character in text.chars() {
+        let font = font_for(character, fonts);
+        let scaled = font.as_scaled(em_scale(font, size));
+        let factors = scaled.scale_factor();
+        let transform = |p: ab_glyph::Point| {
+            (
+                x + p.x * factors.horizontal,
+                y + size - p.y * factors.vertical,
+            )
+        };
+        if let Some(outline) = font.outline(font.glyph_id(character)) {
+            let mut contour_start = None;
+            let mut previous = None;
+            for curve in outline.curves {
+                let (start, end) = match curve {
+                    OutlineCurve::Line(a, b) => (a, b),
+                    OutlineCurve::Quad(a, _, c) => (a, c),
+                    OutlineCurve::Cubic(a, _, _, d) => (a, d),
+                };
+                if previous != Some(start) {
+                    if contour_start.is_some() {
+                        path.close();
+                    }
+                    let (px, py) = transform(start);
+                    path.move_to(px, py);
+                    contour_start = Some(start);
+                }
+                match curve {
+                    OutlineCurve::Line(_, b) => {
+                        let (bx, by) = transform(b);
+                        path.line_to(bx, by);
+                    }
+                    OutlineCurve::Quad(_, b, c) => {
+                        let (bx, by) = transform(b);
+                        let (cx, cy) = transform(c);
+                        path.quad_to(bx, by, cx, cy);
+                    }
+                    OutlineCurve::Cubic(_, b, c, d) => {
+                        let (bx, by) = transform(b);
+                        let (cx, cy) = transform(c);
+                        let (dx, dy) = transform(d);
+                        path.cubic_to(bx, by, cx, cy, dx, dy);
+                    }
+                }
+                previous = Some(end);
+                if contour_start == Some(end) {
+                    path.close();
+                    contour_start = None;
+                    previous = None;
                 }
             }
+            if contour_start.is_some() {
+                path.close();
+            }
         }
+        x += scaled.h_advance(font.glyph_id(character));
+    }
+}
+
+fn render_stroke_path(
+    path: Option<&tiny_skia::Path>,
+    width: u32,
+    height: u32,
+    radius: f32,
+    color: Rgba<u8>,
+) -> Result<RgbaImage, AppError> {
+    let Some(path) = path else {
+        return Ok(RgbaImage::new(width, height));
+    };
+    let mut mask = tiny_skia::Pixmap::new(width, height).ok_or_else(|| {
+        AppError::InvalidInput("watermark stroke dimensions are too large".into())
+    })?;
+    let mut paint = tiny_skia::Paint::default();
+    paint.set_color_rgba8(255, 255, 255, 255);
+    paint.anti_alias = true;
+    let stroke = tiny_skia::Stroke {
+        width: radius * 2.0,
+        line_join: tiny_skia::LineJoin::Round,
+        ..Default::default()
+    };
+    mask.stroke_path(
+        path,
+        &paint,
+        &stroke,
+        tiny_skia::Transform::identity(),
+        None,
+    );
+    // Tint the whole coverage once, preserving straight RGB and translucent alpha.
+    Ok(RgbaImage::from_fn(width, height, |x, y| {
+        let coverage = mask.pixels()[(y * width + x) as usize].alpha();
         let alpha = (coverage as u16 * color[3] as u16 + 127) / 255;
         Rgba([color[0], color[1], color[2], alpha as u8])
-    })
+    }))
 }
 
 fn load_fonts(spec: &FontSpec) -> Result<Vec<FontArc>, AppError> {
@@ -612,15 +688,52 @@ mod tests {
     }
 
     #[test]
-    fn stroke_mask_union_preserves_coverage_and_round_neighborhood() {
-        let mut mask = RgbaImage::new(5, 5);
-        mask.put_pixel(2, 2, Rgba([255, 255, 255, 128]));
-        mask.put_pixel(3, 2, Rgba([255, 255, 255, 128]));
-        let stroke = super::expand_stroke_mask(&mask, 1.0, Rgba([120, 200, 40, 128]));
-        assert_eq!(stroke.get_pixel(2, 2)[3], 64);
-        assert_eq!(stroke.get_pixel(2, 1)[3], 64);
-        assert_eq!(stroke.get_pixel(1, 1)[3], 0);
-        assert!(stroke.pixels().all(|p| p[3] <= 64));
+    fn vector_stroke_preserves_empty_interiors_and_fractional_widths() {
+        let path = tiny_skia::PathBuilder::from_rect(
+            tiny_skia::Rect::from_xywh(8.0, 8.0, 24.0, 24.0).unwrap(),
+        );
+        let render = |radius| {
+            super::render_stroke_path(Some(&path), 40, 40, radius, Rgba([120, 200, 40, 128]))
+                .unwrap()
+        };
+        let half = render(0.5);
+        let full = render(1.0);
+        let alpha_sum = |image: &RgbaImage| image.pixels().map(|p| p[3] as u64).sum::<u64>();
+        assert!(alpha_sum(&half) > 0);
+        assert!(alpha_sum(&half) < alpha_sum(&full));
+        assert_eq!(full.get_pixel(20, 20)[3], 0);
+        assert_eq!(full.get_pixel(8, 20)[3], 128);
+        assert!(full.pixels().all(|p| p[3] <= 128));
+    }
+
+    #[test]
+    fn transparent_text_fill_leaves_thick_glyph_interiors_empty() {
+        let mut spec = text_fixture("O", 900);
+        let font = spec.font.as_mut().unwrap();
+        font.size = 128.0;
+        font.color = "#FFFFFF00".into();
+        font.stroke_width = 0.5;
+        font.stroke_color = "#FFFFFF".into();
+        let stroke = super::render_text(&spec, 256).unwrap();
+        spec.font.as_mut().unwrap().color = "#FFFFFF".into();
+        let filled = super::render_text(&spec, 256).unwrap();
+        let interior = stroke
+            .pixels()
+            .zip(filled.pixels())
+            .filter(|(a, b)| a[3] == 0 && b[3] == 255)
+            .count();
+        assert!(
+            interior > 100,
+            "thick glyph has no unpainted interior: {interior}"
+        );
+    }
+
+    #[test]
+    fn empty_text_has_no_stroke_pixels() {
+        let mut spec = text_fixture(" \n", 400);
+        spec.font.as_mut().unwrap().stroke_width = 0.5;
+        let rendered = super::render_text(&spec, 128).unwrap();
+        assert!(rendered.pixels().all(|p| p[3] == 0));
     }
 
     #[test]

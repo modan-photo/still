@@ -446,13 +446,15 @@ mod tests {
     use super::save_image_atomic;
 
     fn replacement_fixture() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+        static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let directory = std::env::temp_dir().join(format!(
-            "still-replace-{}-{}",
+            "still-replace-{}-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         fs::create_dir(&directory).unwrap();
         let staged = directory.join("staged.png");

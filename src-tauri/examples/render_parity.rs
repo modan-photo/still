@@ -157,6 +157,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             false,
         ));
     }
+    for width in [0.5, 1.0, 1.5] {
+        let mut mark = watermark.clone();
+        mark["content"] = json!("O");
+        mark["opacity"] = json!(1);
+        mark["font"]["size"] = json!(64);
+        mark["font"]["weight"] = json!(900);
+        mark["font"]["color"] = json!("#FFFFFF00");
+        mark["font"]["strokeColor"] = json!("#78C82880");
+        mark["font"]["strokeWidth"] = json!(width);
+        cases.push((
+            format!("transparent-outline-{width}"),
+            json!({"fixtureSource": "transparent.png", "watermark": mark}),
+            false,
+        ));
+    }
     let mut manifest = Vec::new();
     for (id, mut value, exact) in cases {
         value["version"] = json!(1);
