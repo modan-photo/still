@@ -119,6 +119,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             false,
         ));
     }
+    for (id, content, stroke_width) in [
+        ("italic-latin", "Still", 0.0),
+        ("italic-chinese", "测试", 0.0),
+        ("italic-multiline-stroke", "Still\n测试", 1.5),
+    ] {
+        let mut mark = watermark.clone();
+        mark["content"] = json!(content);
+        mark["opacity"] = json!(1);
+        mark["font"]["size"] = json!(32);
+        mark["font"]["italic"] = json!(true);
+        mark["font"]["strokeWidth"] = json!(stroke_width);
+        cases.push((
+            format!("transparent-{id}"),
+            json!({"fixtureSource": "transparent.png", "watermark": mark}),
+            false,
+        ));
+    }
     let mut percent_mark = watermark.clone();
     percent_mark["font"]["size"] = json!(8);
     percent_mark["font"]["sizeUnit"] = json!("percent");

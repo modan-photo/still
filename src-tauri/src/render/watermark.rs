@@ -32,6 +32,13 @@ const FALLBACK_FONT_PATHS: &[&str] = if cfg!(target_os = "windows") {
     ]
 };
 
+const SYNTHETIC_ITALIC_DEGREES: f32 = 14.0;
+
+struct LoadedFont {
+    font: FontArc,
+    synthesize_italic: bool,
+}
+
 pub fn apply_watermark(
     base: &mut RgbaImage,
     spec: &WatermarkSpec,
@@ -152,9 +159,15 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
         .map(|line| measure_line(line, &fonts, size))
         .collect();
     let shadow = &font_spec.shadow;
+    let italic_overhang = if font_spec.italic {
+        size * SYNTHETIC_ITALIC_DEGREES.to_radians().tan()
+    } else {
+        0.0
+    };
     let padding = (font_spec.stroke_width
         + shadow.blur * 2.0
         + shadow.offset_x.abs().max(shadow.offset_y.abs())
+        + italic_overhang
         + 4.0)
         .ceil() as u32;
     let width = widths.iter().copied().fold(0.0, f32::max).ceil() as u32 + padding * 2;
@@ -192,15 +205,21 @@ fn append_stroke_line(
     mut x: f32,
     y: f32,
     size: f32,
-    fonts: &[FontArc],
+    fonts: &[LoadedFont],
 ) {
     for character in text.chars() {
-        let font = font_for(character, fonts);
+        let loaded = font_for(character, fonts);
+        let font = &loaded.font;
         let scaled = font.as_scaled(em_scale(font, size));
         let factors = scaled.scale_factor();
         let transform = |p: ab_glyph::Point| {
+            let italic_shift = if loaded.synthesize_italic {
+                p.y * factors.vertical * SYNTHETIC_ITALIC_DEGREES.to_radians().tan()
+            } else {
+                0.0
+            };
             (
-                x + p.x * factors.horizontal,
+                x + p.x * factors.horizontal + italic_shift,
                 y + size - p.y * factors.vertical,
             )
         };
@@ -289,7 +308,7 @@ fn render_stroke_path(
     }))
 }
 
-fn load_fonts(spec: &FontSpec) -> Result<Vec<FontArc>, AppError> {
+fn load_fonts(spec: &FontSpec) -> Result<Vec<LoadedFont>, AppError> {
     let mut paths = Vec::<PathBuf>::new();
     if let Some(path) = &spec.path {
         let selected = PathBuf::from(path);
@@ -300,13 +319,31 @@ fn load_fonts(spec: &FontSpec) -> Result<Vec<FontArc>, AppError> {
         }
     }
     paths.extend(FALLBACK_FONT_PATHS.iter().map(PathBuf::from));
-    let fonts: Vec<FontArc> = paths
+    let fonts: Vec<LoadedFont> = paths
         .into_iter()
         .filter_map(|path| fs::read(path).ok())
         .filter_map(|bytes| FontVec::try_from_vec(bytes).ok())
         .map(|mut font| {
             font.set_variation(b"wght", spec.weight as f32);
-            FontArc::new(font)
+            let has_italic_face = font.italic_angle().abs() > f32::EPSILON;
+            let axes = font.variations();
+            let italic_axis = axes.iter().find_map(|axis| {
+                if axis.tag == *b"ital" {
+                    Some((b"ital", 1.0))
+                } else if axis.tag == *b"slnt" {
+                    Some((b"slnt", -SYNTHETIC_ITALIC_DEGREES))
+                } else {
+                    None
+                }
+            });
+            let applied_italic_axis = spec.italic && italic_axis.is_some();
+            if let Some((tag, value)) = italic_axis.filter(|_| spec.italic) {
+                font.set_variation(tag, value);
+            }
+            LoadedFont {
+                font: FontArc::new(font),
+                synthesize_italic: spec.italic && !has_italic_face && !applied_italic_axis,
+            }
         })
         .collect();
     if fonts.is_empty() {
@@ -318,10 +355,10 @@ fn load_fonts(spec: &FontSpec) -> Result<Vec<FontArc>, AppError> {
     }
 }
 
-fn font_for(character: char, fonts: &[FontArc]) -> &FontArc {
+fn font_for(character: char, fonts: &[LoadedFont]) -> &LoadedFont {
     fonts
         .iter()
-        .find(|font| font.glyph_id(character).0 != 0)
+        .find(|font| font.font.glyph_id(character).0 != 0)
         .unwrap_or(&fonts[0])
 }
 
@@ -333,10 +370,10 @@ fn em_scale(font: &FontArc, size: f32) -> PxScale {
     )
 }
 
-fn measure_line(line: &str, fonts: &[FontArc], size: f32) -> f32 {
+fn measure_line(line: &str, fonts: &[LoadedFont], size: f32) -> f32 {
     line.chars()
         .map(|character| {
-            let font = font_for(character, fonts);
+            let font = &font_for(character, fonts).font;
             font.as_scaled(em_scale(font, size))
                 .h_advance(font.glyph_id(character))
         })
@@ -350,10 +387,11 @@ fn draw_fallback_line(
     y: f32,
     size: f32,
     color: Rgba<u8>,
-    fonts: &[FontArc],
+    fonts: &[LoadedFont],
 ) {
     for character in text.chars() {
-        let font = font_for(character, fonts);
+        let loaded = font_for(character, fonts);
+        let font = &loaded.font;
         let scale = em_scale(font, size);
         let advance = font.as_scaled(scale).h_advance(font.glyph_id(character));
         // Both renderers use an alphabetic baseline one em below each line top.
@@ -366,10 +404,26 @@ fn draw_fallback_line(
             outline.draw(|gx, gy, coverage| {
                 let px = bounds.min.x as i32 + gx as i32;
                 let py = bounds.min.y as i32 + gy as i32;
-                if px >= 0 && py >= 0 && px < target.width() as i32 && py < target.height() as i32 {
+                if py < 0 || py >= target.height() as i32 {
+                    return;
+                }
+                let italic_shift = if loaded.synthesize_italic {
+                    (y + size - (py as f32 + 0.5)) * SYNTHETIC_ITALIC_DEGREES.to_radians().tan()
+                } else {
+                    0.0
+                };
+                let shifted_x = px as f32 + italic_shift;
+                let left = shifted_x.floor() as i32;
+                let fraction = shifted_x - left as f32;
+                for (target_x, weight) in [(left, 1.0 - fraction), (left + 1, fraction)] {
+                    if target_x < 0 || target_x >= target.width() as i32 || weight <= 0.0 {
+                        continue;
+                    }
                     let mut covered = color;
-                    covered[3] = (color[3] as f32 * coverage).round().clamp(0.0, 255.0) as u8;
-                    blend_rgba(target.get_pixel_mut(px as u32, py as u32), covered);
+                    covered[3] = (color[3] as f32 * coverage * weight)
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
+                    blend_rgba(target.get_pixel_mut(target_x as u32, py as u32), covered);
                 }
             });
         }
@@ -679,6 +733,42 @@ mod tests {
     }
 
     #[test]
+    fn italic_synthesizes_a_slanted_fallback_when_the_font_has_no_italic_face() {
+        let regular = text_fixture("Still 测试", 400);
+        let mut italic = regular.clone();
+        italic.font.as_mut().unwrap().italic = true;
+        let regular_fonts = load_fonts(regular.font.as_ref().unwrap()).unwrap();
+        let italic_fonts = load_fonts(italic.font.as_ref().unwrap()).unwrap();
+        assert!(font_for('S', &italic_fonts).synthesize_italic);
+
+        let mut regular_line = RgbaImage::new(160, 64);
+        let mut italic_line = regular_line.clone();
+        super::draw_fallback_line(
+            &mut regular_line,
+            "Still 测试",
+            8.0,
+            8.0,
+            32.0,
+            Rgba([255; 4]),
+            &regular_fonts,
+        );
+        super::draw_fallback_line(
+            &mut italic_line,
+            "Still 测试",
+            8.0,
+            8.0,
+            32.0,
+            Rgba([255; 4]),
+            &italic_fonts,
+        );
+        assert_ne!(regular_line, italic_line);
+        assert!(
+            super::render_text(&italic, 128).unwrap().width()
+                > super::render_text(&regular, 128).unwrap().width()
+        );
+    }
+
+    #[test]
     fn clipped_source_over_preserves_opaque_background_and_rounds_color() {
         let mut base = RgbaImage::from_pixel(2, 1, Rgba([64, 64, 64, 255]));
         let mark = RgbaImage::from_pixel(2, 1, Rgba([240, 240, 240, 128]));
@@ -920,8 +1010,8 @@ mod tests {
             shadow: TextShadow::default(),
         };
         let fonts = load_fonts(&spec).expect("load bundled fonts");
-        assert_ne!(font_for('中', &fonts).glyph_id('中').0, 0);
-        assert_ne!(font_for('😀', &fonts).glyph_id('😀').0, 0);
+        assert_ne!(font_for('中', &fonts).font.glyph_id('中').0, 0);
+        assert_ne!(font_for('😀', &fonts).font.glyph_id('😀').0, 0);
     }
 
     #[test]

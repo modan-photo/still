@@ -62,6 +62,7 @@ export function watermarkTextLayout(
     1,
     (font.sizeUnit === 'percent' ? (originalLongEdge * font.size) / 100 : font.size) * spec.scale,
   );
+  const italicOverhang = font.italic ? sourceSize * Math.tan((14 * Math.PI) / 180) : 0;
   return {
     size: sourceSize * pixelScale,
     lineHeight: sourceSize * 1.28 * pixelScale,
@@ -70,6 +71,7 @@ export function watermarkTextLayout(
         font.strokeWidth +
           font.shadow.blur * 2 +
           Math.max(Math.abs(font.shadow.offsetX), Math.abs(font.shadow.offsetY)) +
+          italicOverhang +
           4,
       ) * pixelScale,
   };
