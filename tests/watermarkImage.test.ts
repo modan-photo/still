@@ -64,6 +64,66 @@ function render(path: string, ratio = 0.25) {
 }
 
 describe('image watermark preview', () => {
+  it.each([false, true])(
+    'rounds negative half-pixel placement away from zero (free=%s)',
+    async (free) => {
+      const bounds = await renderWatermarkPreview(
+        canvas() as unknown as HTMLCanvasElement,
+        {
+          ...DEFAULT_WATERMARK,
+          type: 'image',
+          path: `negative-${free}.png`,
+          scale: 0.5,
+          position: 'topLeft',
+          offsetX: free ? 1499.5 : -0.5,
+          offsetY: free ? 747.5 : -2.5,
+          ...(free ? { freePosition: { x: 0, y: 0 } } : {}),
+        },
+        6000,
+        1,
+      );
+      // At full density the mark is 3000×1500; free positioning subtracts half its size.
+      expect(bounds).toMatchObject({ x: -1, y: -3 });
+    },
+  );
+
+  it('uses integer row staggering for odd tile steps', async () => {
+    vi.mocked(loadImage).mockResolvedValueOnce({
+      path: 'tile.png',
+      hash: 'tile',
+      width: 4,
+      height: 2,
+      format: 'png',
+      orientation: 1,
+      previewUrl: null,
+      thumbUrl: 'thumb.webp',
+    });
+    const target = { ...canvas(), width: 12, height: 8 };
+    await renderWatermarkPreview(
+      target as unknown as HTMLCanvasElement,
+      {
+        ...DEFAULT_WATERMARK,
+        type: 'image',
+        path: 'tile.png',
+        scale: 1,
+        tiled: true,
+        tileGap: 1,
+      },
+      12,
+      1,
+    );
+    const positions = drawImage.mock.calls
+      .filter((args) => args.length === 3)
+      .map((args) => args.slice(1));
+    expect(positions.filter(([, y]) => y === 1)).toEqual([
+      [-6, 1],
+      [-1, 1],
+      [4, 1],
+      [9, 1],
+    ]);
+    expect(positions.every(([x, y]) => Number.isInteger(x) && Number.isInteger(y))).toBe(true);
+  });
+
   it('sizes a downsampled cache using original dimensions at different preview scales', async () => {
     expect(await render('large.png')).toEqual({ x: 225, y: 213, width: 750, height: 375 });
     expect(await render('large.png', 0.1)).toEqual({ x: 450, y: 325, width: 300, height: 150 });

@@ -35,7 +35,12 @@ export async function renderWatermarkPreview(
     const stepY = rotated.height + gap;
     let row = 0;
     for (let y = -rotated.height; y < canvas.height; y += stepY, row += 1) {
-      for (let x = -rotated.width - (row % 2 ? stepX / 2 : 0); x < canvas.width; x += stepX)
+      // Match Rust's integer stagger instead of introducing half-pixel blur.
+      for (
+        let x = -rotated.width - (row % 2 ? Math.floor(stepX / 2) : 0);
+        x < canvas.width;
+        x += stepX
+      )
         context.drawImage(rotated, x, y);
     }
     context.restore();
@@ -163,6 +168,11 @@ function rotate(source: HTMLCanvasElement, degrees: number): HTMLCanvasElement {
   return layer;
 }
 
+// Rust f32::round rounds ties away from zero; Math.round rounds toward +infinity.
+function roundCoordinate(value: number): number {
+  return value < 0 ? -Math.round(-value) : Math.round(value);
+}
+
 function placement(
   canvas: HTMLCanvasElement,
   mark: HTMLCanvasElement,
@@ -171,8 +181,12 @@ function placement(
 ): WatermarkBounds {
   if (spec.freePosition)
     return {
-      x: Math.round(spec.freePosition.x * canvas.width - mark.width / 2 + spec.offsetX * ratio),
-      y: Math.round(spec.freePosition.y * canvas.height - mark.height / 2 + spec.offsetY * ratio),
+      x: roundCoordinate(
+        spec.freePosition.x * canvas.width - mark.width / 2 + spec.offsetX * ratio,
+      ),
+      y: roundCoordinate(
+        spec.freePosition.y * canvas.height - mark.height / 2 + spec.offsetY * ratio,
+      ),
       width: mark.width,
       height: mark.height,
     };
@@ -189,7 +203,7 @@ function placement(
       : row === 1
         ? (canvas.height - mark.height) / 2 + spec.offsetY * ratio
         : canvas.height - mark.height - spec.offsetY * ratio;
-  return { x: Math.round(x), y: Math.round(y), width: mark.width, height: mark.height };
+  return { x: roundCoordinate(x), y: roundCoordinate(y), width: mark.width, height: mark.height };
 }
 
 export function anchorIndex(anchor: Anchor): [number, number] {

@@ -582,6 +582,34 @@ mod tests {
     }
 
     #[test]
+    fn negative_half_pixel_anchors_and_free_positions_round_away_from_zero() {
+        let base = RgbaImage::new(1200, 800);
+        let mark = RgbaImage::new(3000, 1500);
+        let mut spec = text_fixture("", 400);
+        spec.position = Anchor::TopLeft;
+        spec.offset_x = -0.5;
+        spec.offset_y = -2.5;
+        assert_eq!(super::placement(&base, &mark, &spec), (-1, -3));
+        spec.free_position = Some(crate::render::spec::NormalizedPoint { x: 0.0, y: 0.0 });
+        spec.offset_x = 1499.5;
+        spec.offset_y = 747.5;
+        assert_eq!(super::placement(&base, &mark, &spec), (-1, -3));
+    }
+
+    #[test]
+    fn odd_tile_steps_stagger_rows_on_integer_pixels() {
+        let mut base = RgbaImage::new(12, 8);
+        let mark = RgbaImage::from_pixel(4, 2, Rgba([255, 255, 255, 255]));
+        tile(&mut base, &mark, 1);
+        let opaque_x: Vec<_> = (0..12)
+            .filter(|&x| base.get_pixel(x, 1)[3] == 255)
+            .collect();
+        // Row starts at -6, -1, 4, 9; each mark covers four pixels.
+        assert_eq!(opaque_x, vec![0, 1, 2, 4, 5, 6, 7, 9, 10, 11]);
+        assert!((0..12).all(|x| base.get_pixel(x, 0)[3] == 0));
+    }
+
+    #[test]
     fn tiling_reaches_canvas_edges() {
         let mut base = RgbaImage::new(100, 100);
         let mark = RgbaImage::from_pixel(20, 10, Rgba([255, 255, 255, 255]));
