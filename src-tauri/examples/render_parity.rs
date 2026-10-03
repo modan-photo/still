@@ -136,6 +136,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             false,
         ));
     }
+    for (id, content) in [
+        ("ligature", "office affine"),
+        ("arabic", "مرحبا بالعالم"),
+        ("bidi", "Still مرحبا 2026"),
+    ] {
+        let mut mark = watermark.clone();
+        mark["content"] = json!(content);
+        mark["opacity"] = json!(1);
+        mark["font"]["size"] = json!(18);
+        cases.push((
+            format!("transparent-{id}"),
+            json!({"fixtureSource": "transparent.png", "watermark": mark}),
+            false,
+        ));
+    }
     let mut percent_mark = watermark.clone();
     percent_mark["font"]["size"] = json!(8);
     percent_mark["font"]["sizeUnit"] = json!("percent");

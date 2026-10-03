@@ -37,6 +37,7 @@ pub fn watermark_fonts(app: AppHandle, include_system: bool) -> Result<Vec<FontI
         .join("fonts");
     for (file, family) in [
         ("NotoSansSC-VF.ttf", "Noto Sans SC"),
+        ("NotoSansArabic-Variable.ttf", "Noto Sans Arabic"),
         ("NotoSerifSC-VF.ttf", "Noto Serif SC"),
         ("Inter-Variable.ttf", "Inter"),
         ("PlayfairDisplay-Variable.ttf", "Playfair Display"),

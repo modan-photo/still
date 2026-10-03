@@ -41,6 +41,9 @@ tokio-util = "0.7"
 tauri-plugin-opener = "=2.6.0"
 webp = "0.3"
 tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
+rustybuzz = "0.20.1"
+unicode-bidi = "0.3.18"
+unicode-script = "0.5.8"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }

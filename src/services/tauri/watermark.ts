@@ -1,8 +1,16 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import type { WatermarkSpec } from '../../types/renderSpec';
 
-export interface FontInfo { family: string; path: string; builtin: boolean }
-export interface WatermarkPreset { id: string; name: string; watermark: WatermarkSpec }
+export interface FontInfo {
+  family: string;
+  path: string;
+  builtin: boolean;
+}
+export interface WatermarkPreset {
+  id: string;
+  name: string;
+  watermark: WatermarkSpec;
+}
 
 const fontPromises = new Map<boolean, Promise<FontInfo[]>>();
 
@@ -11,11 +19,12 @@ export function listWatermarkFonts(includeSystem = false): Promise<FontInfo[]> {
   if (!request) {
     request = isTauri()
       ? invoke<FontInfo[]>('watermark_fonts', { includeSystem }).then(async (fonts) => {
-        await Promise.all(fonts.filter((font) => font.builtin).map(loadBundledFont));
-        return fonts;
-      })
+          await Promise.all(fonts.filter((font) => font.builtin).map(loadBundledFont));
+          return fonts;
+        })
       : Promise.resolve([
           { family: 'Noto Sans SC', path: '', builtin: true },
+          { family: 'Noto Sans Arabic', path: '', builtin: true },
           { family: 'Noto Serif SC', path: '', builtin: true },
           { family: 'Noto Emoji', path: '', builtin: true },
           { family: 'Inter', path: '', builtin: true },
@@ -45,7 +54,8 @@ export async function saveWatermarkPreset(preset: WatermarkPreset): Promise<Wate
   if (isTauri()) return invoke<WatermarkPreset[]>('watermark_preset_save', { preset });
   const presets = await listWatermarkPresets();
   const index = presets.findIndex((entry) => entry.id === preset.id);
-  if (index >= 0) presets[index] = preset; else presets.push(preset);
+  if (index >= 0) presets[index] = preset;
+  else presets.push(preset);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
   return presets;
 }

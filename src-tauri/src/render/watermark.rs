@@ -1,10 +1,13 @@
-use std::{fs, path::PathBuf};
+use std::{collections::HashSet, fs, ops::Range, path::PathBuf};
 
 use ab_glyph::{point, Font, FontArc, FontVec, OutlineCurve, PxScale, ScaleFont, VariableFont};
 use image::{
     imageops::{self, FilterType},
     Rgba, RgbaImage,
 };
+use rustybuzz::{Direction, Face, Feature, UnicodeBuffer, Variation};
+use unicode_bidi::{BidiInfo, Level};
+use unicode_script::{Script, UnicodeScript};
 
 use crate::{
     error::AppError,
@@ -37,6 +40,19 @@ const SYNTHETIC_ITALIC_DEGREES: f32 = 14.0;
 struct LoadedFont {
     font: FontArc,
     synthesize_italic: bool,
+    variations: Vec<Variation>,
+}
+
+struct PositionedGlyph {
+    font_index: usize,
+    glyph_id: ab_glyph::GlyphId,
+    x: f32,
+    y_offset: f32,
+}
+
+struct ShapedLine {
+    glyphs: Vec<PositionedGlyph>,
+    width: f32,
 }
 
 pub fn apply_watermark(
@@ -154,9 +170,9 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
     let size = size.max(1.0);
     let lines: Vec<&str> = spec.content.split('\n').collect();
     let line_height = size * 1.28;
-    let widths: Vec<f32> = lines
+    let shaped_lines: Vec<ShapedLine> = lines
         .iter()
-        .map(|line| measure_line(line, &fonts, size))
+        .map(|line| shape_line(line, &fonts, size))
         .collect();
     let shadow = &font_spec.shadow;
     let italic_overhang = if font_spec.italic {
@@ -170,13 +186,18 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
         + italic_overhang
         + 4.0)
         .ceil() as u32;
-    let width = widths.iter().copied().fold(0.0, f32::max).ceil() as u32 + padding * 2;
+    let width = shaped_lines
+        .iter()
+        .map(|line| line.width)
+        .fold(0.0, f32::max)
+        .ceil() as u32
+        + padding * 2;
     let height = (line_height * lines.len().max(1) as f32).ceil() as u32 + padding * 2;
     let fill = parse_color(&font_spec.color)?;
     let stroke = parse_color(&font_spec.stroke_color)?;
     let mut result = RgbaImage::new(width.max(1), height.max(1));
 
-    for (line_index, line) in lines.iter().enumerate() {
+    for (line_index, line) in shaped_lines.iter().enumerate() {
         let y = padding as f32 + line_index as f32 * line_height;
         if font_spec.stroke_width > 0.0 {
             let mut stroke_path = tiny_skia::PathBuilder::new();
@@ -201,14 +222,14 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
 
 fn append_stroke_line(
     path: &mut tiny_skia::PathBuilder,
-    text: &str,
-    mut x: f32,
+    line: &ShapedLine,
+    origin_x: f32,
     y: f32,
     size: f32,
     fonts: &[LoadedFont],
 ) {
-    for character in text.chars() {
-        let loaded = font_for(character, fonts);
+    for glyph in &line.glyphs {
+        let loaded = &fonts[glyph.font_index];
         let font = &loaded.font;
         let scaled = font.as_scaled(em_scale(font, size));
         let factors = scaled.scale_factor();
@@ -219,11 +240,11 @@ fn append_stroke_line(
                 0.0
             };
             (
-                x + p.x * factors.horizontal + italic_shift,
-                y + size - p.y * factors.vertical,
+                origin_x + glyph.x + p.x * factors.horizontal + italic_shift,
+                y + size - glyph.y_offset - p.y * factors.vertical,
             )
         };
-        if let Some(outline) = font.outline(font.glyph_id(character)) {
+        if let Some(outline) = font.outline(glyph.glyph_id) {
             let mut contour_start = None;
             let mut previous = None;
             for curve in outline.curves {
@@ -268,7 +289,6 @@ fn append_stroke_line(
                 path.close();
             }
         }
-        x += scaled.h_advance(font.glyph_id(character));
     }
 }
 
@@ -315,18 +335,28 @@ fn load_fonts(spec: &FontSpec) -> Result<Vec<LoadedFont>, AppError> {
         paths.push(selected.clone());
         if let Some(directory) = selected.parent() {
             paths.push(directory.join("NotoSansSC-VF.ttf"));
+            paths.push(directory.join("NotoSansArabic-Variable.ttf"));
             paths.push(directory.join("NotoEmoji-Variable.ttf"));
         }
     }
     paths.extend(FALLBACK_FONT_PATHS.iter().map(PathBuf::from));
+    let mut seen = HashSet::new();
+    paths.retain(|path| seen.insert(path.clone()));
     let fonts: Vec<LoadedFont> = paths
         .into_iter()
         .filter_map(|path| fs::read(path).ok())
         .filter_map(|bytes| FontVec::try_from_vec(bytes).ok())
         .map(|mut font| {
-            font.set_variation(b"wght", spec.weight as f32);
-            let has_italic_face = font.italic_angle().abs() > f32::EPSILON;
             let axes = font.variations();
+            let mut variations = Vec::new();
+            if axes.iter().any(|axis| axis.tag == *b"wght") {
+                font.set_variation(b"wght", spec.weight as f32);
+                variations.push(Variation {
+                    tag: rustybuzz::ttf_parser::Tag::from_bytes(b"wght"),
+                    value: spec.weight as f32,
+                });
+            }
+            let has_italic_face = font.italic_angle().abs() > f32::EPSILON;
             let italic_axis = axes.iter().find_map(|axis| {
                 if axis.tag == *b"ital" {
                     Some((b"ital", 1.0))
@@ -339,10 +369,15 @@ fn load_fonts(spec: &FontSpec) -> Result<Vec<LoadedFont>, AppError> {
             let applied_italic_axis = spec.italic && italic_axis.is_some();
             if let Some((tag, value)) = italic_axis.filter(|_| spec.italic) {
                 font.set_variation(tag, value);
+                variations.push(Variation {
+                    tag: rustybuzz::ttf_parser::Tag::from_bytes(tag),
+                    value,
+                });
             }
             LoadedFont {
                 font: FontArc::new(font),
                 synthesize_italic: spec.italic && !has_italic_face && !applied_italic_axis,
+                variations,
             }
         })
         .collect();
@@ -355,11 +390,11 @@ fn load_fonts(spec: &FontSpec) -> Result<Vec<LoadedFont>, AppError> {
     }
 }
 
-fn font_for(character: char, fonts: &[LoadedFont]) -> &LoadedFont {
+fn font_index_for(character: char, fonts: &[LoadedFont]) -> usize {
     fonts
         .iter()
-        .find(|font| font.font.glyph_id(character).0 != 0)
-        .unwrap_or(&fonts[0])
+        .position(|font| font.font.glyph_id(character).0 != 0)
+        .unwrap_or(0)
 }
 
 // Canvas font sizes are pixels per em; ab_glyph PxScale instead describes
@@ -370,36 +405,136 @@ fn em_scale(font: &FontArc, size: f32) -> PxScale {
     )
 }
 
-fn measure_line(line: &str, fonts: &[LoadedFont], size: f32) -> f32 {
-    line.chars()
-        .map(|character| {
-            let font = &font_for(character, fonts).font;
-            font.as_scaled(em_scale(font, size))
-                .h_advance(font.glyph_id(character))
+fn shape_line(text: &str, fonts: &[LoadedFont], size: f32) -> ShapedLine {
+    if text.is_empty() {
+        return ShapedLine {
+            glyphs: Vec::new(),
+            width: 0.0,
+        };
+    }
+    let bidi = BidiInfo::new(text, Some(Level::ltr()));
+    let Some(paragraph) = bidi.paragraphs.first() else {
+        return ShapedLine {
+            glyphs: Vec::new(),
+            width: 0.0,
+        };
+    };
+    let (levels, visual_runs) = bidi.visual_runs(paragraph, paragraph.range.clone());
+    let mut glyphs = Vec::new();
+    let mut line_x = 0.0;
+    for visual_run in visual_runs {
+        let rtl = levels[visual_run.start].is_rtl();
+        let mut font_runs = split_font_and_script_runs(text, visual_run, fonts);
+        if rtl {
+            font_runs.reverse();
+        }
+        for (range, font_index) in font_runs {
+            let loaded = &fonts[font_index];
+            let mut face = Face::from_slice(loaded.font.font_data(), 0)
+                .expect("ab_glyph already validated the font data");
+            face.set_variations(&loaded.variations);
+            let mut buffer = UnicodeBuffer::new();
+            buffer.push_str(&text[range]);
+            buffer.set_direction(if rtl {
+                Direction::RightToLeft
+            } else {
+                Direction::LeftToRight
+            });
+            buffer.guess_segment_properties();
+            let no_kerning = Feature::new(rustybuzz::ttf_parser::Tag::from_bytes(b"kern"), 0, ..);
+            let shaped = rustybuzz::shape(&face, &[no_kerning], buffer);
+            let unit_scale = size / face.units_per_em() as f32;
+            let advance = shaped
+                .glyph_positions()
+                .iter()
+                .map(|position| position.x_advance as f32 * unit_scale)
+                .sum::<f32>();
+            let mut pen_x = if advance < 0.0 { -advance } else { 0.0 };
+            for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
+                glyphs.push(PositionedGlyph {
+                    font_index,
+                    glyph_id: ab_glyph::GlyphId(info.glyph_id as u16),
+                    x: line_x + pen_x + position.x_offset as f32 * unit_scale,
+                    y_offset: position.y_offset as f32 * unit_scale,
+                });
+                pen_x += position.x_advance as f32 * unit_scale;
+            }
+            line_x += advance.abs();
+        }
+    }
+    ShapedLine {
+        glyphs,
+        width: line_x,
+    }
+}
+
+fn split_font_and_script_runs(
+    text: &str,
+    range: Range<usize>,
+    fonts: &[LoadedFont],
+) -> Vec<(Range<usize>, usize)> {
+    let mut characters: Vec<(usize, usize, Script)> = text[range.clone()]
+        .char_indices()
+        .map(|(offset, character)| {
+            (
+                range.start + offset,
+                font_index_for(character, fonts),
+                character.script(),
+            )
         })
-        .sum()
+        .collect();
+    let mut inherited = None;
+    for (_, _, script) in &mut characters {
+        if !matches!(*script, Script::Common | Script::Inherited) {
+            inherited = Some(*script);
+        } else if let Some(previous) = inherited {
+            *script = previous;
+        }
+    }
+    let mut inherited = None;
+    for (_, _, script) in characters.iter_mut().rev() {
+        if !matches!(*script, Script::Common | Script::Inherited) {
+            inherited = Some(*script);
+        } else if let Some(next) = inherited {
+            *script = next;
+        }
+    }
+    let mut runs = Vec::new();
+    let Some(&(mut start, mut font_index, mut script)) = characters.first() else {
+        return runs;
+    };
+    for &(offset, next_font, next_script) in characters.iter().skip(1) {
+        if next_font != font_index || next_script != script {
+            runs.push((start..offset, font_index));
+            start = offset;
+            font_index = next_font;
+            script = next_script;
+        }
+    }
+    runs.push((start..range.end, font_index));
+    runs
 }
 
 fn draw_fallback_line(
     target: &mut RgbaImage,
-    text: &str,
-    mut x: f32,
+    line: &ShapedLine,
+    origin_x: f32,
     y: f32,
     size: f32,
     color: Rgba<u8>,
     fonts: &[LoadedFont],
 ) {
-    for character in text.chars() {
-        let loaded = font_for(character, fonts);
+    for glyph in &line.glyphs {
+        let loaded = &fonts[glyph.font_index];
         let font = &loaded.font;
         let scale = em_scale(font, size);
-        let advance = font.as_scaled(scale).h_advance(font.glyph_id(character));
+        let baseline = y + size - glyph.y_offset;
         // Both renderers use an alphabetic baseline one em below each line top.
         // Keep subpixel positions and straight RGB; only coverage changes alpha.
-        let glyph = font
-            .glyph_id(character)
-            .with_scale_and_position(scale, point(x, y + size));
-        if let Some(outline) = font.outline_glyph(glyph) {
+        let raster_glyph = glyph
+            .glyph_id
+            .with_scale_and_position(scale, point(origin_x + glyph.x, baseline));
+        if let Some(outline) = font.outline_glyph(raster_glyph) {
             let bounds = outline.px_bounds();
             outline.draw(|gx, gy, coverage| {
                 let px = bounds.min.x as i32 + gx as i32;
@@ -408,7 +543,7 @@ fn draw_fallback_line(
                     return;
                 }
                 let italic_shift = if loaded.synthesize_italic {
-                    (y + size - (py as f32 + 0.5)) * SYNTHETIC_ITALIC_DEGREES.to_radians().tan()
+                    (baseline - (py as f32 + 0.5)) * SYNTHETIC_ITALIC_DEGREES.to_radians().tan()
                 } else {
                     0.0
                 };
@@ -427,7 +562,6 @@ fn draw_fallback_line(
                 }
             });
         }
-        x += advance;
     }
 }
 
@@ -585,7 +719,7 @@ fn parse_color(value: &str) -> Result<Rgba<u8>, AppError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_opacity, apply_watermark, font_for, load_fonts, tile};
+    use super::{apply_opacity, apply_watermark, font_index_for, load_fonts, tile};
     use crate::render::spec::{
         Anchor, FontSizeUnit, FontSpec, TextShadow, WatermarkSpec, WatermarkType,
     };
@@ -691,7 +825,7 @@ mod tests {
     fn css_em_size_preserves_a_full_width_chinese_glyph() {
         let spec = text_fixture("中", 400);
         let fonts = load_fonts(spec.font.as_ref().unwrap()).unwrap();
-        assert!((super::measure_line("中", &fonts, 32.0) - 32.0).abs() < 0.01);
+        assert!((super::shape_line("中", &fonts, 32.0).width - 32.0).abs() < 0.01);
         let rendered = super::render_text(&spec, 128).unwrap();
         assert_eq!(rendered.width(), 40); // 32px em plus two 4px pads.
     }
@@ -739,13 +873,15 @@ mod tests {
         italic.font.as_mut().unwrap().italic = true;
         let regular_fonts = load_fonts(regular.font.as_ref().unwrap()).unwrap();
         let italic_fonts = load_fonts(italic.font.as_ref().unwrap()).unwrap();
-        assert!(font_for('S', &italic_fonts).synthesize_italic);
+        assert!(italic_fonts[font_index_for('S', &italic_fonts)].synthesize_italic);
+        let regular_shape = super::shape_line("Still 测试", &regular_fonts, 32.0);
+        let italic_shape = super::shape_line("Still 测试", &italic_fonts, 32.0);
 
         let mut regular_line = RgbaImage::new(160, 64);
         let mut italic_line = regular_line.clone();
         super::draw_fallback_line(
             &mut regular_line,
-            "Still 测试",
+            &regular_shape,
             8.0,
             8.0,
             32.0,
@@ -754,7 +890,7 @@ mod tests {
         );
         super::draw_fallback_line(
             &mut italic_line,
-            "Still 测试",
+            &italic_shape,
             8.0,
             8.0,
             32.0,
@@ -766,6 +902,45 @@ mod tests {
             super::render_text(&italic, 128).unwrap().width()
                 > super::render_text(&regular, 128).unwrap().width()
         );
+    }
+
+    #[test]
+    fn shaping_applies_ligatures_and_contextual_arabic_forms() {
+        let spec = text_fixture("office مرحبا", 400);
+        let fonts = load_fonts(spec.font.as_ref().unwrap()).unwrap();
+        let ligature = super::shape_line("office", &fonts, 32.0);
+        assert!(ligature.glyphs.len() < "office".chars().count());
+
+        let arabic = super::shape_line("مرحبا", &fonts, 32.0);
+        let mut nominal: Vec<_> = "مرحبا"
+            .chars()
+            .map(|character| {
+                let font = &fonts[font_index_for(character, &fonts)].font;
+                font.glyph_id(character)
+            })
+            .collect();
+        nominal.reverse();
+        assert_ne!(
+            arabic
+                .glyphs
+                .iter()
+                .map(|glyph| glyph.glyph_id)
+                .collect::<Vec<_>>(),
+            nominal
+        );
+        assert!(arabic.glyphs.iter().all(|glyph| glyph.glyph_id.0 != 0));
+        assert!(arabic.width > 0.0);
+        assert!(arabic.glyphs.windows(2).any(|pair| pair[0].x != pair[1].x));
+    }
+
+    #[test]
+    fn bidi_layout_orders_visual_runs_without_missing_glyphs() {
+        let spec = text_fixture("Still مرحبا 2026", 400);
+        let fonts = load_fonts(spec.font.as_ref().unwrap()).unwrap();
+        let shaped = super::shape_line("Still مرحبا 2026", &fonts, 32.0);
+        assert!(shaped.width > 0.0);
+        assert!(shaped.glyphs.iter().all(|glyph| glyph.glyph_id.0 != 0));
+        assert!(shaped.glyphs.iter().all(|glyph| glyph.x.is_finite()));
     }
 
     #[test]
@@ -1010,8 +1185,8 @@ mod tests {
             shadow: TextShadow::default(),
         };
         let fonts = load_fonts(&spec).expect("load bundled fonts");
-        assert_ne!(font_for('中', &fonts).font.glyph_id('中').0, 0);
-        assert_ne!(font_for('😀', &fonts).font.glyph_id('😀').0, 0);
+        assert_ne!(fonts[font_index_for('中', &fonts)].font.glyph_id('中').0, 0);
+        assert_ne!(fonts[font_index_for('😀', &fonts)].font.glyph_id('😀').0, 0);
     }
 
     #[test]

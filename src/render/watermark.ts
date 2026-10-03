@@ -87,7 +87,7 @@ function renderText(
   const lines = spec.content.split('\n');
   const measure = document.createElement('canvas').getContext('2d')!;
   const style = font.italic ? 'italic ' : '';
-  measure.font = `${style}${font.weight} ${size}px "${font.family}", "Noto Sans SC", "Noto Emoji", sans-serif`;
+  measure.font = `${style}${font.weight} ${size}px "${font.family}", "Noto Sans SC", "Noto Sans Arabic", "Noto Emoji", sans-serif`;
   measure.fontKerning = 'none';
   const width = Math.max(1, ...lines.map((line) => measure.measureText(line).width));
   const layer = document.createElement('canvas');
