@@ -9,7 +9,7 @@ use image::{
 use crate::{
     error::AppError,
     image_io::load::decode_image,
-    render::spec::{Anchor, FontSizeUnit, FontSpec, WatermarkSpec, WatermarkType},
+    render::spec::{Anchor, FontSizeUnit, FontSpec, TextShadow, WatermarkSpec, WatermarkType},
 };
 
 const FALLBACK_FONT_PATHS: &[&str] = if cfg!(target_os = "windows") {
@@ -159,43 +159,30 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
         .ceil() as u32;
     let width = widths.iter().copied().fold(0.0, f32::max).ceil() as u32 + padding * 2;
     let height = (line_height * lines.len().max(1) as f32).ceil() as u32 + padding * 2;
-    let mut fill_layer = RgbaImage::new(width.max(1), height.max(1));
-    let mut stroke_path = tiny_skia::PathBuilder::new();
     let fill = parse_color(&font_spec.color)?;
     let stroke = parse_color(&font_spec.stroke_color)?;
+    let mut result = RgbaImage::new(width.max(1), height.max(1));
 
     for (line_index, line) in lines.iter().enumerate() {
         let y = padding as f32 + line_index as f32 * line_height;
         if font_spec.stroke_width > 0.0 {
+            let mut stroke_path = tiny_skia::PathBuilder::new();
             append_stroke_line(&mut stroke_path, line, padding as f32, y, size, &fonts);
+            let stroke_layer = render_stroke_path(
+                stroke_path.finish().as_ref(),
+                width.max(1),
+                height.max(1),
+                font_spec.stroke_width,
+                stroke,
+            )?;
+            overlay_shadow(&mut result, &stroke_layer, shadow)?;
+            overlay_rgba(&mut result, &stroke_layer, 0, 0);
         }
+        let mut fill_layer = RgbaImage::new(width.max(1), height.max(1));
         draw_fallback_line(&mut fill_layer, line, padding as f32, y, size, fill, &fonts);
+        overlay_shadow(&mut result, &fill_layer, shadow)?;
+        overlay_rgba(&mut result, &fill_layer, 0, 0);
     }
-
-    let mut result = RgbaImage::new(width.max(1), height.max(1));
-    if shadow.blur > 0.0 || shadow.offset_x != 0.0 || shadow.offset_y != 0.0 {
-        let mut shadow_layer = alpha_tint(&fill_layer, parse_color(&shadow.color)?);
-        if shadow.blur > 0.0 {
-            shadow_layer = imageops::blur(&shadow_layer, shadow.blur.min(64.0));
-        }
-        overlay_rgba(
-            &mut result,
-            &shadow_layer,
-            shadow.offset_x.round() as i64,
-            shadow.offset_y.round() as i64,
-        );
-    }
-    if font_spec.stroke_width > 0.0 {
-        let stroke_layer = render_stroke_path(
-            stroke_path.finish().as_ref(),
-            width.max(1),
-            height.max(1),
-            font_spec.stroke_width,
-            stroke,
-        )?;
-        overlay_rgba(&mut result, &stroke_layer, 0, 0);
-    }
-    overlay_rgba(&mut result, &fill_layer, 0, 0);
     Ok(result)
 }
 
@@ -390,11 +377,53 @@ fn draw_fallback_line(
     }
 }
 
-fn alpha_tint(source: &RgbaImage, color: Rgba<u8>) -> RgbaImage {
-    RgbaImage::from_fn(source.width(), source.height(), |x, y| {
-        let alpha = source.get_pixel(x, y)[3] as u16 * color[3] as u16 / 255;
-        Rgba([color[0], color[1], color[2], alpha as u8])
-    })
+fn overlay_shadow(
+    target: &mut RgbaImage,
+    source: &RgbaImage,
+    shadow: &TextShadow,
+) -> Result<(), AppError> {
+    if shadow.blur == 0.0 && shadow.offset_x == 0.0 && shadow.offset_y == 0.0 {
+        return Ok(());
+    }
+    let color = parse_color(&shadow.color)?;
+    if color[3] == 0 {
+        return Ok(());
+    }
+    // Canvas shadows shift coverage before blur, then apply the shadow color.
+    // Bilinear sampling retains fractional offsets without darkening straight RGB.
+    let mut mask = image::GrayImage::from_fn(source.width(), source.height(), |x, y| {
+        let sx = x as f64 - shadow.offset_x as f64;
+        let sy = y as f64 - shadow.offset_y as f64;
+        let left = sx.floor() as i64;
+        let top = sy.floor() as i64;
+        let fx = sx - left as f64;
+        let fy = sy - top as f64;
+        let mut alpha = 0.0;
+        for (ox, oy, weight) in [
+            (0, 0, (1.0 - fx) * (1.0 - fy)),
+            (1, 0, fx * (1.0 - fy)),
+            (0, 1, (1.0 - fx) * fy),
+            (1, 1, fx * fy),
+        ] {
+            let px = left + ox;
+            let py = top + oy;
+            if px >= 0 && py >= 0 && px < source.width() as i64 && py < source.height() as i64 {
+                alpha += weight * source.get_pixel(px as u32, py as u32)[3] as f64;
+            }
+        }
+        image::Luma([alpha.round() as u8])
+    });
+    if shadow.blur > 0.0 {
+        mask = imageops::blur(&mask, (shadow.blur * 0.5).min(64.0));
+    }
+    for (x, y, coverage) in mask.enumerate_pixels() {
+        let alpha = (coverage[0] as u16 * color[3] as u16 + 127) / 255;
+        blend_rgba(
+            target.get_pixel_mut(x, y),
+            Rgba([color[0], color[1], color[2], alpha as u8]),
+        );
+    }
+    Ok(())
 }
 
 fn apply_opacity(image: &mut RgbaImage, opacity: f32) {
@@ -734,6 +763,102 @@ mod tests {
         spec.font.as_mut().unwrap().stroke_width = 0.5;
         let rendered = super::render_text(&spec, 128).unwrap();
         assert!(rendered.pixels().all(|p| p[3] == 0));
+    }
+
+    #[test]
+    fn fractional_shadow_offsets_preserve_color_and_split_coverage() {
+        let mut source = RgbaImage::new(7, 5);
+        source.put_pixel(3, 2, Rgba([255, 255, 255, 255]));
+        for offset in [-0.5, 0.5] {
+            let mut result = RgbaImage::new(7, 5);
+            let shadow = TextShadow {
+                color: "#78C82880".into(),
+                blur: 0.0,
+                offset_x: offset,
+                offset_y: 0.0,
+            };
+            super::overlay_shadow(&mut result, &source, &shadow).unwrap();
+            let neighbor = if offset < 0.0 { 2 } else { 4 };
+            assert_eq!(*result.get_pixel(3, 2), Rgba([120, 200, 40, 64]));
+            assert_eq!(*result.get_pixel(neighbor, 2), Rgba([120, 200, 40, 64]));
+            assert_eq!(result.pixels().filter(|p| p[3] > 0).count(), 2);
+        }
+    }
+
+    #[test]
+    fn shadow_blur_uses_half_the_canvas_blur_as_sigma() {
+        let mut source = RgbaImage::new(51, 51);
+        for y in 23..=27 {
+            for x in 23..=27 {
+                source.put_pixel(x, y, Rgba([255; 4]));
+            }
+        }
+        let mut result = RgbaImage::new(51, 51);
+        let shadow = TextShadow {
+            color: "#FF0000".into(),
+            blur: 8.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        };
+        super::overlay_shadow(&mut result, &source, &shadow).unwrap();
+        let mass: f64 = result.pixels().map(|p| p[3] as f64).sum();
+        let variance: f64 = result
+            .enumerate_pixels()
+            .map(|(x, _, p)| (x as f64 - 25.0).powi(2) * p[3] as f64)
+            .sum::<f64>()
+            / mass;
+        // A 5px square has variance 2; convolving with sigma=4 adds 16.
+        assert!(
+            (variance - 18.0).abs() < 3.0,
+            "unexpected shadow variance: {variance}"
+        );
+        assert!(result
+            .pixels()
+            .filter(|p| p[3] > 0)
+            .all(|p| p[0] == 255 && p[1] == 0 && p[2] == 0));
+    }
+
+    #[test]
+    fn transparent_fill_does_not_suppress_stroke_shadow() {
+        let mut spec = text_fixture("O", 700);
+        let font = spec.font.as_mut().unwrap();
+        font.color = "#FFFFFF00".into();
+        font.stroke_width = 1.0;
+        font.stroke_color = "#FFFFFF".into();
+        font.shadow = TextShadow {
+            color: "#FF0000".into(),
+            blur: 0.0,
+            offset_x: 6.0,
+            offset_y: 0.0,
+        };
+        let rendered = super::render_text(&spec, 128).unwrap();
+        assert!(rendered
+            .pixels()
+            .any(|p| p[3] > 0 && p[0] == 255 && p[1] == 0 && p[2] == 0));
+    }
+
+    #[test]
+    fn disabled_shadow_does_not_change_the_target() {
+        let source = RgbaImage::from_pixel(5, 5, Rgba([255; 4]));
+        let original = RgbaImage::from_pixel(5, 5, Rgba([12, 34, 56, 255]));
+        for shadow in [
+            TextShadow {
+                color: "#FF0000".into(),
+                blur: 0.0,
+                offset_x: 0.0,
+                offset_y: 0.0,
+            },
+            TextShadow {
+                color: "#FF000000".into(),
+                blur: 8.0,
+                offset_x: 1.0,
+                offset_y: 1.0,
+            },
+        ] {
+            let mut result = original.clone();
+            super::overlay_shadow(&mut result, &source, &shadow).unwrap();
+            assert_eq!(result, original);
+        }
     }
 
     #[test]
