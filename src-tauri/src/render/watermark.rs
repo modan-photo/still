@@ -160,29 +160,22 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
     let width = widths.iter().copied().fold(0.0, f32::max).ceil() as u32 + padding * 2;
     let height = (line_height * lines.len().max(1) as f32).ceil() as u32 + padding * 2;
     let mut fill_layer = RgbaImage::new(width.max(1), height.max(1));
-    let mut stroke_layer = RgbaImage::new(width.max(1), height.max(1));
+    let mut stroke_mask = RgbaImage::new(width.max(1), height.max(1));
     let fill = parse_color(&font_spec.color)?;
     let stroke = parse_color(&font_spec.stroke_color)?;
 
     for (line_index, line) in lines.iter().enumerate() {
         let y = padding as f32 + line_index as f32 * line_height;
         if font_spec.stroke_width > 0.0 {
-            let radius = font_spec.stroke_width.ceil().min(24.0) as i32;
-            for oy in -radius..=radius {
-                for ox in -radius..=radius {
-                    if ox * ox + oy * oy <= radius * radius {
-                        draw_fallback_line(
-                            &mut stroke_layer,
-                            line,
-                            padding as f32 + ox as f32,
-                            y + oy as f32,
-                            size,
-                            stroke,
-                            &fonts,
-                        );
-                    }
-                }
-            }
+            draw_fallback_line(
+                &mut stroke_mask,
+                line,
+                padding as f32,
+                y,
+                size,
+                Rgba([255, 255, 255, 255]),
+                &fonts,
+            );
         }
         draw_fallback_line(&mut fill_layer, line, padding as f32, y, size, fill, &fonts);
     }
@@ -200,9 +193,37 @@ fn render_text(spec: &WatermarkSpec, source_long_edge: u32) -> Result<RgbaImage,
             shadow.offset_y.round() as i64,
         );
     }
-    overlay_rgba(&mut result, &stroke_layer, 0, 0);
+    if font_spec.stroke_width > 0.0 {
+        let stroke_layer = expand_stroke_mask(&stroke_mask, font_spec.stroke_width, stroke);
+        overlay_rgba(&mut result, &stroke_layer, 0, 0);
+    }
     overlay_rgba(&mut result, &fill_layer, 0, 0);
     Ok(result)
+}
+
+// Build the coverage union before applying color alpha. Repeated source-over
+// painting would increase opacity with every overlapping shifted glyph.
+fn expand_stroke_mask(mask: &RgbaImage, width: f32, color: Rgba<u8>) -> RgbaImage {
+    let radius = width.ceil().min(24.0) as i32;
+    let offsets: Vec<_> = (-radius..=radius)
+        .flat_map(|y| (-radius..=radius).map(move |x| (x, y)))
+        .filter(|(x, y)| x * x + y * y <= radius * radius)
+        .collect();
+    RgbaImage::from_fn(mask.width(), mask.height(), |x, y| {
+        let mut coverage = 0;
+        for &(ox, oy) in &offsets {
+            let sx = x as i64 + ox as i64;
+            let sy = y as i64 + oy as i64;
+            if sx >= 0 && sy >= 0 && sx < mask.width() as i64 && sy < mask.height() as i64 {
+                coverage = coverage.max(mask.get_pixel(sx as u32, sy as u32)[3]);
+                if coverage == 255 {
+                    break;
+                }
+            }
+        }
+        let alpha = (coverage as u16 * color[3] as u16 + 127) / 255;
+        Rgba([color[0], color[1], color[2], alpha as u8])
+    })
 }
 
 fn load_fonts(spec: &FontSpec) -> Result<Vec<FontArc>, AppError> {
@@ -572,6 +593,34 @@ mod tests {
         apply_watermark(&mut base, &spec, 128).unwrap();
         assert!(base.pixels().any(|p| p[0] != 12));
         assert!(base.pixels().all(|p| p[3] == 255));
+    }
+
+    #[test]
+    fn translucent_stroke_applies_color_alpha_once() {
+        let mut spec = text_fixture("Still 测试", 400);
+        let font = spec.font.as_mut().unwrap();
+        font.color = "#FFFFFF00".into();
+        font.stroke_color = "#78C82880".into();
+        font.stroke_width = 3.0;
+        let rendered = super::render_text(&spec, 128).unwrap();
+        assert!(rendered.pixels().any(|p| p[3] == 128));
+        assert!(rendered.pixels().all(|p| p[3] <= 128));
+        assert!(rendered
+            .pixels()
+            .filter(|p| p[3] > 0)
+            .all(|p| p.0[0..3] == [120, 200, 40]));
+    }
+
+    #[test]
+    fn stroke_mask_union_preserves_coverage_and_round_neighborhood() {
+        let mut mask = RgbaImage::new(5, 5);
+        mask.put_pixel(2, 2, Rgba([255, 255, 255, 128]));
+        mask.put_pixel(3, 2, Rgba([255, 255, 255, 128]));
+        let stroke = super::expand_stroke_mask(&mask, 1.0, Rgba([120, 200, 40, 128]));
+        assert_eq!(stroke.get_pixel(2, 2)[3], 64);
+        assert_eq!(stroke.get_pixel(2, 1)[3], 64);
+        assert_eq!(stroke.get_pixel(1, 1)[3], 0);
+        assert!(stroke.pixels().all(|p| p[3] <= 64));
     }
 
     #[test]

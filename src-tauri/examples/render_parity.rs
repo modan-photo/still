@@ -143,6 +143,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             false,
         ));
     }
+    for (id, fill) in [("stroke-only", "#FFFFFF00"), ("stroke-fill", "#FFFFFF80")] {
+        let mut mark = watermark.clone();
+        mark["content"] = json!("Still 测试");
+        mark["opacity"] = json!(1);
+        mark["font"]["size"] = json!(24);
+        mark["font"]["color"] = json!(fill);
+        mark["font"]["strokeColor"] = json!("#78C82880");
+        mark["font"]["strokeWidth"] = json!(3);
+        cases.push((
+            format!("transparent-{id}"),
+            json!({"fixtureSource": "transparent.png", "watermark": mark}),
+            false,
+        ));
+    }
     let mut manifest = Vec::new();
     for (id, mut value, exact) in cases {
         value["version"] = json!(1);
