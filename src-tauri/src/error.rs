@@ -28,6 +28,9 @@ pub enum AppError {
     #[error("The file is read-only and cannot be modified.")]
     FileReadOnly,
 
+    #[error("EXIF writeback to Android documents is not available yet. The original and imported copy have not been changed.")]
+    DocumentWriteUnsupported,
+
     #[error("Export commit failed ({commit_error}). Original retained at {backup_path}; rollback failed ({rollback_error}). Keep this backup for recovery.")]
     ExportRecoveryRequired {
         backup_path: String,
@@ -50,6 +53,7 @@ impl AppError {
             Self::Unsupported(_) => "unsupported",
             Self::FileBusy => "file_busy",
             Self::FileReadOnly => "file_read_only",
+            Self::DocumentWriteUnsupported => "document_write_unsupported",
             Self::ExportRecoveryRequired { .. } => "export_recovery_required",
             Self::Cancelled => "cancelled",
         }

@@ -112,6 +112,7 @@ pub async fn image_load(
     task_id: String,
     path: String,
 ) -> Result<ImageMeta, AppError> {
+    let app = window.app_handle().clone();
     let root = window
         .app_handle()
         .path()
@@ -124,23 +125,32 @@ pub async fn image_load(
         "image_load",
         move |token, report| {
             report("metadata", 10);
-            let path = std::fs::canonicalize(path)?;
-            let info = inspect_image(&path)?;
-            let hash = cache_hash(&path)?;
-            task::check(&token)?;
-            report("thumbnail", 30);
-            let thumb = get_or_create_cached(&path, &root, CacheKind::Thumbnail, &token)?;
-            task::check(&token)?;
-            Ok(ImageMeta {
-                path,
-                hash,
-                width: info.width,
-                height: info.height,
-                format: info.format,
-                orientation: info.orientation,
-                preview_url: None,
-                thumb_url: thumb.path,
-            })
+            let load = |path: &Path| {
+                let info = inspect_image(path)?;
+                let hash = cache_hash(path)?;
+                task::check(&token)?;
+                report("thumbnail", 30);
+                let thumb = get_or_create_cached(path, &root, CacheKind::Thumbnail, &token)?;
+                task::check(&token)?;
+                Ok(ImageMeta {
+                    path: path.to_path_buf(),
+                    hash,
+                    width: info.width,
+                    height: info.height,
+                    format: info.format,
+                    orientation: info.orientation,
+                    preview_url: None,
+                    thumb_url: thumb.path,
+                })
+            };
+            if crate::image_io::source::is_content_uri(Path::new(&path)) {
+                report("document", 10);
+                let mut meta = crate::image_io::source::prepare(&app, &path, &root, &token, load)?;
+                meta.path = PathBuf::from(path);
+                Ok(meta)
+            } else {
+                load(&std::fs::canonicalize(path)?)
+            }
         },
     )
     .await

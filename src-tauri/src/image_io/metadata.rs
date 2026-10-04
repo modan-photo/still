@@ -27,7 +27,7 @@ pub fn copy_metadata(
     if !preserve_exif && !preserve_icc {
         return Ok(());
     }
-    let bytes = fs::read(source)?;
+    let bytes = fs::read(super::source::resolve(source)?)?;
     let mut metadata = extract(&bytes);
     if preserve_exif {
         if let Some(exif) = metadata.exif.as_mut() {

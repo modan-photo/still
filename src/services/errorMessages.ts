@@ -4,6 +4,8 @@ export function errorMessage(error: { code: string; message: string }): string {
     cancelled: 'Operation cancelled.',
     file_busy: 'The file is in use. Close it in other applications and try again.',
     file_read_only: 'The file is read-only. Choose a writable location or change its permissions.',
+    document_write_unsupported:
+      'EXIF writeback to Android documents is not available yet. Your original photo has not been changed.',
     io_error:
       'The file could not be written or read. Check the folder, permissions and available space.',
     image_error: 'The image could not be processed. It may be damaged or unsupported.',

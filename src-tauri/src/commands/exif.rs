@@ -119,6 +119,9 @@ pub async fn exif_write(path: String, edits: ExifEdits) -> Result<(), AppError> 
 }
 
 fn write_exif(path: &Path, edits: ExifEdits) -> Result<(), AppError> {
+    if crate::image_io::source::is_content_uri(path) {
+        return Err(AppError::DocumentWriteUnsupported);
+    }
     if edits.artist.is_none() && edits.copyright.is_none() && edits.keywords.is_none() {
         return Ok(());
     }
@@ -346,7 +349,7 @@ fn unique_sibling_path(source: &Path, label: &str) -> PathBuf {
 }
 
 fn read_exif(path: &Path) -> Result<ExifData, AppError> {
-    let file = File::open(path)?;
+    let file = File::open(crate::image_io::source::resolve(path)?)?;
     let mut reader = BufReader::new(file);
     let exif = match ExifReader::new()
         .continue_on_error(true)
@@ -605,6 +608,20 @@ fn gcd(mut left: u32, mut right: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn document_writeback_is_rejected_before_touching_any_file() {
+        let result = super::write_exif(
+            std::path::Path::new("content://photos/document/42"),
+            super::ExifEdits {
+                artist: Some("Changed".into()),
+                ..Default::default()
+            },
+        );
+        assert!(matches!(
+            result,
+            Err(crate::error::AppError::DocumentWriteUnsupported)
+        ));
+    }
     use std::{fs, time::SystemTime};
 
     use image::{Rgb, RgbImage, Rgba, RgbaImage};

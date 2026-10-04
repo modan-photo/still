@@ -34,6 +34,15 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            #[cfg(target_os = "android")]
+            {
+                use tauri::Manager;
+                image_io::source::cleanup_previous_session(&app.path().app_cache_dir()?)?;
+            }
+            let _ = app;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -268,7 +268,7 @@ fn copy_to_staging(
     token: &CancellationToken,
 ) -> Result<(), AppError> {
     ensure_not_cancelled(token)?;
-    let mut input = File::open(source)?;
+    let mut input = File::open(super::source::resolve(source)?)?;
     let mut output = File::options()
         .write(true)
         .create_new(true)

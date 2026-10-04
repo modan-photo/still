@@ -24,7 +24,7 @@ pub struct ImageInfo {
 pub fn inspect_image(path: &Path) -> Result<ImageInfo, AppError> {
     reject_optional_heic(path)?;
 
-    let reader = ImageReader::open(path)?.with_guessed_format()?;
+    let reader = ImageReader::open(super::source::resolve(path)?)?.with_guessed_format()?;
     let format = reader.format().ok_or_else(|| {
         AppError::Unsupported(format!(
             "could not determine image format for {}",
@@ -50,7 +50,7 @@ pub fn decode_image(path: &Path) -> Result<DynamicImage, AppError> {
     reject_optional_heic(path)?;
 
     let orientation = read_exif_orientation(path)?;
-    let decoder = ImageReader::open(path)?
+    let decoder = ImageReader::open(super::source::resolve(path)?)?
         .with_guessed_format()?
         .into_decoder()?;
     let mut image = DynamicImage::from_decoder(decoder)?;
@@ -63,7 +63,7 @@ pub fn decode_image(path: &Path) -> Result<DynamicImage, AppError> {
 }
 
 pub fn read_exif_orientation(path: &Path) -> Result<u8, AppError> {
-    let file = File::open(path)?;
+    let file = File::open(super::source::resolve(path)?)?;
     let mut reader = BufReader::new(file);
     let exif = match ExifReader::new().read_from_container(&mut reader) {
         Ok(exif) => exif,

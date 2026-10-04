@@ -113,6 +113,8 @@ fn resize_to_long_edge(image: DynamicImage, target: u32) -> Result<DynamicImage,
 }
 
 pub fn cache_hash(source_path: &Path) -> Result<String, AppError> {
+    let resolved = super::source::resolve(source_path)?;
+    let source_path = resolved.as_path();
     let metadata = fs::metadata(source_path)?;
     let canonical = fs::canonicalize(source_path)?;
     let modified = metadata

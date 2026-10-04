@@ -383,7 +383,8 @@ fn draw_item(
     config: &CollageConfig,
     token: &CancellationToken,
 ) -> Result<(), AppError> {
-    let source = image::open(&item.path)?.into_rgba8();
+    let source =
+        image::open(crate::image_io::source::resolve(Path::new(&item.path))?)?.into_rgba8();
     check_cancelled(token)?;
     let (sw, sh) = source.dimensions();
     let fit = match item.transform.fit {
