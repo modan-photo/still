@@ -140,6 +140,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("ligature", "office affine"),
         ("arabic", "مرحبا بالعالم"),
         ("bidi", "Still مرحبا 2026"),
+        ("combining", "Cafe\u{301}"),
+        ("devanagari", "नमस्ते"),
+        ("bidi-isolate", "Still \u{2067}مرحبا 2026\u{2069}"),
     ] {
         let mut mark = watermark.clone();
         mark["content"] = json!(content);

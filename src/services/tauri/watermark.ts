@@ -25,6 +25,7 @@ export function listWatermarkFonts(includeSystem = false): Promise<FontInfo[]> {
       : Promise.resolve([
           { family: 'Noto Sans SC', path: '', builtin: true },
           { family: 'Noto Sans Arabic', path: '', builtin: true },
+          { family: 'Noto Sans Devanagari', path: '', builtin: true },
           { family: 'Noto Serif SC', path: '', builtin: true },
           { family: 'Noto Emoji', path: '', builtin: true },
           { family: 'Inter', path: '', builtin: true },

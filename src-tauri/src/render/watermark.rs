@@ -336,6 +336,7 @@ fn load_fonts(spec: &FontSpec) -> Result<Vec<LoadedFont>, AppError> {
         if let Some(directory) = selected.parent() {
             paths.push(directory.join("NotoSansSC-VF.ttf"));
             paths.push(directory.join("NotoSansArabic-Variable.ttf"));
+            paths.push(directory.join("NotoSansDevanagari-Variable.ttf"));
             paths.push(directory.join("NotoEmoji-Variable.ttf"));
         }
     }
@@ -941,6 +942,51 @@ mod tests {
         assert!(shaped.width > 0.0);
         assert!(shaped.glyphs.iter().all(|glyph| glyph.glyph_id.0 != 0));
         assert!(shaped.glyphs.iter().all(|glyph| glyph.x.is_finite()));
+    }
+
+    #[test]
+    fn shaping_positions_combining_marks_without_advancing_them() {
+        let spec = text_fixture("Cafe\u{301}", 400);
+        let fonts = load_fonts(spec.font.as_ref().unwrap()).unwrap();
+        let base = super::shape_line("Cafe", &fonts, 32.0);
+        let combined = super::shape_line("Cafe\u{301}", &fonts, 32.0);
+        assert!((combined.width - base.width).abs() < 0.01);
+        assert!(combined.glyphs.iter().all(|glyph| glyph.glyph_id.0 != 0));
+        assert!(combined.glyphs.iter().all(|glyph| glyph.x.is_finite()));
+    }
+
+    #[test]
+    fn shaping_applies_devanagari_conjuncts() {
+        let spec = text_fixture("नमस्ते", 400);
+        let fonts = load_fonts(spec.font.as_ref().unwrap()).unwrap();
+        let shaped = super::shape_line("नमस्ते", &fonts, 32.0);
+        let nominal: Vec<_> = "नमस्ते"
+            .chars()
+            .map(|character| {
+                let font = &fonts[font_index_for(character, &fonts)].font;
+                font.glyph_id(character)
+            })
+            .collect();
+        assert_ne!(
+            shaped
+                .glyphs
+                .iter()
+                .map(|glyph| glyph.glyph_id)
+                .collect::<Vec<_>>(),
+            nominal
+        );
+        assert!(shaped.glyphs.iter().all(|glyph| glyph.glyph_id.0 != 0));
+        assert!(shaped.width > 0.0);
+    }
+
+    #[test]
+    fn bidi_isolates_do_not_add_visible_advance() {
+        let spec = text_fixture("Still \u{2067}مرحبا 2026\u{2069}", 400);
+        let fonts = load_fonts(spec.font.as_ref().unwrap()).unwrap();
+        let isolated = super::shape_line("Still \u{2067}مرحبا 2026\u{2069}", &fonts, 32.0);
+        let plain = super::shape_line("Still مرحبا 2026", &fonts, 32.0);
+        assert!((isolated.width - plain.width).abs() < 0.01);
+        assert!(isolated.glyphs.iter().all(|glyph| glyph.x.is_finite()));
     }
 
     #[test]

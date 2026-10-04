@@ -61,6 +61,7 @@ async function run() {
   for (const [family, filename] of [
     ['Noto Sans SC', 'NotoSansSC-VF.ttf'],
     ['Noto Sans Arabic', 'NotoSansArabic-Variable.ttf'],
+    ['Noto Sans Devanagari', 'NotoSansDevanagari-Variable.ttf'],
     ['Noto Emoji', 'NotoEmoji-Variable.ttf'],
   ]) {
     const font = new FontFace(family, `url(/src-tauri/resources/fonts/${filename})`, {
