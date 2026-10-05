@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Snackbar, useMediaQuery, useTheme as useMuiTheme } from '@mui/material';
 import { isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
 import type { ThemeController } from './hooks/useTheme';
 import { AppShell } from './layout/AppShell';
 import { TitleBar } from './layout/TitleBar';
-import { RightPanel } from './layout/RightPanel';
 import { FilmStrip } from './layout/FilmStrip';
 import { MainCanvas } from './layout/MainCanvas';
-import { MobileRightPanel } from './layout/MobileRightPanel';
 import { useEditorShortcuts } from './hooks/useEditorShortcuts';
 import { useImageImport } from './hooks/useImageImport';
 import { useProjectStore } from './stores/projectStore';
@@ -18,21 +16,40 @@ import { composeCollage } from './services/tauri/collage';
 import { createCollageExportPayload } from './services/collageExport';
 import { TaskProgressBar } from './components/TaskProgressBar';
 import { listWatermarkFonts } from './services/tauri/watermark';
-import { SettingsDialog } from './components/SettingsDialog';
-import { ExportCompletionNotice } from './components/ExportCompletionNotice';
-import { ExportDialog } from './components/ExportDialog';
 import type {
   BatchExportReport,
   ExportMode,
   ExportRequest,
   PhotoExportRequest,
 } from './types/export';
-import { MobileCollageEditor } from './layout/MobileCollageEditor';
 import type { RightPanelTabId } from './layout/rightPanelTabs';
 import { motionTokens } from './theme/tokens';
 import { restoreViewAfterCollage } from './services/collageMode';
 import { createExportRetry, markExportedPhotosClean } from './services/exportCompletion';
 import { errorMessage } from './services/errorMessages';
+
+const SettingsDialog = lazy(() =>
+  import('./components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })),
+);
+const ExportDialog = lazy(() =>
+  import('./components/ExportDialog').then((module) => ({ default: module.ExportDialog })),
+);
+const ExportCompletionNotice = lazy(() =>
+  import('./components/ExportCompletionNotice').then((module) => ({
+    default: module.ExportCompletionNotice,
+  })),
+);
+const MobileCollageEditor = lazy(() =>
+  import('./layout/MobileCollageEditor').then((module) => ({
+    default: module.MobileCollageEditor,
+  })),
+);
+const RightPanel = lazy(() =>
+  import('./layout/RightPanel').then((module) => ({ default: module.RightPanel })),
+);
+const MobileRightPanel = lazy(() =>
+  import('./layout/MobileRightPanel').then((module) => ({ default: module.MobileRightPanel })),
+);
 
 /**
  * Application composition root.
@@ -102,9 +119,12 @@ function App({ theme }: { theme: ThemeController }) {
   const [exportReport, setExportReport] = useState<BatchExportReport | null>(null);
   const [exportNoticeOpen, setExportNoticeOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportDialogMounted, setExportDialogMounted] = useState(false);
+  const [exportNoticeMounted, setExportNoticeMounted] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>('photos');
   const [collageExportPath, setCollageExportPath] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsMounted, setSettingsMounted] = useState(false);
   // Folder selection is desktop-only; Android uses individual file picking.
   const desktopFolderImport = isTauri() && platform() !== 'android';
   // Read the latest store value at invocation time so shortcut callbacks never
@@ -114,6 +134,16 @@ function App({ theme }: { theme: ThemeController }) {
     [setInspectorOpen],
   );
   useEditorShortcuts(toggleInspector, choosePhotos);
+
+  useEffect(() => {
+    if (exportDialogOpen) setExportDialogMounted(true);
+  }, [exportDialogOpen]);
+  useEffect(() => {
+    if (exportNoticeOpen) setExportNoticeMounted(true);
+  }, [exportNoticeOpen]);
+  useEffect(() => {
+    if (settingsOpen) setSettingsMounted(true);
+  }, [settingsOpen]);
 
   useEffect(() => {
     // Grid selection has no meaning in an empty project. Clear both UI and project
@@ -242,7 +272,9 @@ function App({ theme }: { theme: ThemeController }) {
       {/* Phones replace the full editor shell during collage editing. Wider layouts
         keep collage inside the standard canvas and inspector composition. */}
       {isMobile && isCollageMode ? (
-        <MobileCollageEditor onExit={() => setActiveRightTab(previousRightTab.current)} />
+        <Suspense fallback={<div role="status">Loading collage editor…</div>}>
+          <MobileCollageEditor onExit={() => setActiveRightTab(previousRightTab.current)} />
+        </Suspense>
       ) : (
         <AppShell
           titleBarVisible={!(isTauri() && platform() === 'android')}
@@ -253,7 +285,11 @@ function App({ theme }: { theme: ThemeController }) {
                 onToggleTheme={theme.toggleResolvedTheme}
                 themeMode={theme.resolvedTheme}
               />
-              <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+              {(settingsOpen || settingsMounted) && (
+                <Suspense fallback={<span role="status">Loading settings…</span>}>
+                  <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+                </Suspense>
+              )}
             </>
           }
           progress={
@@ -285,13 +321,17 @@ function App({ theme }: { theme: ThemeController }) {
             />
           }
           rightPanel={
-            photos.length === 0 ? null : mobileLayout ? (
-              <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
-            ) : (
-              <RightPanel
-                collapsed={!inspectorOpen}
-                onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)}
-              />
+            photos.length === 0 ? null : (
+              <Suspense fallback={<div role="status">Loading inspector…</div>}>
+                {mobileLayout ? (
+                  <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
+                ) : (
+                  <RightPanel
+                    collapsed={!inspectorOpen}
+                    onCollapsedChange={(collapsed) => setInspectorOpen(!collapsed)}
+                  />
+                )}
+              </Suspense>
             )
           }
           filmStrip={
@@ -311,19 +351,27 @@ function App({ theme }: { theme: ThemeController }) {
       )}
       {/* Export UI remains outside the responsive shell so replacing the mobile layout
         cannot interrupt an open dialog or completion notice. */}
-      <ExportDialog
-        open={exportDialogOpen}
-        exportMode={exportMode}
-        onClose={() => setExportDialogOpen(false)}
-        onExport={(request) => void beginExport(request)}
-      />
-      <ExportCompletionNotice
-        report={exportReport}
-        open={exportNoticeOpen}
-        onClose={() => setExportNoticeOpen(false)}
-        canRetry={canRetry && !exporting}
-        onRetry={retryExport}
-      />
+      {(exportDialogOpen || exportDialogMounted) && (
+        <Suspense fallback={<div role="status">Loading export options…</div>}>
+          <ExportDialog
+            open={exportDialogOpen}
+            exportMode={exportMode}
+            onClose={() => setExportDialogOpen(false)}
+            onExport={(request) => void beginExport(request)}
+          />
+        </Suspense>
+      )}
+      {(exportNoticeOpen || exportNoticeMounted) && (
+        <Suspense fallback={<div role="status">Loading export report…</div>}>
+          <ExportCompletionNotice
+            report={exportReport}
+            open={exportNoticeOpen}
+            onClose={() => setExportNoticeOpen(false)}
+            canRetry={canRetry && !exporting}
+            onRetry={retryExport}
+          />
+        </Suspense>
+      )}
       {/* Collage produces one output path, so a lightweight success snackbar is enough;
         batch photo exports use the detailed completion notice above. */}
       <Snackbar
