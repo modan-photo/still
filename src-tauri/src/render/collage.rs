@@ -226,6 +226,7 @@ pub fn compose_to_file(
     report: Arc<dyn Fn(&str, u8) + Send + Sync>,
 ) -> Result<String, AppError> {
     let path = PathBuf::from(&config.output_path);
+    crate::image_io::save::require_filesystem_destination(&path)?;
     let image = compose(items, config, token, report.clone())?;
     report("encoding", 94);
     let output = output_spec(&path, config.quality)?;

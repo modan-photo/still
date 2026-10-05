@@ -16,7 +16,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
-import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import type {
@@ -29,6 +29,13 @@ import type {
 import type { OutputFormat, RenderSpec } from '../types/renderSpec';
 import { getCollageCanvasSize } from './collage/collageModel';
 import { cropPixelRect } from '../render/crop';
+import {
+  isDocumentUri,
+  parentDirectory,
+  withOutputExtension,
+  recentFilesystemDirectories,
+} from '../services/exportPaths';
+import { pickImportDirectory } from '../services/directoryPicker';
 
 type ExportScope = 'all' | 'current' | 'selected';
 type Props = {
@@ -132,20 +139,25 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
   const collageSize = getCollageCanvasSize(collageDraft, collagePhotoCount);
 
   const chooseDirectory = async () => {
-    const value = await openDialog({
-      directory: true,
-      multiple: false,
-      title: 'Choose export folder',
-      defaultPath: options.outputDirectory || undefined,
-    });
+    const value = await pickImportDirectory(
+      'Choose export folder',
+      isDocumentUri(options.outputDirectory) ? undefined : options.outputDirectory || undefined,
+    );
     if (typeof value === 'string') patch('outputDirectory', value);
   };
   const submit = () => {
-    if (!options.outputDirectory || targetPhotos.length === 0) return;
+    if (
+      !options.outputDirectory ||
+      isDocumentUri(options.outputDirectory) ||
+      targetPhotos.length === 0
+    )
+      return;
     const nextRecent = [
       options.outputDirectory,
       ...recent.filter((entry) => entry !== options.outputDirectory),
-    ].slice(0, 5);
+    ]
+      .filter((entry) => !isDocumentUri(entry))
+      .slice(0, 5);
     localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
     setRecent(nextRecent);
     const request: ExportRequest = {
@@ -166,7 +178,8 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
     const extension = collageFormat === 'jpeg' ? 'jpg' : collageFormat;
     const value = await saveDialog({
       title: 'Export collage',
-      defaultPath: collageOutputPath || `still-collage.${extension}`,
+      defaultPath:
+        (!isDocumentUri(collageOutputPath) && collageOutputPath) || `still-collage.${extension}`,
       filters: [
         {
           name: collageFormat === 'jpeg' ? 'JPEG image' : `${collageFormat.toUpperCase()} image`,
@@ -177,7 +190,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
     if (typeof value === 'string') setCollageOutputPath(value);
   };
   const submitCollage = () => {
-    if (!collageOutputPath || collagePhotoCount < 2) return;
+    if (!collageOutputPath || isDocumentUri(collageOutputPath) || collagePhotoCount < 2) return;
     const outputPath = withOutputExtension(collageOutputPath, collageFormat);
     setCollageOutputPath(outputPath);
     onClose();
@@ -256,6 +269,11 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                   Choose
                 </Button>
               </div>
+              {isDocumentUri(collageOutputPath) && (
+                <p role="alert" className="mt-2 text-xs text-secondary">
+                  Saving to an Android document is not available yet.
+                </p>
+              )}
             </Section>
           </div>
         </DialogContent>
@@ -263,7 +281,9 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="contained"
-            disabled={!collageOutputPath || collagePhotoCount < 2}
+            disabled={
+              !collageOutputPath || isDocumentUri(collageOutputPath) || collagePhotoCount < 2
+            }
             onClick={submitCollage}
           >
             Export collage
@@ -477,6 +497,11 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                   Choose
                 </Button>
               </div>
+              {isDocumentUri(options.outputDirectory) && (
+                <p role="alert" className="mt-2 text-xs text-secondary">
+                  Saving to an Android document folder is not available yet.
+                </p>
+              )}
               {recent.length > 0 && (
                 <div>
                   <div className="mb-1 text-[11px] text-secondary">Recent folders</div>
@@ -583,23 +608,10 @@ function NumberField({
 function readRecent(): string[] {
   try {
     const value = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
-    return Array.isArray(value)
-      ? value.filter((entry): entry is string => typeof entry === 'string').slice(0, 5)
-      : [];
+    return recentFilesystemDirectories(value);
   } catch {
     return [];
   }
-}
-function parentDirectory(path: string) {
-  const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-  return index > 0 ? path.slice(0, index) : '';
-}
-function withOutputExtension(path: string, format: OutputFormat) {
-  if (!path) return path;
-  const extension = format === 'jpeg' ? 'jpg' : format;
-  const separator = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-  const dot = path.lastIndexOf('.');
-  return `${dot > separator ? path.slice(0, dot) : path}.${extension}`;
 }
 function estimateBytes(specs: RenderSpec[], options: ExportOptions) {
   return specs.reduce((sum, spec) => {

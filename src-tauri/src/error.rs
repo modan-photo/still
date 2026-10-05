@@ -31,6 +31,9 @@ pub enum AppError {
     #[error("EXIF writeback to Android documents is not available yet. The original and imported copy have not been changed.")]
     DocumentWriteUnsupported,
 
+    #[error("Export to Android document-provider locations is not available yet. No destination was written.")]
+    DocumentExportUnsupported,
+
     #[error("Export commit failed ({commit_error}). Original retained at {backup_path}; rollback failed ({rollback_error}). Keep this backup for recovery.")]
     ExportRecoveryRequired {
         backup_path: String,
@@ -54,6 +57,7 @@ impl AppError {
             Self::FileBusy => "file_busy",
             Self::FileReadOnly => "file_read_only",
             Self::DocumentWriteUnsupported => "document_write_unsupported",
+            Self::DocumentExportUnsupported => "document_export_unsupported",
             Self::ExportRecoveryRequired { .. } => "export_recovery_required",
             Self::Cancelled => "cancelled",
         }

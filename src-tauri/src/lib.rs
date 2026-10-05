@@ -1,4 +1,5 @@
 mod commands;
+mod documents;
 mod error;
 mod image_io;
 mod render;
@@ -8,6 +9,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(commands::task::TaskManager::default())
         .invoke_handler(tauri::generate_handler![
+            documents::document_pick_directory,
             commands::exif::exif_read,
             commands::exif::exif_write,
             commands::image::image_load,
@@ -31,6 +33,7 @@ pub fn run() {
             commands::preferences::migrate_preferences_if_needed,
         ])
         .plugin(tauri_plugin_dialog::init())
+        .plugin(documents::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())

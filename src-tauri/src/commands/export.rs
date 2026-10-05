@@ -145,6 +145,7 @@ fn export_batch(
     report: &(dyn Fn(&str, u8) + Send + Sync),
 ) -> Result<BatchExportReport, AppError> {
     validate_options(&opts, &items)?;
+    crate::image_io::save::require_filesystem_destination(Path::new(&opts.output_directory))?;
     let output_directory = std::fs::canonicalize(&opts.output_directory)?;
     if !output_directory.is_dir() {
         return Err(AppError::InvalidInput(

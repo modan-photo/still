@@ -67,7 +67,7 @@ pub async fn cache_invalidate(window: Window, hashes: Vec<String>) -> Result<usi
         .map_err(|error| AppError::InvalidInput(format!("unable to invalidate cache: {error}")))?
 }
 
-fn supported_image_path(path: &Path) -> bool {
+pub(crate) fn supported_image_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .map(|extension| {
@@ -80,8 +80,14 @@ fn supported_image_path(path: &Path) -> bool {
 }
 
 #[tauri::command]
-pub async fn image_list_directory(path: String) -> Result<Vec<PathBuf>, AppError> {
+pub async fn image_list_directory(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Vec<PathBuf>, AppError> {
     tauri::async_runtime::spawn_blocking(move || {
+        if crate::image_io::source::is_content_uri(Path::new(&path)) {
+            return crate::documents::list_directory(&app, &path);
+        }
         let directory = std::fs::canonicalize(path)?;
         if !directory.is_dir() {
             return Err(AppError::InvalidInput(
@@ -204,6 +210,7 @@ pub async fn image_export(
             }
             let source = PathBuf::from(&spec.source.path);
             let destination = PathBuf::from(out_path);
+            crate::image_io::save::require_filesystem_destination(&destination)?;
             if spec.output.is_some() || spec.border.is_some() {
                 let output = spec
                     .output

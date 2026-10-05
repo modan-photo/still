@@ -6,6 +6,8 @@ export function errorMessage(error: { code: string; message: string }): string {
     file_read_only: 'The file is read-only. Choose a writable location or change its permissions.',
     document_write_unsupported:
       'EXIF writeback to Android documents is not available yet. Your original photo has not been changed.',
+    document_export_unsupported:
+      'Export to Android document-provider locations is not available yet. No destination was written.',
     io_error:
       'The file could not be written or read. Check the folder, permissions and available space.',
     image_error: 'The image could not be processed. It may be damaged or unsupported.',

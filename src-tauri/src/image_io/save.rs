@@ -26,6 +26,13 @@ pub enum ExistingDestination {
 
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+pub fn require_filesystem_destination(destination: &Path) -> Result<(), AppError> {
+    if super::source::is_content_uri(destination) {
+        return Err(AppError::DocumentExportUnsupported);
+    }
+    Ok(())
+}
+
 /// Encodes to a sibling temporary file and renames only after a complete write.
 /// Existing destinations are rejected so a failed export can never destroy them.
 pub fn save_image_atomic(
@@ -58,6 +65,7 @@ pub fn save_image_atomic_with_metadata(
     preserve_icc: bool,
 ) -> Result<(), AppError> {
     ensure_not_cancelled(cancellation)?;
+    require_filesystem_destination(destination)?;
     if destination.exists() && existing == ExistingDestination::Reject {
         return Err(AppError::InvalidInput(format!(
             "destination already exists: {}",
@@ -255,6 +263,7 @@ pub fn copy_image_atomic(
     token: &CancellationToken,
 ) -> Result<(), AppError> {
     ensure_not_cancelled(token)?;
+    require_filesystem_destination(destination)?;
     let mut temporary = TemporaryOutput::new(destination);
     copy_to_staging(source, &mut temporary, token)?;
     publish_new(temporary.path(), destination, token)?;
@@ -436,6 +445,33 @@ impl Drop for TemporaryOutput {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn document_destinations_are_rejected_before_reading_or_writing_files() {
+        let destination = std::path::Path::new("content://provider/document/42");
+        let token = tokio_util::sync::CancellationToken::new();
+        let copy = super::copy_image_atomic(
+            std::path::Path::new("missing-source.png"),
+            destination,
+            &token,
+        );
+        assert!(matches!(
+            copy,
+            Err(crate::error::AppError::DocumentExportUnsupported)
+        ));
+        let encoded = super::save_image_atomic(
+            &image::DynamicImage::new_rgb8(1, 1),
+            destination,
+            &crate::render::spec::OutputSpec {
+                format: crate::render::spec::OutputFormat::Png,
+                quality: 92,
+            },
+            &token,
+        );
+        assert!(matches!(
+            encoded,
+            Err(crate::error::AppError::DocumentExportUnsupported)
+        ));
+    }
     use std::{fs, time::SystemTime};
 
     use image::{DynamicImage, Rgba, RgbaImage};
