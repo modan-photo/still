@@ -64,6 +64,25 @@ function render(path: string, ratio = 0.25) {
 }
 
 describe('image watermark preview', () => {
+  it('loads a new document URI before requesting its cached preview', async () => {
+    const uri = 'content://documents.test/document/mark';
+    let registered = false;
+    vi.mocked(loadImage).mockImplementationOnce(async () => {
+      registered = true;
+      return {
+        path: uri, hash: 'abc', width: 40, height: 20, format: 'png', orientation: 1,
+        previewUrl: null, thumbUrl: 'thumb.webp',
+      };
+    });
+    vi.mocked(getCachedImage).mockImplementationOnce(async () => {
+      expect(registered).toBe(true);
+      return { path: 'cache.webp', width: 40, height: 20, cacheHit: false };
+    });
+    await render(uri);
+    expect(loadImage).toHaveBeenCalledWith(uri);
+    expect(getCachedImage).toHaveBeenCalledWith(uri, 'preview');
+  });
+
   it.each([false, true])(
     'rounds negative half-pixel placement away from zero (free=%s)',
     async (free) => {

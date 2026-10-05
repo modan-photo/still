@@ -1,7 +1,6 @@
 import {
   Button, IconButton, ListSubheader, MenuItem, Select, Slider, Switch, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRenderSpec } from '../hooks/useRenderSpec';
 import {
@@ -10,6 +9,9 @@ import {
 } from '../services/tauri/watermark';
 import { DEFAULT_WATERMARK, type Anchor, type FontSpec, type WatermarkSpec } from '../types/renderSpec';
 import { useUIStore } from '../stores/uiStore';
+import { errorMessage } from '../services/errorMessages';
+import { normalizeError } from '../services/tauri/image';
+import { selectWatermarkImage } from '../services/watermarkImageSelection';
 
 const ANCHORS: { value: Anchor; label: string }[] = [
   { value: 'topLeft', label: 'Top left' }, { value: 'topCenter', label: 'Top center' }, { value: 'topRight', label: 'Top right' },
@@ -48,8 +50,15 @@ export function StampControls() {
   if (!spec) return <p className="m-0 text-xs leading-5 text-secondary">Select a photo to add a stamp.</p>;
 
   const chooseImage = async () => {
-    const path = await open({ multiple: false, filters: [{ name: 'PNG image', extensions: ['png'] }] });
-    if (typeof path === 'string') change({ type: 'image', path, content: '' });
+    try {
+      const path = await selectWatermarkImage();
+      if (path !== null) {
+        change({ type: 'image', path, content: '' });
+        setMessage(null);
+      }
+    } catch (error) {
+      setMessage(errorMessage(normalizeError(error)));
+    }
   };
   const savePreset = async () => {
     const name = presetName.trim();

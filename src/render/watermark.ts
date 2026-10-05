@@ -118,8 +118,10 @@ async function renderImage(spec: WatermarkSpec, ratio: number): Promise<HTMLCanv
   let request = watermarkImageCache.get(spec.path);
   if (!request) {
     const path = spec.path;
-    request = Promise.all([getCachedImage(path, 'preview'), loadImage(path)])
-      .then(async ([cached, source]) => {
+    request = loadImage(path)
+      .then(async (source) => {
+        // Android content URIs need a private snapshot before cache lookup.
+        const cached = await getCachedImage(path, 'preview');
         const image = new Image();
         image.src = cacheAssetUrl(cached.path);
         await image.decode();
