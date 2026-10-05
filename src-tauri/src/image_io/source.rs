@@ -32,6 +32,14 @@ pub fn is_content_uri(path: &Path) -> bool {
     path.to_string_lossy().starts_with("content://")
 }
 
+pub fn is_registered(uri: &str) -> bool {
+    SOURCES.get().is_some_and(|sources| {
+        sources
+            .lock()
+            .is_ok_and(|sources| sources.contains_key(uri))
+    })
+}
+
 /// Only read operations may resolve a URI to a private copy.
 pub fn resolve(path: &Path) -> Result<PathBuf, AppError> {
     if !is_content_uri(path) {

@@ -42,6 +42,7 @@ pub fn run() {
             {
                 use tauri::Manager;
                 image_io::source::cleanup_previous_session(&app.path().app_cache_dir()?)?;
+                documents::cleanup_staged(&app.path().app_cache_dir()?)?;
             }
             let _ = app;
             Ok(())

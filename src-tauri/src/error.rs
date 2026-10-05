@@ -34,6 +34,16 @@ pub enum AppError {
     #[error("Export to Android document-provider locations is not available yet. No destination was written.")]
     DocumentExportUnsupported,
 
+    #[error("Overwriting an existing Android document is unavailable until provider rollback is implemented.")]
+    DocumentOverwriteUnsupported,
+
+    #[error("Document export failed ({cause}) and cleanup failed ({cleanup}). Remove incomplete document at {uri} manually.")]
+    DocumentCleanupRequired {
+        uri: String,
+        cause: String,
+        cleanup: String,
+    },
+
     #[error("Export commit failed ({commit_error}). Original retained at {backup_path}; rollback failed ({rollback_error}). Keep this backup for recovery.")]
     ExportRecoveryRequired {
         backup_path: String,
@@ -58,6 +68,8 @@ impl AppError {
             Self::FileReadOnly => "file_read_only",
             Self::DocumentWriteUnsupported => "document_write_unsupported",
             Self::DocumentExportUnsupported => "document_export_unsupported",
+            Self::DocumentOverwriteUnsupported => "document_overwrite_unsupported",
+            Self::DocumentCleanupRequired { .. } => "document_cleanup_required",
             Self::ExportRecoveryRequired { .. } => "export_recovery_required",
             Self::Cancelled => "cancelled",
         }
@@ -104,5 +116,22 @@ mod tests {
             read_only["message"],
             "The file is read-only and cannot be modified."
         );
+    }
+
+    #[test]
+    fn distinguishes_unavailable_overwrite_from_cleanup_recovery() {
+        let overwrite = serde_json::to_value(AppError::DocumentOverwriteUnsupported).unwrap();
+        assert_eq!(overwrite["code"], "document_overwrite_unsupported");
+        let cleanup = serde_json::to_value(AppError::DocumentCleanupRequired {
+            uri: "content://provider/document/temp".into(),
+            cause: "write failed".into(),
+            cleanup: "permission denied".into(),
+        })
+        .unwrap();
+        assert_eq!(cleanup["code"], "document_cleanup_required");
+        assert!(cleanup["message"]
+            .as_str()
+            .unwrap()
+            .contains("content://provider/document/temp"));
     }
 }

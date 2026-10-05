@@ -129,6 +129,8 @@ pub enum StripDirection {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CollageConfig {
     pub output_path: String,
+    #[serde(default)]
+    pub output_format: Option<OutputFormat>,
     pub width: u32,
     pub height: u32,
     #[serde(default)]
@@ -227,9 +229,17 @@ pub fn compose_to_file(
 ) -> Result<String, AppError> {
     let path = PathBuf::from(&config.output_path);
     crate::image_io::save::require_filesystem_destination(&path)?;
+    let output = output_spec(&path, config.quality)?;
+    if config
+        .output_format
+        .is_some_and(|format| format != output.format)
+    {
+        return Err(AppError::InvalidInput(
+            "collage outputFormat does not match destination extension".into(),
+        ));
+    }
     let image = compose(items, config, token, report.clone())?;
     report("encoding", 94);
-    let output = output_spec(&path, config.quality)?;
     save_image_atomic(&DynamicImage::ImageRgba8(image), &path, &output, token)?;
     Ok(path.to_string_lossy().into_owned())
 }
@@ -645,6 +655,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let config = CollageConfig {
+            output_format: None,
             output_path: output_path.to_string_lossy().into_owned(),
             width: 8_000,
             height: 6_000,

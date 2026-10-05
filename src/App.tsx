@@ -179,6 +179,7 @@ function App({ theme }: { theme: ThemeController }) {
           request.outputPath,
           request.quality,
         );
+        payload.config.outputFormat = request.format;
         // Photo deletion can race with an already-open export dialog.
         if (payload.items.length < 2) return;
         const path = await composeCollage(payload.items, payload.config);

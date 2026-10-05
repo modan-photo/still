@@ -17,6 +17,7 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { platform } from '@tauri-apps/plugin-os';
 import { useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import type {
@@ -143,12 +144,18 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
       'Choose export folder',
       isDocumentUri(options.outputDirectory) ? undefined : options.outputDirectory || undefined,
     );
-    if (typeof value === 'string') patch('outputDirectory', value);
+    if (typeof value === 'string')
+      setOptions((current) => ({
+        ...current,
+        outputDirectory: value,
+        conflict:
+          isDocumentUri(value) && current.conflict === 'overwrite' ? 'rename' : current.conflict,
+      }));
   };
   const submit = () => {
     if (
       !options.outputDirectory ||
-      isDocumentUri(options.outputDirectory) ||
+      (isDocumentUri(options.outputDirectory) && options.conflict === 'overwrite') ||
       targetPhotos.length === 0
     )
       return;
@@ -187,7 +194,20 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
         },
       ],
     });
-    if (typeof value === 'string') setCollageOutputPath(value);
+    if (typeof value === 'string') {
+      if (isDocumentUri(value)) {
+        setCollageOutputPath('');
+        onClose();
+        onExport({
+          exportMode: 'collage',
+          outputPath: value,
+          format: collageFormat,
+          quality: collageQuality,
+        });
+      } else {
+        setCollageOutputPath(value);
+      }
+    }
   };
   const submitCollage = () => {
     if (!collageOutputPath || isDocumentUri(collageOutputPath) || collagePhotoCount < 2) return;
@@ -266,12 +286,12 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                   onChange={(event) => setCollageOutputPath(event.target.value)}
                 />
                 <Button variant="outlined" onClick={() => void chooseCollageFile()}>
-                  Choose
+                  {platform() === 'android' ? 'Choose and export' : 'Choose'}
                 </Button>
               </div>
               {isDocumentUri(collageOutputPath) && (
                 <p role="alert" className="mt-2 text-xs text-secondary">
-                  Saving to an Android document is not available yet.
+                  Use “Choose and export” to create an Android document.
                 </p>
               )}
             </Section>
@@ -499,7 +519,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
               </div>
               {isDocumentUri(options.outputDirectory) && (
                 <p role="alert" className="mt-2 text-xs text-secondary">
-                  Saving to an Android document folder is not available yet.
+                  Android documents support Skip and Rename automatically. Overwrite is unavailable.
                 </p>
               )}
               {recent.length > 0 && (
@@ -529,7 +549,9 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                   }
                 >
                   <MenuItem value="skip">Skip</MenuItem>
-                  <MenuItem value="overwrite">Overwrite</MenuItem>
+                  <MenuItem value="overwrite" disabled={isDocumentUri(options.outputDirectory)}>
+                    Overwrite
+                  </MenuItem>
                   <MenuItem value="rename">Rename automatically</MenuItem>
                 </Select>
               </FormControl>
@@ -556,7 +578,11 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={!options.outputDirectory || targetPhotos.length === 0}
+          disabled={
+            !options.outputDirectory ||
+            (isDocumentUri(options.outputDirectory) && options.conflict === 'overwrite') ||
+            targetPhotos.length === 0
+          }
           onClick={submit}
         >
           Export {targetPhotos.length}

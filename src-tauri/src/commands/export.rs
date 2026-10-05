@@ -7,6 +7,8 @@ use std::{
 use image::{imageops::FilterType, DynamicImage};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "android")]
+use tauri::Manager;
 use tauri::{State, Window};
 
 use super::task::{self, TaskManager};
@@ -128,14 +130,174 @@ pub async fn image_export_batch(
     items: Vec<ExportItem>,
     opts: ExportOptions,
 ) -> Result<BatchExportReport, AppError> {
+    #[cfg(target_os = "android")]
+    let app = window.app_handle().clone();
     task::run(
         window,
         state.inner().clone(),
         task_id,
         "image_export_batch",
-        move |token, report| export_batch(items, opts, token, report.as_ref()),
+        move |token, report| {
+            #[cfg(target_os = "android")]
+            if crate::image_io::source::is_content_uri(Path::new(&opts.output_directory)) {
+                return document_export_batch(&app, items, opts, token, report.as_ref());
+            }
+            export_batch(items, opts, token, report.as_ref())
+        },
     )
     .await
+}
+
+#[cfg(target_os = "android")]
+fn document_export_batch(
+    app: &tauri::AppHandle,
+    items: Vec<ExportItem>,
+    opts: ExportOptions,
+    token: tokio_util::sync::CancellationToken,
+    report: &(dyn Fn(&str, u8) + Send + Sync),
+) -> Result<BatchExportReport, AppError> {
+    use std::collections::HashMap;
+    validate_options(&opts, &items)?;
+    if opts.conflict == ConflictPolicy::Overwrite {
+        return Err(AppError::DocumentOverwriteUnsupported);
+    }
+    let mut existing: HashMap<String, String> =
+        crate::documents::list_all(app, &opts.output_directory)?
+            .into_iter()
+            .map(|(name, uri)| (name.to_lowercase(), uri))
+            .collect();
+    let total = items.len();
+    let mut results = Vec::with_capacity(total);
+    for (index, item) in items.into_iter().enumerate() {
+        let source = Path::new(&item.spec.source.path);
+        let source_name = if crate::image_io::source::is_content_uri(source) {
+            crate::documents::display_name(app, &item.spec.source.path)
+                .unwrap_or_else(|_| "image".into())
+        } else {
+            source
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("image")
+                .to_owned()
+        };
+        let extension = match opts.format {
+            OutputFormat::Jpeg => "jpg",
+            OutputFormat::Png => "png",
+            OutputFormat::Webp => "webp",
+        };
+        let number = opts.naming.start_number.saturating_add(item.sequence_index);
+        let base = match opts.naming.mode {
+            NamingMode::OriginalSuffix => format!(
+                "{}{}",
+                Path::new(&source_name)
+                    .file_stem()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("image"),
+                opts.naming.suffix
+            ),
+            NamingMode::PrefixSequence => format!("{}{:04}", opts.naming.prefix, number),
+            NamingMode::Template => opts
+                .naming
+                .template
+                .replace(
+                    "{name}",
+                    Path::new(&source_name)
+                        .file_stem()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or("image"),
+                )
+                .replace("{n}", &number.to_string())
+                .replace("{ext}", extension),
+        };
+        let mut stem = sanitize_stem(&base);
+        let suffix = format!(".{extension}");
+        if stem.to_ascii_lowercase().ends_with(&suffix) {
+            stem.truncate(stem.len() - suffix.len());
+        }
+        let mut name = format!("{stem}.{extension}");
+        let mut collision = existing.get(&name.to_lowercase()).cloned();
+        if opts.conflict == ConflictPolicy::Rename {
+            let mut copy = 1;
+            while collision.is_some() {
+                name = format!("{stem} ({copy}).{extension}");
+                collision = existing.get(&name.to_lowercase()).cloned();
+                copy += 1;
+            }
+        }
+        let source_path = item.spec.source.path.clone();
+        let mut result = ExportItemResult {
+            item_id: item.item_id,
+            source_path,
+            output_path: None,
+            status: "failed".into(),
+            code: None,
+            message: None,
+        };
+        if opts.conflict == ConflictPolicy::Skip && collision.is_some() {
+            result.status = "skipped".into();
+            result.output_path = collision;
+        } else {
+            let outcome = (|| {
+                task::check(&token)?;
+                let rendered = apply_render_spec(source, &item.spec)?;
+                task::check(&token)?;
+                let resized = resize(rendered, &opts.size);
+                let output = OutputSpec {
+                    format: opts.format,
+                    quality: opts.quality,
+                };
+                let staged = crate::documents::stage_image(
+                    app,
+                    &resized,
+                    &output,
+                    Some(source),
+                    opts.preserve_exif,
+                    opts.preserve_icc,
+                    &token,
+                )?;
+                let mime = match opts.format {
+                    OutputFormat::Jpeg => "image/jpeg",
+                    OutputFormat::Png => "image/png",
+                    OutputFormat::Webp => "image/webp",
+                };
+                crate::documents::publish(
+                    app,
+                    &opts.output_directory,
+                    staged.path(),
+                    &name,
+                    mime,
+                    &token,
+                )
+            })();
+            match outcome {
+                Ok(uri) => {
+                    existing.insert(name.to_lowercase(), uri.clone());
+                    result.status = "success".into();
+                    result.output_path = Some(uri);
+                }
+                Err(error) => {
+                    result.status = if matches!(error, AppError::Cancelled) {
+                        "cancelled"
+                    } else {
+                        "failed"
+                    }
+                    .into();
+                    result.code = Some(error.code().into());
+                    result.message = Some(error.to_string());
+                }
+            }
+        }
+        results.push(result);
+        report(
+            &format!("Exporting {}/{total}", index + 1),
+            (((index + 1) * 100) / total) as u8,
+        );
+    }
+    Ok(batch_report(
+        results,
+        Path::new(&opts.output_directory),
+        token.is_cancelled(),
+    ))
 }
 
 fn export_batch(

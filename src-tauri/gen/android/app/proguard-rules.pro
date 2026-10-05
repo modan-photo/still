@@ -1,6 +1,8 @@
 # Add project specific ProGuard rules here.
 -keep class dev.still.app.DocumentsPlugin { *; }
 -keep class dev.still.app.TreeArgs { *; }
+-keep class dev.still.app.CreateArgs { *; }
+-keep class dev.still.app.RenameArgs { *; }
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #
