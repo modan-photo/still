@@ -13,6 +13,17 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val signingPropertiesFile = rootProject.file("keystore.properties")
+val signingProperties = Properties().apply {
+    if (signingPropertiesFile.isFile) {
+        signingPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun signingProperty(name: String): String =
+    signingProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: error("Missing $name in the local keystore.properties")
+
 android {
     compileSdk = 36
     namespace = "dev.still.app"
@@ -23,6 +34,18 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        if (signingPropertiesFile.isFile) {
+            create("release") {
+                keyAlias = signingProperty("keyAlias")
+                keyPassword = signingProperty("keyPassword")
+                storeFile = rootProject.file(signingProperty("storeFile")).also {
+                    require(it.isFile) { "Release keystore file does not exist: $it" }
+                }
+                storePassword = signingProperty("storePassword")
+            }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -37,6 +60,9 @@ android {
             }
         }
         getByName("release") {
+            if (signingPropertiesFile.isFile) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
@@ -50,6 +76,18 @@ android {
     }
     buildFeatures {
         buildConfig = true
+    }
+}
+
+gradle.taskGraph.whenReady {
+    if (!signingPropertiesFile.isFile && allTasks.any { task ->
+            task.project.path == ":app" &&
+                task.name.contains("Release") &&
+                listOf("assemble", "bundle", "package").any(task.name::startsWith)
+        }) {
+        throw org.gradle.api.GradleException(
+            "Android release packaging requires local keystore.properties and an upload key"
+        )
     }
 }
 
