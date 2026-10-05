@@ -74,7 +74,7 @@ const defaultOptions = (): ExportOptions => ({
 export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
   const photos = useProjectStore((state) => state.photos);
   const collageDraft = useProjectStore((state) => state.collageDraft);
-  const selectedId = useProjectStore((state) => state.selectedId);
+  const selectedId = useProjectStore((state) => state.currentPhotoId);
   const selectedIds = useProjectStore((state) => state.selectedIds);
   const [scope, setScope] = useState<ExportScope>('all');
   const [options, setOptions] = useState<ExportOptions>(defaultOptions);

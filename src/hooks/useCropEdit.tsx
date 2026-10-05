@@ -19,7 +19,7 @@ const CropEditContext = createContext<CropEditContextValue | null>(null);
 
 /** Transient React state: pointer moves never write to the photo store. */
 export function CropEditProvider({ children }: { children: ReactNode }) {
-  const photoId = useProjectStore(state => state.selectedId);
+  const photoId = useProjectStore(state => state.currentPhotoId);
   const tab = useUIStore(state => state.activeRightTab);
   const gridOpen = useUIStore(state => state.gridPanelOpen);
   const [session, setSession] = useState<CropSession | null>(null);

@@ -89,7 +89,7 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         && !useUIStore.getState().gridPanelOpen
       ) {
         const project = useProjectStore.getState();
-        const currentId = project.currentPhotoId ?? project.selectedId;
+        const currentId = project.currentPhotoId;
         if (!currentId) return;
 
         event.preventDefault();
@@ -110,8 +110,8 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         // Navigation is bounded naturally: no state change occurs beyond either end.
         event.preventDefault();
-        const { photos, selectedId, selectPhoto } = useProjectStore.getState();
-        const index = photos.findIndex((photo) => photo.id === selectedId);
+        const { photos, currentPhotoId, selectPhoto } = useProjectStore.getState();
+        const index = photos.findIndex((photo) => photo.id === currentPhotoId);
         const next = photos[index + (event.key === 'ArrowLeft' ? -1 : 1)];
         if (next) selectPhoto(next.id);
       }

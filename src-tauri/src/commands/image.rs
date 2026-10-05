@@ -257,27 +257,6 @@ fn infer_output(destination: &std::path::Path) -> Option<OutputSpec> {
     })
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StubResult {
-    implemented: bool,
-    spec: RenderSpec,
-}
-
-#[tauri::command]
-pub fn image_apply_border(spec: RenderSpec) -> Result<StubResult, AppError> {
-    spec.validate().map_err(AppError::InvalidInput)?;
-    Ok(StubResult {
-        implemented: false,
-        spec,
-    })
-}
-
-#[tauri::command]
-pub fn image_apply_watermark(spec: RenderSpec) -> Result<StubResult, AppError> {
-    image_apply_border(spec)
-}
-
 #[cfg(test)]
 mod tests {
     use std::{fs, path::Path, time::SystemTime};

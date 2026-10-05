@@ -22,7 +22,7 @@ const ROTATION_ACTIONS = [
 /** Current-photo transforms and batch controls share the normalized crop contract. */
 export function TransformTab() {
   const { spec } = useRenderSpec();
-  const photoId = useProjectStore(state => state.selectedId);
+  const photoId = useProjectStore(state => state.currentPhotoId);
   const activeTab = useUIStore(state => state.activeRightTab);
   const edit = useCropEdit();
   const photos = useProjectStore(state => state.photos);

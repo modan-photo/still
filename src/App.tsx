@@ -90,7 +90,7 @@ function App({ theme }: { theme: ThemeController }) {
   const isCollageMode = activeRightTab === 'collage';
   const photos = useProjectStore((state) => state.photos);
   const collagePhotoIds = useProjectStore((state) => state.collageDraft.photoIds);
-  const selectedId = useProjectStore((state) => state.selectedId);
+  const selectedId = useProjectStore((state) => state.currentPhotoId);
   const selectPhoto = useProjectStore((state) => state.selectPhoto);
   const { choosePhotos, chooseFolder, dragActive, error, clearError } = useImageImport();
   // One dialog serves both export modes, while progress and errors belong to the

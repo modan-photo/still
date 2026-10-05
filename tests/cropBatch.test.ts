@@ -11,7 +11,7 @@ function photo(id: string, width: number, height: number, crop?: CropSpec): Proj
 }
 const sourceCrop: CropSpec = { aspect: '1:1', enabled: true, rect: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 } };
 
-beforeEach(() => useProjectStore.setState({ photos: [], selectedId: null, currentPhotoId: null, selectedIds: [] }));
+beforeEach(() => useProjectStore.setState({ photos: [], currentPhotoId: null, selectedIds: [] }));
 
 describe('batch crop application', () => {
   it('centers targets using their own dimensions, preserves source position and other settings, and updates atomically', () => {
@@ -20,7 +20,7 @@ describe('batch crop application', () => {
     const landscape = photo('landscape.jpg', 8000, 4000);
     portrait.spec.output = { format: 'png', quality: 100 };
     landscape.spec.adjustments = { exposure: 1, contrast: 0.1, saturation: 0.2 };
-    useProjectStore.setState({ photos: [source, portrait, landscape], selectedId: source.id, currentPhotoId: source.id });
+    useProjectStore.setState({ photos: [source, portrait, landscape], currentPhotoId: source.id });
     let writes = 0;
     const unsubscribe = useProjectStore.subscribe(() => { writes += 1; });
     expect(useProjectStore.getState().applyCropToAll(source.id, '1:1')).toBe(2);

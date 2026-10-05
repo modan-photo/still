@@ -11,6 +11,16 @@ interface ExampleSession {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('session memory across hot reload', () => {
+  it('drops retired fields while retaining active session values', () => {
+    const original = createSessionStore<{ currentPhotoId: string | null; selectedId?: string }>(
+      () => ({ currentPhotoId: 'first', selectedId: 'first' }),
+    );
+    original.setState({ currentPhotoId: 'edited' });
+    const reloaded = createSessionStore(() => ({ currentPhotoId: null as string | null }), original);
+    expect(reloaded.getState().currentPhotoId).toBe('edited');
+    expect(Object.hasOwn(reloaded.getState(), 'selectedId')).toBe(false);
+  });
+
   it('retains the store and edited data while updating actions and notifying existing subscribers', () => {
     const setItem = vi.fn();
     vi.stubGlobal('localStorage', { setItem });

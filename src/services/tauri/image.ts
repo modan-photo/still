@@ -115,7 +115,3 @@ export const exportImageBatch = (
     taskId,
     (report) => report.cancellationRequested,
   );
-export const applyBorderStub = (spec: RenderSpec) =>
-  call<{ implemented: false; spec: RenderSpec }>('image_apply_border', { spec });
-export const applyWatermarkStub = (spec: RenderSpec) =>
-  call<{ implemented: false; spec: RenderSpec }>('image_apply_watermark', { spec });

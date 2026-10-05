@@ -31,7 +31,7 @@ function photo(id: string): ProjectPhoto {
   };
 }
 
-beforeEach(() => useProjectStore.setState({ photos: [], selectedId: null, currentPhotoId: null }));
+beforeEach(() => useProjectStore.setState({ photos: [], currentPhotoId: null }));
 
 describe('transform button edits', () => {
   it('retains the same source region for every angle, reflection and button operation', () => {
@@ -85,7 +85,7 @@ describe('transform button edits', () => {
     const first = photo('first.jpg');
     first.spec.crop = structuredClone(crop);
     const second = photo('second.jpg');
-    useProjectStore.setState({ photos: [first, second], selectedId: first.id, currentPhotoId: first.id });
+    useProjectStore.setState({ photos: [first, second], currentPhotoId: first.id });
     let writes = 0;
     const unsubscribe = useProjectStore.subscribe(state => {
       writes++;

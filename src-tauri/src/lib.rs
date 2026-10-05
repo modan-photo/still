@@ -18,8 +18,6 @@ pub fn run() {
             commands::image::image_export,
             commands::export::image_export_batch,
             commands::image::thumb_get,
-            commands::image::image_apply_border,
-            commands::image::image_apply_watermark,
             commands::collage::collage_compose,
             commands::watermark::watermark_fonts,
             commands::watermark::watermark_presets_list,

@@ -62,7 +62,7 @@ function closeEvent() {
 }
 
 function expectCleanSession() {
-  expect(useProjectStore.getState()).toMatchObject({ photos: [], currentPhotoId: null, selectedId: null, selectedIds: [], collageDraft: DEFAULT_COLLAGE_DRAFT });
+  expect(useProjectStore.getState()).toMatchObject({ photos: [], currentPhotoId: null, selectedIds: [], collageDraft: DEFAULT_COLLAGE_DRAFT });
   expect(useUndoStore.getState()).toMatchObject({ snapshot: null, expiresAt: null, count: 0, notice: null });
   expect(useUIStore.getState()).toMatchObject({ activeRightTab: 'frame', inspectorOpen: true, gridPanelOpen: false, theme: 'dark', systemFontsEnabled: true });
   expect(setItem).not.toHaveBeenCalled();

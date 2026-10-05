@@ -25,7 +25,7 @@ test('deduplicates imports, isolates photo edits, and preserves edits during exp
   store.getState().addPhotos([photo('a.jpg'), photo('b.jpg'), photo('a.jpg')]);
   assert.equal(store.getState().photos.length, 2);
   assert.equal(store.getState().currentPhotoId, 'a.jpg');
-  assert.equal(store.getState().selectedId, 'a.jpg');
+  assert.equal(Object.hasOwn(store.getState(), 'selectedId'), false);
   const exported = structuredClone(store.getState().photos[0].spec);
   store.getState().updateSpec('a.jpg', { output: { format: 'png', quality: 100 } });
   store.getState().markClean('a.jpg', exported);
@@ -40,7 +40,6 @@ test('deduplicates imports, isolates photo edits, and preserves edits during exp
   assert.notEqual(store.getState().photos[0].spec.border, store.getState().photos[1].spec.border);
   store.getState().removePhoto('a.jpg');
   assert.equal(store.getState().currentPhotoId, 'b.jpg');
-  assert.equal(store.getState().selectedId, 'b.jpg');
 });
 
 test('batch removal updates selections and chooses the next photo before the previous one', () => {
@@ -54,7 +53,6 @@ test('batch removal updates selections and chooses the next photo before the pre
   const snapshot = store.getState().removePhotos(['a.jpg', 'c.jpg']);
   assert.deepEqual(store.getState().photos.map((entry) => entry.id), ['b.jpg', 'd.jpg']);
   assert.equal(store.getState().currentPhotoId, 'd.jpg');
-  assert.equal(store.getState().selectedId, 'd.jpg');
   assert.deepEqual(store.getState().selectedIds, []);
   assert.deepEqual(snapshot.removedPhotos.map((entry) => entry.id), ['a.jpg', 'c.jpg']);
   assert.deepEqual(snapshot.removedIndices, [0, 2]);
@@ -70,7 +68,6 @@ test('batch removal updates selections and chooses the next photo before the pre
   store.getState().clearAll();
   assert.deepEqual(store.getState().photos, []);
   assert.equal(store.getState().currentPhotoId, null);
-  assert.equal(store.getState().selectedId, null);
 });
 
 test('applies the current RenderSpec to selected photos while preserving each source', () => {

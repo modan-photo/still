@@ -33,8 +33,8 @@ const PRESET_COLORS = ['#FFFFFF', '#F5F0E8', '#D8E7DE', '#BEDBE7', '#F3C6C2', '#
 
 export function FrameControls() {
   const { spec, update } = useRenderSpec();
-  const selectedId = useProjectStore((state) => state.selectedId);
-  const photo = useProjectStore((state) => state.photos.find((entry) => entry.id === state.selectedId));
+  const selectedId = useProjectStore((state) => state.currentPhotoId);
+  const photo = useProjectStore((state) => state.photos.find((entry) => entry.id === state.currentPhotoId));
   const photoCount = useProjectStore((state) => state.photos.length);
   const applyBorderToAll = useProjectStore((state) => state.applyBorderToAll);
   const [confirmOpen, setConfirmOpen] = useState(false);

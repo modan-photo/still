@@ -18,7 +18,7 @@ beforeEach(() => {
   setItem = vi.fn((key: string, value: string) => entries.set(key, value));
   removeItem = vi.fn((key: string) => entries.delete(key));
   vi.stubGlobal('localStorage', { getItem, setItem, removeItem });
-  useProjectStore.setState({ photos: [], selectedId: null, currentPhotoId: null, selectedIds: [] });
+  useProjectStore.setState({ photos: [], currentPhotoId: null, selectedIds: [] });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -44,7 +44,7 @@ describe('in-memory photo transforms', () => {
     store.addPhotos([source]);
     store.updateSpec(source.path, { rotation: { angle: 90, flipH: true, flipV: false }, crop });
     expect(useProjectStore.getState().photos[0].dirty).toBe(true);
-    useProjectStore.setState({ photos: [], selectedId: null, currentPhotoId: null });
+    useProjectStore.setState({ photos: [], currentPhotoId: null });
     store.addPhotos([source]);
     expect(useProjectStore.getState().photos[0].spec.crop).toEqual(DEFAULT_CROP);
     expect(useProjectStore.getState().photos[0].spec.rotation).toEqual(DEFAULT_ROTATION);
@@ -98,7 +98,7 @@ describe('in-memory photo transforms', () => {
       store.updateSpec(source.path, computeTransformEdit(spec.rotation ?? DEFAULT_ROTATION, spec.crop!, 'right'));
     }
     expect(useProjectStore.getState().photos[0].spec.rotation?.angle).toBe(180);
-    useProjectStore.setState({ photos: [], selectedId: null, currentPhotoId: null });
+    useProjectStore.setState({ photos: [], currentPhotoId: null });
     store.addPhotos([source]);
     expect(useProjectStore.getState().photos[0].spec.rotation).toEqual(DEFAULT_ROTATION);
     expectNoStorageAccess();

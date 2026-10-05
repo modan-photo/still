@@ -71,7 +71,7 @@ export function GridPanel() {
   });
   const theme = useTheme();
   const photos = useProjectStore((state) => state.photos);
-  const selectedId = useProjectStore((state) => state.selectedId);
+  const selectedId = useProjectStore((state) => state.currentPhotoId);
   const selectedIds = useProjectStore((state) => state.selectedIds);
   const selectPhoto = useProjectStore((state) => state.selectPhoto);
   const setSelectedIds = useProjectStore((state) => state.setSelectedIds);

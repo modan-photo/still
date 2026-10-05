@@ -10,7 +10,7 @@ export function createSessionStore<T extends object>(
   const state = previous.getState();
   const refreshed = initializer(previous.setState, previous.getState, previous);
   for (const key of Object.keys(state) as Array<keyof T>) {
-    if (typeof state[key] !== 'function') refreshed[key] = state[key];
+    if (key in refreshed && typeof state[key] !== 'function') refreshed[key] = state[key];
   }
   previous.setState(refreshed, true);
   return previous;

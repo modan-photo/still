@@ -19,7 +19,7 @@ function fixture(aspect: CropAspect = '16:9', rotation: RotationSpec = { angle: 
   target.spec.crop = { ...structuredClone(DEFAULT_CROP), enabled: true, aspect: 'free' };
   target.spec.output = { format: 'png', quality: 100 };
   const landscape = photo('landscape.jpg', 6000, 3000);
-  useProjectStore.setState({ photos: [source, target, landscape], selectedId: source.id, currentPhotoId: source.id });
+  useProjectStore.setState({ photos: [source, target, landscape], currentPhotoId: source.id });
   return { source, target, landscape };
 }
 
@@ -32,7 +32,7 @@ function expectCentered(photo: ProjectPhoto, aspect: CropAspect) {
   expect(Math.max(rect.width, rect.height)).toBeCloseTo(1);
 }
 
-beforeEach(() => useProjectStore.setState({ photos: [], selectedId: null, currentPhotoId: null, selectedIds: [] }));
+beforeEach(() => useProjectStore.setState({ photos: [], currentPhotoId: null, selectedIds: [] }));
 
 describe('batch transform application', () => {
   it('preserves each rotation by default and centers every crop in one store update', () => {

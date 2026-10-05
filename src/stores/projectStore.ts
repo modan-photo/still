@@ -46,8 +46,6 @@ export interface ProjectState {
   selectedIds: string[];
   currentPhotoId: string | null;
   collageDraft: CollageDraft;
-  /** @deprecated Use currentPhotoId. Kept temporarily for existing consumers. */
-  selectedId: string | null;
   addPhotos: (photos: ImageMeta[]) => void;
   selectPhoto: (id: string) => void;
   setSelectedIds: (ids: string[]) => void;
@@ -115,7 +113,7 @@ async function regenerateRestoredThumbnails(photos: ProjectPhoto[]) {
 }
 
 export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
-  photos: [], selectedIds: [], currentPhotoId: null, selectedId: null,
+  photos: [], selectedIds: [], currentPhotoId: null,
   collageDraft: structuredClone(DEFAULT_COLLAGE_DRAFT),
   addPhotos: (incoming) => set((state) => {
     const known = new Set<string>();
@@ -132,14 +130,14 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
       spec.source = { path: meta.path, width: meta.width, height: meta.height };
       return { ...meta, id, dirty: false, thumbRevision: 0, spec };
     });
-    const currentPhotoId = state.currentPhotoId ?? state.selectedId ?? added[0]?.id ?? null;
-    return { photos: [...state.photos, ...added], currentPhotoId, selectedId: currentPhotoId };
+    const currentPhotoId = state.currentPhotoId ?? added[0]?.id ?? null;
+    return { photos: [...state.photos, ...added], currentPhotoId };
   }),
   selectPhoto: (id) => {
     const request = ++photoSelectionRequest;
     const applySelection = () => set((state) => (
       request === photoSelectionRequest && state.photos.some((photo) => photo.id === id)
-        ? { currentPhotoId: id, selectedId: id }
+        ? { currentPhotoId: id }
         : state
     ));
     if (!hasPendingExifSaves()) {
@@ -248,7 +246,7 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
       removedPhotos.push(photo);
       removedIndices.push(index);
     });
-    const previousCurrentId = state.currentPhotoId ?? state.selectedId;
+    const previousCurrentId = state.currentPhotoId;
     const snapshot: RemovePhotosSnapshot = {
       removedPhotos,
       removedIndices,
@@ -273,7 +271,6 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
       photos,
       selectedIds: state.selectedIds.filter((id) => !targetIds.has(id)),
       currentPhotoId,
-      selectedId: currentPhotoId,
       collageDraft: { ...state.collageDraft, photoIds: state.collageDraft.photoIds.filter((id) => !targetIds.has(id)) },
     });
     invalidatePhotoCaches(removedPhotos);
@@ -299,7 +296,6 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
         photos,
         selectedIds: snapshot.previousSelectedIds.filter((id) => availableIds.has(id)),
         currentPhotoId,
-        selectedId: currentPhotoId,
         collageDraft: { ...state.collageDraft, photoIds: (snapshot.previousCollagePhotoIds ?? []).filter((id) => availableIds.has(id)) },
       };
     });
@@ -311,7 +307,7 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
   resetSession: () => {
     photoSelectionRequest++;
     set({
-      photos: [], selectedIds: [], currentPhotoId: null, selectedId: null,
+      photos: [], selectedIds: [], currentPhotoId: null,
       collageDraft: structuredClone(DEFAULT_COLLAGE_DRAFT),
     });
   },
