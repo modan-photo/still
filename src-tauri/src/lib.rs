@@ -28,6 +28,7 @@ pub fn run() {
             commands::frame::frame_presets_load,
             commands::frame::frame_presets_save,
             commands::task::task_cancel,
+            commands::task::task_cancel_all,
             commands::task::task_list,
             commands::session::cleanup_legacy_session_files,
             commands::preferences::migrate_preferences_if_needed,

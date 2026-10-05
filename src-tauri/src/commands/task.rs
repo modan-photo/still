@@ -22,6 +22,17 @@ pub struct TaskProgress {
 }
 
 impl TaskManager {
+    fn cancel_all(&self) -> Result<usize, AppError> {
+        let tasks = self
+            .0
+            .lock()
+            .map_err(|_| AppError::InvalidInput("task registry unavailable".into()))?;
+        for (_, token) in tasks.values() {
+            token.cancel();
+        }
+        Ok(tasks.len())
+    }
+
     fn start(&self, id: &str, operation: &str) -> Result<CancellationToken, AppError> {
         let mut tasks = self
             .0
@@ -154,6 +165,11 @@ pub fn task_cancel(task_id: String, state: State<'_, TaskManager>) -> Result<(),
 }
 
 #[tauri::command]
+pub fn task_cancel_all(state: State<'_, TaskManager>) -> Result<usize, AppError> {
+    state.cancel_all()
+}
+
+#[tauri::command]
 pub fn task_list(state: State<'_, TaskManager>) -> Result<Vec<TaskProgress>, AppError> {
     let tasks = state
         .0
@@ -175,5 +191,16 @@ mod tests {
         assert!(manager.start("export-1", "export").is_err());
         manager.0.lock().unwrap()["export-1"].1.cancel();
         assert!(matches!(check(&token), Err(AppError::Cancelled)));
+    }
+
+    #[test]
+    fn cancelling_orphaned_tasks_preserves_registry_until_workers_finish() {
+        let manager = TaskManager::default();
+        let first = manager.start("old-import", "image_load").unwrap();
+        let second = manager.start("old-export", "image_export_batch").unwrap();
+        assert_eq!(manager.cancel_all().unwrap(), 2);
+        assert!(matches!(check(&first), Err(AppError::Cancelled)));
+        assert!(matches!(check(&second), Err(AppError::Cancelled)));
+        assert_eq!(manager.0.lock().unwrap().len(), 2);
     }
 }

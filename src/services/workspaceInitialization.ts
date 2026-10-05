@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { platform } from '@tauri-apps/plugin-os';
 
 const SESSION_FIELDS = [
   'lastFramePresetId', 'lastWatermarkPresetId', 'lastUsedSpec', 'lastAppliedSpec',
@@ -62,6 +63,15 @@ export async function migratePreferencesIfNeeded(): Promise<void> {
 
 async function initialize(): Promise<void> {
   if (isTauri()) {
+    try {
+      if (platform() === 'android') {
+        // A recreated WebView has no listeners for tasks started by its predecessor.
+        // Leave ordinary backgrounding alone; cancel only on a fresh JS startup.
+        await invoke('task_cancel_all');
+      }
+    } catch (error) {
+      console.warn('Unable to cancel orphaned Android tasks', error);
+    }
     try {
       await invoke('cleanup_legacy_session_files');
     } catch (error) {

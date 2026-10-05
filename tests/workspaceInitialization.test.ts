@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { invoke, isTauri } = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
+const { invoke, isTauri, platform } = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(), platform: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke, isTauri }));
+vi.mock('@tauri-apps/plugin-os', () => ({ platform }));
 
 let entries: Map<string, string>;
 let setItem: ReturnType<typeof vi.fn>;
@@ -11,6 +12,7 @@ beforeEach(() => {
   vi.resetModules();
   invoke.mockReset().mockResolvedValue(undefined);
   isTauri.mockReset().mockReturnValue(true);
+  platform.mockReset().mockReturnValue('windows');
   entries = new Map();
   setItem = vi.fn((key: string, value: string) => entries.set(key, value));
   removeItem = vi.fn((key: string) => entries.delete(key));
@@ -25,6 +27,40 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('workspace startup migration', () => {
+  it('cancels orphaned Android tasks before initializing a recreated WebView', async () => {
+    platform.mockReturnValue('android');
+    const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
+    await initializeWorkspace();
+    expect(invoke.mock.calls).toEqual([
+      ['task_cancel_all'], ['cleanup_legacy_session_files'], ['migrate_preferences_if_needed'],
+    ]);
+  });
+
+  it('still starts Android after orphan cancellation fails', async () => {
+    platform.mockReturnValue('android');
+    invoke.mockImplementation((command: string) => command === 'task_cancel_all'
+      ? Promise.reject(new Error('registry unavailable'))
+      : Promise.resolve());
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
+    await initializeWorkspace();
+    expect(invoke.mock.calls).toEqual([
+      ['task_cancel_all'], ['cleanup_legacy_session_files'], ['migrate_preferences_if_needed'],
+    ]);
+    expect(warning).toHaveBeenCalledTimes(1);
+  });
+
+  it('still starts when the OS plugin cannot identify the platform', async () => {
+    platform.mockImplementation(() => { throw new Error('OS plugin unavailable'); });
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
+    await initializeWorkspace();
+    expect(invoke.mock.calls).toEqual([
+      ['cleanup_legacy_session_files'], ['migrate_preferences_if_needed'],
+    ]);
+    expect(warning).toHaveBeenCalledTimes(1);
+  });
+
   it('runs cleanup and migration in order once per window', async () => {
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
     const first = initializeWorkspace();

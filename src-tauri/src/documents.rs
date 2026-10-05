@@ -118,6 +118,7 @@ pub fn publish(
     let mut active_uri = created.uri;
     let commit = (|| {
         copy_staged(app, staged, &active_uri, token)?;
+        crate::commands::task::check(token)?;
         let result: RenameResponse = plugin(
             app,
             "renameDocument",
