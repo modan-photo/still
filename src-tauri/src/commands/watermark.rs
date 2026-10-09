@@ -97,6 +97,27 @@ pub fn watermark_preset_save(
 }
 
 #[tauri::command]
+pub fn watermark_presets_replace(
+    app: AppHandle,
+    presets: Vec<WatermarkPreset>,
+) -> Result<Vec<WatermarkPreset>, AppError> {
+    let mut ids = std::collections::HashSet::new();
+    for preset in &presets {
+        if preset.id.trim().is_empty() || preset.name.trim().is_empty() || !ids.insert(&preset.id) {
+            return Err(AppError::InvalidInput(
+                "watermark presets need unique IDs and nonempty names".into(),
+            ));
+        }
+        preset
+            .watermark
+            .validate()
+            .map_err(AppError::InvalidInput)?;
+    }
+    write_presets(&preset_path(&app)?, &presets)?;
+    Ok(presets)
+}
+
+#[tauri::command]
 pub fn watermark_preset_delete(
     app: AppHandle,
     id: String,

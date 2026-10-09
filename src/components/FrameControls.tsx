@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { BUILTIN_FRAME_PRESETS, DEFAULT_FRAME_PRESET_ID } from '../constants/framePresets';
 import { useRenderSpec } from '../hooks/useRenderSpec';
 import { loadFramePresets, saveFramePresets } from '../services/tauri/framePresets';
+import { createPresetBundle, exportPresetText, getDefaultPresetId, importPresetText, isFramePreset, mergeImportedPresets, parsePresetBundle, setDefaultPresetId } from '../services/presetBundles';
 import { useProjectStore } from '../stores/projectStore';
 import type { FramePreset, FrameStyle } from '../types/frame';
 import { DEFAULT_BORDER, type BorderSpec } from '../types/renderSpec';
@@ -43,6 +44,7 @@ export function FrameControls() {
   const [presetActionTarget, setPresetActionTarget] = useState<FramePresetActionTarget | null>(null);
   const [userPresets, setUserPresets] = useState<FramePreset[]>([]);
   const [currentFramePresetId, setCurrentFramePresetId] = useState(DEFAULT_FRAME_PRESET_ID);
+  const [defaultFramePresetId, setDefaultFramePresetId] = useState(() => getDefaultPresetId('frame'));
   const presets = useMemo<FramePreset[]>(() => [
     ...BUILTIN_FRAME_PRESETS.map((preset) => structuredClone(preset)),
     ...userPresets,
@@ -60,6 +62,10 @@ export function FrameControls() {
       .then((storedPresets) => {
         if (disposed) return;
         setUserPresets(storedPresets);
+        if (defaultFramePresetId && !storedPresets.some((preset) => preset.id === defaultFramePresetId)) {
+          setDefaultPresetId('frame', null);
+          setDefaultFramePresetId(null);
+        }
       })
       .catch((error: unknown) => {
         console.warn('Unable to restore frame presets', error);
@@ -152,6 +158,10 @@ export function FrameControls() {
     const nextUserPresets = userPresets.filter((entry) => entry.id !== preset.id);
     await saveFramePresets(nextUserPresets);
     setUserPresets(nextUserPresets);
+    if (defaultFramePresetId === preset.id) {
+      setDefaultPresetId('frame', null);
+      setDefaultFramePresetId(null);
+    }
     if (currentFramePresetId === preset.id) {
       const fallback = presets.find((entry) => entry.id === DEFAULT_FRAME_PRESET_ID);
       if (fallback) {
@@ -160,6 +170,36 @@ export function FrameControls() {
       }
     }
     setNotice('Preset deleted');
+  };
+
+  const toggleDefaultPreset = (preset: FramePreset) => {
+    const id = defaultFramePresetId === preset.id ? null : preset.id;
+    setDefaultPresetId('frame', id);
+    setDefaultFramePresetId(id);
+    setNotice(id ? `${preset.name} is the default frame preset` : 'Default frame preset cleared');
+  };
+
+  const importPresets = async () => {
+    try {
+      const contents = await importPresetText('frame');
+      if (contents === null) return;
+      const bundle = parsePresetBundle(contents, 'frame', isFramePreset);
+      const merged = mergeImportedPresets(userPresets, bundle.presets, bundle.defaultPresetId, 'frame');
+      await saveFramePresets(merged.presets);
+      setUserPresets(merged.presets);
+      if (!defaultFramePresetId && merged.importedDefaultId) {
+        setDefaultPresetId('frame', merged.importedDefaultId);
+        setDefaultFramePresetId(merged.importedDefaultId);
+      }
+      setNotice(`Imported ${bundle.presets.length} frame presets`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to import presets'); }
+  };
+
+  const exportPresets = async () => {
+    try {
+      const contents = createPresetBundle('frame', userPresets, defaultFramePresetId);
+      if (await exportPresetText('frame', contents)) setNotice('Frame presets exported');
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to export presets'); }
   };
 
   const resetFrame = useCallback(() => {
@@ -220,6 +260,15 @@ export function FrameControls() {
       </Tooltip>
     </div>
 
+    <div className="flex gap-2">
+      <Button size="small" variant="outlined" onClick={() => void importPresets()}>Import presets</Button>
+      <Button size="small" variant="outlined" disabled={userPresets.length === 0} onClick={() => void exportPresets()}>Export presets</Button>
+      {defaultFramePresetId && <Button size="small" onClick={() => {
+        const preset = userPresets.find((entry) => entry.id === defaultFramePresetId);
+        if (preset) selectPreset(preset);
+      }}>Apply default</Button>}
+    </div>
+
     {frameApplied ? (
       <FrameParameterTransition style={selectedPreset.style}>
         {(displayStyle) => <FrameParameterFields
@@ -257,6 +306,8 @@ export function FrameControls() {
     />}
     <FramePresetActions
       target={presetActionTarget}
+      defaultPresetId={defaultFramePresetId}
+      onToggleDefault={toggleDefaultPreset}
       onCloseMenu={() => setPresetActionTarget(null)}
       onRename={renameUserPreset}
       onDuplicate={duplicateUserPreset}

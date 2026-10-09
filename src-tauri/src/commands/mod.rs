@@ -4,6 +4,7 @@ pub mod export;
 pub mod frame;
 pub mod image;
 pub mod preferences;
+pub mod preset_transfer;
 pub mod session;
 pub mod task;
 pub mod watermark;

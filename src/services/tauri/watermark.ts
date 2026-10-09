@@ -66,3 +66,9 @@ export async function deleteWatermarkPreset(id: string): Promise<WatermarkPreset
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
   return presets;
 }
+
+export async function replaceWatermarkPresets(presets: WatermarkPreset[]): Promise<WatermarkPreset[]> {
+  if (isTauri()) return invoke<WatermarkPreset[]>('watermark_presets_replace', { presets });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+  return presets;
+}

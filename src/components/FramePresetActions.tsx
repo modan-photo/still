@@ -24,6 +24,8 @@ interface FramePresetActionsProps {
   onRename: (preset: FramePreset, name: string) => Promise<void>;
   onDuplicate: (preset: FramePreset) => Promise<void>;
   onDelete: (preset: FramePreset) => Promise<void>;
+  onToggleDefault: (preset: FramePreset) => void;
+  defaultPresetId: string | null;
   onError: (message: string) => void;
 }
 
@@ -33,6 +35,8 @@ export function FramePresetActions({
   onRename,
   onDuplicate,
   onDelete,
+  onToggleDefault,
+  defaultPresetId,
   onError,
 }: FramePresetActionsProps) {
   const [renamePreset, setRenamePreset] = useState<FramePreset | null>(null);
@@ -110,6 +114,9 @@ export function FramePresetActions({
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: dialogPaper }}
       >
+        <MenuItem onClick={() => { if (target) onToggleDefault(target.preset); onCloseMenu(); }}>
+          {target?.preset.id === defaultPresetId ? 'Clear default' : 'Set as default'}
+        </MenuItem>
         <MenuItem onClick={beginRename}>Rename</MenuItem>
         <MenuItem onClick={duplicate}>Duplicate</MenuItem>
         <MenuItem

@@ -1,10 +1,10 @@
 import {
-  Button, IconButton, ListSubheader, MenuItem, Select, Slider, Switch, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
+  Button, Dialog, DialogActions, DialogContent, DialogTitle, ListSubheader, MenuItem, Select, Slider, Switch, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRenderSpec } from '../hooks/useRenderSpec';
 import {
-  deleteWatermarkPreset, listWatermarkFonts, listWatermarkPresets, saveWatermarkPreset,
+  deleteWatermarkPreset, listWatermarkFonts, listWatermarkPresets, replaceWatermarkPresets, saveWatermarkPreset,
   type FontInfo, type WatermarkPreset,
 } from '../services/tauri/watermark';
 import { DEFAULT_WATERMARK, type Anchor, type FontSpec, type WatermarkSpec } from '../types/renderSpec';
@@ -12,6 +12,7 @@ import { useUIStore } from '../stores/uiStore';
 import { errorMessage } from '../services/errorMessages';
 import { normalizeError } from '../services/tauri/image';
 import { selectWatermarkImage } from '../services/watermarkImageSelection';
+import { createPresetBundle, exportPresetText, getDefaultPresetId, importPresetText, isWatermarkPreset, mergeImportedPresets, parsePresetBundle, setDefaultPresetId } from '../services/presetBundles';
 
 const ANCHORS: { value: Anchor; label: string }[] = [
   { value: 'topLeft', label: 'Top left' }, { value: 'topCenter', label: 'Top center' }, { value: 'topRight', label: 'Top right' },
@@ -27,6 +28,10 @@ export function StampControls() {
   const [fonts, setFonts] = useState<FontInfo[]>([]);
   const [presets, setPresets] = useState<WatermarkPreset[]>([]);
   const [presetName, setPresetName] = useState('');
+  const [defaultWatermarkPresetId, setDefaultWatermarkPresetId] = useState(() => getDefaultPresetId('watermark'));
+  const [renameTarget, setRenameTarget] = useState<WatermarkPreset | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<WatermarkPreset | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
   useEffect(() => { void listWatermarkFonts(systemFontsEnabled).then((available) => {
@@ -39,7 +44,13 @@ export function StampControls() {
       if (fallback) changeFont({ family: fallback.family, path: fallback.path });
     }
   }).catch((error) => setMessage(String(error))); }, [systemFontsEnabled]); // Each source mode is cached for the app lifetime.
-  useEffect(() => { void listWatermarkPresets().then(setPresets).catch((error) => setMessage(String(error))); }, []);
+  useEffect(() => { void listWatermarkPresets().then((stored) => {
+    setPresets(stored);
+    if (defaultWatermarkPresetId && !stored.some((preset) => preset.id === defaultWatermarkPresetId)) {
+      setDefaultPresetId('watermark', null);
+      setDefaultWatermarkPresetId(null);
+    }
+  }).catch((error) => setMessage(String(error))); }, []);
   const selectedFont = useMemo(() => fonts.find((font) => font.family === stamp.font?.family), [fonts, stamp.font?.family]);
   const change = (patch: Partial<WatermarkSpec>) => {
     const next = { ...stamp, ...patch };
@@ -63,9 +74,67 @@ export function StampControls() {
   const savePreset = async () => {
     const name = presetName.trim();
     if (!name) { setMessage('Enter a preset name first.'); return; }
-    const preset = { id: crypto.randomUUID(), name, watermark: structuredClone(stamp) };
+    const preset = { id: crypto.randomUUID(), name: uniquePresetName(name, presets), watermark: structuredClone(stamp) };
     try { setPresets(await saveWatermarkPreset(preset)); setPresetName(''); setMessage('Preset saved.'); }
     catch (error) { setMessage(String(error)); }
+  };
+
+  const applyPreset = (preset: WatermarkPreset) => {
+    const loaded = withAllowedFont(preset.watermark, fonts);
+    setDraft(structuredClone(loaded));
+    update({ watermark: structuredClone(loaded) });
+  };
+
+  const toggleDefault = (preset: WatermarkPreset) => {
+    const id = defaultWatermarkPresetId === preset.id ? null : preset.id;
+    setDefaultPresetId('watermark', id);
+    setDefaultWatermarkPresetId(id);
+    setMessage(id ? `${preset.name} is the default stamp preset.` : 'Default stamp preset cleared.');
+  };
+
+  const renamePreset = async () => {
+    if (!renameTarget || !renameDraft.trim()) return;
+    try {
+      const name = uniquePresetName(renameDraft, presets.filter((item) => item.id !== renameTarget.id));
+      setPresets(await replaceWatermarkPresets(presets.map((item) => item.id === renameTarget.id ? { ...item, name } : item)));
+      setRenameTarget(null);
+      setMessage('Preset renamed.');
+    } catch (error) { setMessage(String(error)); }
+  };
+
+  const removePreset = async () => {
+    if (!deleteTarget) return;
+    try {
+      setPresets(await deleteWatermarkPreset(deleteTarget.id));
+      if (defaultWatermarkPresetId === deleteTarget.id) {
+        setDefaultPresetId('watermark', null);
+        setDefaultWatermarkPresetId(null);
+      }
+      setDeleteTarget(null);
+      setMessage('Preset deleted.');
+    } catch (error) { setMessage(String(error)); }
+  };
+
+  const importPresets = async () => {
+    try {
+      const contents = await importPresetText('watermark');
+      if (contents === null) return;
+      const bundle = parsePresetBundle(contents, 'watermark', isWatermarkPreset);
+      const merged = mergeImportedPresets(presets, bundle.presets, bundle.defaultPresetId, 'watermark');
+      setPresets(await replaceWatermarkPresets(merged.presets));
+      if (!defaultWatermarkPresetId && merged.importedDefaultId) {
+        setDefaultPresetId('watermark', merged.importedDefaultId);
+        setDefaultWatermarkPresetId(merged.importedDefaultId);
+      }
+      setMessage(`Imported ${bundle.presets.length} presets.${bundle.presets.some((item) => item.watermark.type === 'image') ? ' Image presets retain local PNG paths; reselect missing PNGs.' : ''}`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to import presets.'); }
+  };
+
+  const exportPresets = async () => {
+    try {
+      const contents = createPresetBundle('watermark', presets, defaultWatermarkPresetId);
+      if (await exportPresetText('watermark', contents)) setMessage('Stamp presets exported. Image presets retain local PNG paths.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to export presets.'); }
   };
 
   return <div className="space-y-4">
@@ -141,17 +210,37 @@ export function StampControls() {
 
     <div className="border-t border-subtle pt-3">
       <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-secondary">Presets</span>
-      {presets.length > 0 && <div className="mb-2 space-y-1">{presets.map((preset) => <div key={preset.id} className="flex items-center gap-1">
-        <Button size="small" fullWidth variant="text" sx={{ justifyContent: 'flex-start', fontSize: 11 }} onClick={() => {
-          const loaded = withAllowedFont(preset.watermark, fonts);
-          setDraft(structuredClone(loaded)); update({ watermark: structuredClone(loaded) });
-        }}>{preset.name}</Button>
-        <IconButton size="small" aria-label={`Delete ${preset.name}`} onClick={() => void deleteWatermarkPreset(preset.id).then(setPresets)}>×</IconButton>
+      {presets.length > 0 && <div className="mb-2 space-y-1">{presets.map((preset) => <div key={preset.id} className="flex flex-wrap items-center gap-1">
+        <Button size="small" fullWidth variant="text" sx={{ justifyContent: 'flex-start', fontSize: 11 }} onClick={() => applyPreset(preset)}>{preset.name}{defaultWatermarkPresetId === preset.id ? ' (default)' : ''}</Button>
+        <Button size="small" aria-label={`Set ${preset.name} as default`} onClick={() => toggleDefault(preset)}>{defaultWatermarkPresetId === preset.id ? 'Unset' : 'Default'}</Button>
+        <Button size="small" aria-label={`Rename ${preset.name}`} onClick={() => { setRenameTarget(preset); setRenameDraft(preset.name); }}>Rename</Button>
+        <Button size="small" color="error" aria-label={`Delete ${preset.name}`} onClick={() => setDeleteTarget(preset)}>Delete</Button>
       </div>)}</div>}
       <div className="flex gap-2"><TextField size="small" fullWidth placeholder="Preset name" value={presetName} onChange={(event) => setPresetName(event.target.value)} /><Button size="small" variant="outlined" onClick={() => void savePreset()}>Save</Button></div>
+      <div className="mt-2 flex gap-2"><Button size="small" variant="outlined" onClick={() => void importPresets()}>Import</Button><Button size="small" variant="outlined" disabled={presets.length === 0} onClick={() => void exportPresets()}>Export</Button>
+        {defaultWatermarkPresetId && <Button size="small" onClick={() => { const preset = presets.find((item) => item.id === defaultWatermarkPresetId); if (preset) applyPreset(preset); }}>Apply default</Button>}
+      </div>
       {message && <p className="mb-0 mt-2 text-[10px] text-secondary">{message}</p>}
     </div>
+    <Dialog open={Boolean(renameTarget)} onClose={() => setRenameTarget(null)} fullWidth maxWidth="xs" aria-labelledby="rename-stamp-preset-title">
+      <DialogTitle id="rename-stamp-preset-title">Rename stamp preset</DialogTitle>
+      <DialogContent><TextField autoFocus fullWidth label="Preset name" value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} sx={{ mt: 1 }} /></DialogContent>
+      <DialogActions><Button onClick={() => setRenameTarget(null)}>Cancel</Button><Button disabled={!renameDraft.trim()} onClick={() => void renamePreset()}>Save</Button></DialogActions>
+    </Dialog>
+    <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="xs" aria-labelledby="delete-stamp-preset-title">
+      <DialogTitle id="delete-stamp-preset-title">Delete stamp preset?</DialogTitle>
+      <DialogContent>Delete “{deleteTarget?.name}”? This cannot be undone.</DialogContent>
+      <DialogActions><Button onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="error" onClick={() => void removePreset()}>Delete</Button></DialogActions>
+    </Dialog>
   </div>;
+}
+
+function uniquePresetName(requested: string, presets: WatermarkPreset[]): string {
+  const base = requested.trim();
+  const names = new Set(presets.map((preset) => preset.name.toLocaleLowerCase()));
+  let name = base;
+  for (let index = 2; names.has(name.toLocaleLowerCase()); index += 1) name = `${base} (${index})`;
+  return name;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label><span className="mb-1.5 block text-xs font-medium text-secondary">{label}</span>{children}</label>; }
