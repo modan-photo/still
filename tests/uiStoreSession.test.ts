@@ -116,6 +116,33 @@ describe('in-memory inspector state', () => {
     expect(useUIStore.getState().singleKeyActions.remove).toBe(false);
   });
 
+  it('keeps the chosen grid and photo navigation keys across session reset', async () => {
+    getItem.mockImplementation((key: string) =>
+      key === 'still.shortcuts.grid-key'
+        ? 'v'
+        : key === 'still.shortcuts.photo-navigation-keys'
+          ? 'jl'
+          : null,
+    );
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState()).toMatchObject({
+      gridShortcutKey: 'v',
+      photoNavigationKeys: 'jl',
+      activeRightTab: 'frame',
+      gridPanelOpen: false,
+    });
+    useUIStore.getState().setGridShortcutKey('g');
+    useUIStore.getState().setPhotoNavigationKeys('arrows');
+    expect(setItem).toHaveBeenCalledWith('still.shortcuts.grid-key', 'g');
+    expect(setItem).toHaveBeenCalledWith('still.shortcuts.photo-navigation-keys', 'arrows');
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState()).toMatchObject({
+      gridShortcutKey: 'g',
+      photoNavigationKeys: 'arrows',
+      activeRightTab: 'frame',
+    });
+  });
+
   it('persists window size independently of the session state', async () => {
     getItem.mockImplementation((key: string) =>
       key === 'still.window.size-preset' ? 'compact' : null,

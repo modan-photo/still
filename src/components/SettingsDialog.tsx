@@ -43,6 +43,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setSingleKeyShortcutsEnabled = useUIStore((state) => state.setSingleKeyShortcutsEnabled);
   const singleKeyActions = useUIStore((state) => state.singleKeyActions);
   const setSingleKeyActionEnabled = useUIStore((state) => state.setSingleKeyActionEnabled);
+  const gridShortcutKey = useUIStore((state) => state.gridShortcutKey);
+  const setGridShortcutKey = useUIStore((state) => state.setGridShortcutKey);
+  const photoNavigationKeys = useUIStore((state) => state.photoNavigationKeys);
+  const setPhotoNavigationKeys = useUIStore((state) => state.setPhotoNavigationKeys);
   const language = useUIStore((state) => state.language);
   const setLanguage = useUIStore((state) => state.setLanguage);
   const windowSizePreset = useUIStore((state) => state.windowSizePreset);
@@ -163,7 +167,39 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               <div key={shortcut.id} className="flex items-center justify-between gap-3">
                 <div className="text-xs">
                   <div className="text-primary">{t(shortcut.label)}</div>
-                  <div className="font-mono text-secondary">{shortcut.keys}</div>
+                  {shortcut.id === 'grid' ? (
+                    <TextField
+                      select
+                      size="small"
+                      value={gridShortcutKey}
+                      disabled={!singleKeyShortcutsEnabled || !singleKeyActions.grid}
+                      inputProps={{ 'aria-label': `${t(shortcut.label)} ${t('shortcutKeys')}` }}
+                      onChange={(event) =>
+                        setGridShortcutKey(event.target.value === 'v' ? 'v' : 'g')
+                      }
+                      sx={{ mt: 0.5, minWidth: 90 }}
+                    >
+                      <MenuItem value="g">G</MenuItem>
+                      <MenuItem value="v">V</MenuItem>
+                    </TextField>
+                  ) : shortcut.id === 'photoNavigation' ? (
+                    <TextField
+                      select
+                      size="small"
+                      value={photoNavigationKeys}
+                      disabled={!singleKeyShortcutsEnabled || !singleKeyActions.photoNavigation}
+                      inputProps={{ 'aria-label': `${t(shortcut.label)} ${t('shortcutKeys')}` }}
+                      onChange={(event) =>
+                        setPhotoNavigationKeys(event.target.value === 'jl' ? 'jl' : 'arrows')
+                      }
+                      sx={{ mt: 0.5, minWidth: 110 }}
+                    >
+                      <MenuItem value="arrows">← / →</MenuItem>
+                      <MenuItem value="jl">J / L</MenuItem>
+                    </TextField>
+                  ) : (
+                    <div className="font-mono text-secondary">{shortcut.keys}</div>
+                  )}
                 </div>
                 <Switch
                   size="small"

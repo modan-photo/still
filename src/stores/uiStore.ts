@@ -9,6 +9,12 @@ import type { PhotoSort } from '../services/photoCollection';
 import {
   readSingleKeyActions,
   SINGLE_KEY_ACTIONS_KEY,
+  readGridShortcutKey,
+  GRID_SHORTCUT_KEY,
+  readPhotoNavigationKeys,
+  PHOTO_NAVIGATION_KEYS_KEY,
+  type GridShortcutKey,
+  type PhotoNavigationKeys,
   type SingleKeyAction,
   type SingleKeyActions,
 } from '../services/shortcutPreferences';
@@ -19,6 +25,8 @@ export interface UIState {
   systemFontsEnabled: boolean;
   singleKeyShortcutsEnabled: boolean;
   singleKeyActions: SingleKeyActions;
+  gridShortcutKey: GridShortcutKey;
+  photoNavigationKeys: PhotoNavigationKeys;
   language: 'en' | 'zh';
   windowSizePreset: WindowSizePreset;
   photoSort: PhotoSort;
@@ -29,6 +37,8 @@ export interface UIState {
   setSystemFontsEnabled: (enabled: boolean) => void;
   setSingleKeyShortcutsEnabled: (enabled: boolean) => void;
   setSingleKeyActionEnabled: (action: SingleKeyAction, enabled: boolean) => void;
+  setGridShortcutKey: (key: GridShortcutKey) => void;
+  setPhotoNavigationKeys: (keys: PhotoNavigationKeys) => void;
   setLanguage: (language: UIState['language']) => void;
   setWindowSizePreset: (preset: WindowSizePreset) => void;
   setPhotoSort: (sort: PhotoSort) => void;
@@ -56,6 +66,8 @@ export const useUIStore = createSessionStore<UIState>(
     systemFontsEnabled: storedSystemFontsEnabled(),
     singleKeyShortcutsEnabled: storedSingleKeyShortcutsEnabled(),
     singleKeyActions: readSingleKeyActions(),
+    gridShortcutKey: readGridShortcutKey(),
+    photoNavigationKeys: readPhotoNavigationKeys(),
     language: storedLanguage(),
     windowSizePreset: readWindowSizePreset(),
     photoSort: 'import',
@@ -78,6 +90,16 @@ export const useUIStore = createSessionStore<UIState>(
       if (typeof localStorage !== 'undefined')
         localStorage.setItem(SINGLE_KEY_ACTIONS_KEY, JSON.stringify(singleKeyActions));
       set({ singleKeyActions });
+    },
+    setGridShortcutKey: (gridShortcutKey) => {
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(GRID_SHORTCUT_KEY, gridShortcutKey);
+      set({ gridShortcutKey });
+    },
+    setPhotoNavigationKeys: (photoNavigationKeys) => {
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(PHOTO_NAVIGATION_KEYS_KEY, photoNavigationKeys);
+      set({ photoNavigationKeys });
     },
     setLanguage: (language) => {
       if (typeof localStorage !== 'undefined') localStorage.setItem(LANGUAGE_KEY, language);

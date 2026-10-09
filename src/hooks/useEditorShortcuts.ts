@@ -5,7 +5,11 @@ import { useUIStore } from '../stores/uiStore';
 import { useUndoStore } from '../stores/undoStore';
 import { enterCollageMode } from '../services/collageMode';
 import { adjacentPhoto } from '../services/photoCollection';
-import { singleKeyActionEnabled } from '../services/shortcutPreferences';
+import {
+  gridShortcutMatches,
+  photoNavigationDirection,
+  singleKeyActionEnabled,
+} from '../services/shortcutPreferences';
 
 /**
  * Registers the editor-level keyboard shortcuts for the lifetime of the caller.
@@ -36,7 +40,7 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         return;
       }
 
-      // `G` is available from passive controls such as the canvas, but not while
+      // The configured grid key is available from passive controls such as the canvas, but not while
       // text is being entered. It is also unavailable in collage mode, where the
       // center canvas has a different meaning.
       const textEntryActive =
@@ -66,7 +70,7 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         !event.metaKey &&
         !event.altKey &&
         !event.shiftKey &&
-        event.key.toLowerCase() === 'g' &&
+        gridShortcutMatches(event.key, useUIStore.getState().gridShortcutKey) &&
         useUIStore.getState().activeRightTab !== 'collage' &&
         useProjectStore.getState().photos.length >= 2
       ) {
@@ -144,10 +148,12 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       ) {
         event.preventDefault();
         onTogglePanel();
-      } else if (
-        singleKeyActions.photoNavigation &&
-        (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-      ) {
+      } else if (singleKeyActions.photoNavigation) {
+        const direction = photoNavigationDirection(
+          event.key,
+          useUIStore.getState().photoNavigationKeys,
+        );
+        if (direction === null) return;
         // Navigation is bounded naturally: no state change occurs beyond either end.
         event.preventDefault();
         const { photos, currentPhotoId, selectPhoto } = useProjectStore.getState();
@@ -155,7 +161,7 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
           photos,
           useUIStore.getState().photoSort,
           currentPhotoId,
-          event.key === 'ArrowLeft' ? -1 : 1,
+          direction,
         );
         if (next) selectPhoto(next.id);
       }
