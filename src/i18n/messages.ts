@@ -456,6 +456,12 @@ const messages = {
     desktopFolderOnly: 'Open the desktop app to import a photo folder.',
     folderNoSupported: 'The selected folder does not contain supported photos.',
     images: 'Images',
+    backToEditor: 'Back to editor',
+    cropKeyboardHelp:
+      'Use arrow keys to move the crop frame. Hold Shift for larger steps. Press Enter to confirm or Escape to cancel.',
+    editColor: 'Edit {label} color, currently {color}',
+    reorderGradientStop: 'Reorder stop {number}',
+    gradientStopKeyboardHelp: 'Use Alt+Up or Alt+Down to move a gradient stop.',
   },
   zh: {
     settingsTitle: '应用设置',
@@ -899,6 +905,12 @@ const messages = {
     desktopFolderOnly: '请在桌面应用中导入照片文件夹。',
     folderNoSupported: '所选文件夹中没有支持的照片。',
     images: '图片',
+    backToEditor: '返回编辑器',
+    cropKeyboardHelp:
+      '使用方向键移动裁剪框，按住 Shift 可加大步长；按 Enter 确认，按 Escape 取消。',
+    editColor: '编辑{label}颜色，当前为 {color}',
+    reorderGradientStop: '调整色标 {number} 的顺序',
+    gradientStopKeyboardHelp: '按 Alt+上方向键或 Alt+下方向键移动渐变色标。',
   },
 } as const;
 

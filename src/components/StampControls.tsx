@@ -427,7 +427,7 @@ export function StampControls() {
         </div>
         <div
           className="grid grid-cols-3 gap-1 rounded-lg border border-subtle bg-app-base p-1"
-          role="radiogroup"
+          role="group"
           aria-label={t('stampAnchor')}
         >
           {ANCHORS.map((anchor) => (

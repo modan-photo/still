@@ -1,4 +1,4 @@
-import { alpha, createTheme } from "@mui/material/styles";
+import { alpha, createTheme } from '@mui/material/styles';
 import {
   breakpointTokens,
   colorTokens,
@@ -8,9 +8,9 @@ import {
   radiusTokens,
   typographyTokens,
   type ColorMode,
-} from "./tokens";
+} from './tokens';
 
-declare module "@mui/material/styles" {
+declare module '@mui/material/styles' {
   interface Theme {
     still: typeof designTokens;
   }
@@ -32,8 +32,8 @@ export function createStillTheme(mode: ColorMode) {
         paper: colors.bg.surface,
       },
       text: colors.text,
-      primary: { main: colors.accent },
-      error: { main: colors.danger },
+      primary: { main: colors.accent, contrastText: mode === 'light' ? '#FFFFFF' : colors.bg.base },
+      error: { main: colors.danger, contrastText: mode === 'light' ? '#FFFFFF' : colors.bg.base },
       divider: colors.border.subtle,
     },
     breakpoints: {
@@ -49,7 +49,7 @@ export function createStillTheme(mode: ColorMode) {
     spacing: 8,
     typography: {
       fontFamily: typographyTokens.fontFamily,
-      button: { textTransform: "none" },
+      button: { textTransform: 'none' },
     },
     transitions: {
       easing: {
@@ -71,7 +71,7 @@ export function createStillTheme(mode: ColorMode) {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          ":focus-visible": {
+          ':focus-visible': {
             outline: `2px solid ${colors.accent}`,
             outlineOffset: 2,
           },
@@ -80,7 +80,7 @@ export function createStillTheme(mode: ColorMode) {
       MuiButtonBase: {
         styleOverrides: {
           root: {
-            "&.Mui-focusVisible": {
+            '&.Mui-focusVisible': {
               outline: `2px solid ${colors.accent}`,
               outlineOffset: 2,
             },
@@ -91,8 +91,8 @@ export function createStillTheme(mode: ColorMode) {
         defaultProps: { disableElevation: true },
         styleOverrides: {
           root: {
-            boxShadow: "none",
-            textTransform: "none",
+            boxShadow: 'none',
+            textTransform: 'none',
           },
         },
       },
@@ -100,7 +100,7 @@ export function createStillTheme(mode: ColorMode) {
         defaultProps: { elevation: 0 },
         styleOverrides: {
           root: {
-            backgroundImage: "none",
+            backgroundImage: 'none',
             border: `1px solid ${colors.border.subtle}`,
           },
         },
@@ -115,7 +115,7 @@ export function createStillTheme(mode: ColorMode) {
       MuiTooltip: {
         styleOverrides: {
           tooltip: {
-            padding: "5px 8px",
+            padding: '5px 8px',
             border: `1px solid ${colors.border.subtle}`,
             borderRadius: radiusTokens.md,
             backgroundColor: alpha(colors.bg.surface, glassTokens.backgroundOpacity),

@@ -18,10 +18,12 @@ import {
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import { BUILTIN_FRAME_PRESETS, DEFAULT_FRAME_PRESET_ID } from '../constants/framePresets';
@@ -516,6 +518,7 @@ function ColorPicker({
       <span className="mb-1.5 block text-xs font-medium text-secondary">{label}</span>
       <button
         type="button"
+        aria-label={t('editColor', { label, color })}
         className="flex h-8 w-full items-center gap-2 rounded-md border border-subtle bg-app-elevated px-2 text-xs text-primary"
         onClick={(event) => setAnchor(event.currentTarget)}
       >
@@ -578,6 +581,8 @@ function GradientStops({
   onChange: (patch: Partial<BorderSpec>) => void;
 }) {
   const t = useTranslation();
+  const listRef = useRef<HTMLDivElement>(null);
+  const keyboardHelpId = useId();
   const dragging = useRef<number | null>(null);
   const move = (event: DragEvent, target: number) => {
     event.preventDefault();
@@ -588,6 +593,21 @@ function GradientStops({
     colors.splice(target, 0, color);
     dragging.current = target;
     onChange({ colors });
+  };
+  const moveByKeyboard = (event: ReactKeyboardEvent<HTMLButtonElement>, from: number) => {
+    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    const target = from + (event.key === 'ArrowUp' ? -1 : 1);
+    if (target < 0 || target >= frame.colors.length) return;
+    const colors = [...frame.colors];
+    const [color] = colors.splice(from, 1);
+    colors.splice(target, 0, color);
+    onChange({ colors });
+    window.requestAnimationFrame(() => {
+      listRef.current
+        ?.querySelector<HTMLButtonElement>(`[data-gradient-stop-index="${target}"]`)
+        ?.focus();
+    });
   };
   return (
     <div>
@@ -601,7 +621,10 @@ function GradientStops({
           {t('add')}
         </Button>
       </div>
-      <div className="space-y-2">
+      <span id={keyboardHelpId} className="sr-only">
+        {t('gradientStopKeyboardHelp')}
+      </span>
+      <div ref={listRef} className="space-y-2">
         {frame.colors.map((color, index) => (
           <div
             className="flex items-center gap-2 rounded-md border border-subtle p-1.5"
@@ -615,9 +638,16 @@ function GradientStops({
               dragging.current = null;
             }}
           >
-            <span className="cursor-grab text-xs text-secondary" aria-hidden="true">
+            <button
+              type="button"
+              data-gradient-stop-index={index}
+              aria-label={t('reorderGradientStop', { number: index + 1 })}
+              aria-describedby={keyboardHelpId}
+              onKeyDown={(event) => moveByKeyboard(event, index)}
+              className="cursor-grab rounded-sm text-xs text-secondary focus-visible:outline-2 focus-visible:outline-accent"
+            >
               ⠿
-            </span>
+            </button>
             <div className="min-w-0 flex-1">
               <ColorPicker
                 label={t('gradientStop', { number: index + 1 })}

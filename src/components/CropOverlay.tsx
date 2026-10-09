@@ -1,6 +1,7 @@
 import { Box, Fade } from '@mui/material';
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -52,6 +53,7 @@ export function CropOverlay({
   onExited,
 }: CropOverlayProps) {
   const t = useTranslation();
+  const keyboardHelpId = useId();
   const photoRegion = useRef<HTMLDivElement>(null);
   const cropFrame = useRef<HTMLDivElement>(null);
   const session = useRef<{
@@ -177,6 +179,9 @@ export function CropOverlay({
           transitionProperty: 'opacity',
         }}
       >
+        <span id={keyboardHelpId} className="sr-only">
+          {t('cropKeyboardHelp')}
+        </span>
         {/* Clip only the mask to the photo. Handle hit areas can extend beyond its edges. */}
         <Box sx={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
           <Box
@@ -222,6 +227,7 @@ export function CropOverlay({
           tabIndex={visible ? 0 : -1}
           role="group"
           aria-label={t('cropFrame')}
+          aria-describedby={keyboardHelpId}
           onPointerDown={startDrag}
           onPointerMove={moveDrag}
           onPointerUp={(event) => endDrag(event)}

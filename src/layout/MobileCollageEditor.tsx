@@ -4,6 +4,7 @@ import { CollageMobileSheet } from '../components/collage/CollageMobileSheet';
 import { CollagePreview } from '../components/collage/CollagePreview';
 import { Icon } from '../components/Icons';
 import { useProjectStore } from '../stores/projectStore';
+import { useTranslation } from '../i18n/messages';
 import { MobileCollageToolbar, type CollagePanelId } from './MobileCollageToolbar';
 
 type MobileCollageEditorProps = {
@@ -16,6 +17,7 @@ type MobileCollageEditorProps = {
  * a bottom toolbar and sheet so the preview retains most of the viewport.
  */
 export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
+  const t = useTranslation();
   const theme = useTheme();
   const reset = useProjectStore((state) => state.resetCollageDraft);
   const photoCount = useProjectStore((state) => state.collageDraft.photoIds.length);
@@ -31,15 +33,19 @@ export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
     }
   }, [activePanel]);
 
-  const changePanel = useCallback((panel: CollagePanelId | null) => {
-    if (panel === null) {
-      closeSheet();
-      return;
-    }
-    // Switching between open panels reuses the same history entry.
-    if (activePanel === null) window.history.pushState({ ...window.history.state, stillCollageSheet: true }, '');
-    setActivePanel(panel);
-  }, [activePanel, closeSheet]);
+  const changePanel = useCallback(
+    (panel: CollagePanelId | null) => {
+      if (panel === null) {
+        closeSheet();
+        return;
+      }
+      // Switching between open panels reuses the same history entry.
+      if (activePanel === null)
+        window.history.pushState({ ...window.history.state, stillCollageSheet: true }, '');
+      setActivePanel(panel);
+    },
+    [activePanel, closeSheet],
+  );
 
   useEffect(() => {
     // Browser/system back closes whichever collage settings sheet is active.
@@ -85,17 +91,39 @@ export function MobileCollageEditor({ onExit }: MobileCollageEditorProps) {
           backgroundColor: theme.still.colors[theme.palette.mode].bg.surface,
         }}
       >
-        <IconButton aria-label="Back to editor" onClick={exit} sx={{ justifySelf: 'start' }}>
-          <Box component="span" sx={{ display: 'grid', transform: 'rotate(90deg)' }}><Icon name="chevron" size={20} /></Box>
+        <IconButton aria-label={t('backToEditor')} onClick={exit} sx={{ justifySelf: 'start' }}>
+          <Box component="span" sx={{ display: 'grid', transform: 'rotate(90deg)' }}>
+            <Icon name="chevron" size={20} />
+          </Box>
         </IconButton>
-        <Typography component="h1" sx={{ m: 0, fontSize: 15, fontWeight: 600 }}>Collage</Typography>
+        <Typography component="h1" sx={{ m: 0, fontSize: 15, fontWeight: 600 }}>
+          {t('collage')}
+        </Typography>
         <Box sx={{ display: 'flex', justifySelf: 'end', gap: `${theme.still.spacing.xs}px` }}>
-          <Button size="small" onClick={reset}>Reset</Button>
-          <Button size="small" variant="contained" disabled={photoCount < 2} onClick={() => window.dispatchEvent(new CustomEvent('still:request-collage-export'))}>Export</Button>
+          <Button size="small" onClick={reset}>
+            {t('reset')}
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            disabled={photoCount < 2}
+            onClick={() => window.dispatchEvent(new CustomEvent('still:request-collage-export'))}
+          >
+            {t('export')}
+          </Button>
         </Box>
       </Box>
 
-      <Box component="main" sx={{ minWidth: 0, minHeight: 0, flex: 1, overflow: 'hidden', p: `${theme.still.spacing.sm}px` }}>
+      <Box
+        component="main"
+        sx={{
+          minWidth: 0,
+          minHeight: 0,
+          flex: 1,
+          overflow: 'hidden',
+          p: `${theme.still.spacing.sm}px`,
+        }}
+      >
         <CollagePreview />
       </Box>
 

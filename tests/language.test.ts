@@ -36,6 +36,12 @@ describe('language messages', () => {
     expect(translate('zh', 'removedPhotos', { count: 2 })).toBe('已移除 2 张照片');
   });
 
+  it('provides localized keyboard guidance for crop and gradient controls', () => {
+    expect(translate('zh', 'cropKeyboardHelp')).toContain('方向键');
+    expect(translate('zh', 'gradientStopKeyboardHelp')).toContain('Alt');
+    expect(translate('zh', 'backToEditor')).toBe('返回编辑器');
+  });
+
   it('uses the selected language for stable error codes and preserves unknown details', () => {
     const previous = useUIStore.getState().language;
     try {
