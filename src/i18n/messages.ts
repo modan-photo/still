@@ -10,10 +10,11 @@ const messages = {
     chinese: '简体中文',
     windowSize: 'Window size',
     windowSizeDescription:
-      'Choose a desktop window size. Large sizes adapt to the available screen area.',
+      'Choose a desktop window size. Remember last size tracks manual resizing; saved sizes adapt to the available screen area.',
     windowSizeDefault: 'Default (1100 × 760)',
     windowSizeCompact: 'Compact (900 × 620)',
     windowSizeSpacious: 'Spacious (1360 × 900)',
+    windowSizeCustom: 'Remember last size',
     windowSizeError: 'Could not change the window size. Try again.',
     systemFonts: 'Use system fonts',
     systemFontsDescription:
@@ -487,10 +488,12 @@ const messages = {
     english: 'English',
     chinese: '简体中文',
     windowSize: '窗口尺寸',
-    windowSizeDescription: '选择桌面窗口尺寸。较大尺寸会按屏幕可用区域自动缩小。',
+    windowSizeDescription:
+      '选择桌面窗口尺寸。“记住上次尺寸”会记录手动调整；恢复时按屏幕可用区域缩小。',
     windowSizeDefault: '默认（1100 × 760）',
     windowSizeCompact: '紧凑（900 × 620）',
     windowSizeSpacious: '宽敞（1360 × 900）',
+    windowSizeCustom: '记住上次尺寸',
     windowSizeError: '无法更改窗口尺寸，请重试。',
     systemFonts: '使用系统字体',
     systemFontsDescription: '允许使用设备上安装的水印字体。关闭后预设更易在不同设备间保持一致。',

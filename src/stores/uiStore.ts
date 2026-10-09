@@ -3,7 +3,7 @@ import { DEFAULT_RIGHT_PANEL_TAB, type RightPanelTabId } from '../layout/rightPa
 import {
   readWindowSizePreset,
   WINDOW_SIZE_KEY,
-  type WindowSizePreset,
+  type WindowSizeMode,
 } from '../services/windowPreferences';
 import type { PhotoSort } from '../services/photoCollection';
 import {
@@ -28,7 +28,7 @@ export interface UIState {
   gridShortcutKey: GridShortcutKey;
   photoNavigationKeys: PhotoNavigationKeys;
   language: 'en' | 'zh';
-  windowSizePreset: WindowSizePreset;
+  windowSizePreset: WindowSizeMode;
   photoSort: PhotoSort;
   activeRightTab: RightPanelTabId;
   gridPanelOpen: boolean;
@@ -40,7 +40,7 @@ export interface UIState {
   setGridShortcutKey: (key: GridShortcutKey) => void;
   setPhotoNavigationKeys: (keys: PhotoNavigationKeys) => void;
   setLanguage: (language: UIState['language']) => void;
-  setWindowSizePreset: (preset: WindowSizePreset) => void;
+  setWindowSizePreset: (preset: WindowSizeMode) => void;
   setPhotoSort: (sort: PhotoSort) => void;
   setActiveRightTab: (tab: UIState['activeRightTab']) => void;
   setGridPanelOpen: (open: boolean) => void;

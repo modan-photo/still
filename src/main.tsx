@@ -11,7 +11,7 @@ import { getCssVariables } from './theme/tokens';
 import { CropEditProvider } from './hooks/useCropEdit';
 import { initializeWorkspace } from './services/workspaceInitialization';
 import { installWorkspaceCloseHandler } from './services/workspaceShutdown';
-import { restoreWindowSizePreset } from './services/windowPreferences';
+import { installWindowSizeTracking, restoreWindowSizePreset } from './services/windowPreferences';
 import { useUIStore } from './stores/uiStore';
 import './theme/global.css';
 
@@ -43,6 +43,7 @@ function Root() {
 
 let disposed = false;
 let removeCloseHandler: (() => void) | undefined;
+let removeWindowSizeTracking: (() => Promise<void>) | undefined;
 let reactRoot: ReactRoot | undefined = import.meta.hot?.data.reactRoot;
 
 void initializeWorkspace().then(async () => {
@@ -52,18 +53,26 @@ void initializeWorkspace().then(async () => {
   } catch (error) {
     console.warn('Unable to restore the window size preference', error);
   }
+  try {
+    removeWindowSizeTracking = await installWindowSizeTracking();
+  } catch (error) {
+    console.warn('Unable to track window size changes', error);
+  }
   const root = (reactRoot ??= ReactDOM.createRoot(document.getElementById('root') as HTMLElement));
   let stopped = false;
   try {
     removeCloseHandler = await installWorkspaceCloseHandler(() => {
       stopped = true;
+      const flushWindowSize = removeWindowSizeTracking?.();
       root.unmount();
+      return flushWindowSize;
     });
   } catch (error) {
     console.warn('Unable to register the workspace close handler', error);
   }
   if (disposed) {
     removeCloseHandler?.();
+    void removeWindowSizeTracking?.();
     return;
   }
   if (stopped) return;
@@ -79,6 +88,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose((data) => {
     disposed = true;
     removeCloseHandler?.();
+    void removeWindowSizeTracking?.();
     data.reactRoot = reactRoot;
   });
 }

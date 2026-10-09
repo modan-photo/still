@@ -158,6 +158,16 @@ describe('in-memory inspector state', () => {
     expect(useUIStore.getState().windowSizePreset).toBe('spacious');
   });
 
+  it('retains the custom window size mode through session reset', async () => {
+    getItem.mockImplementation((key: string) =>
+      key === 'still.window.size-preset' ? 'custom' : null,
+    );
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState().windowSizePreset).toBe('custom');
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState().windowSizePreset).toBe('custom');
+  });
+
   it('shares photo sort within the session and resets it without storing it', async () => {
     const { useUIStore } = await import('../src/stores/uiStore');
     useUIStore.getState().setPhotoSort('name-desc');

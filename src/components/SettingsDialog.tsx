@@ -13,8 +13,9 @@ import { useTranslation } from '../i18n/messages';
 import type { MessageKey } from '../i18n/messages';
 import {
   applyWindowSizePreset,
+  captureCustomWindowSize,
   desktopWindowAvailable,
-  type WindowSizePreset,
+  type WindowSizeMode,
 } from '../services/windowPreferences';
 import type { SingleKeyAction } from '../services/shortcutPreferences';
 import { Icon } from './Icons';
@@ -54,11 +55,12 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [windowSizeError, setWindowSizeError] = useState(false);
   const [windowSizePending, setWindowSizePending] = useState(false);
 
-  const changeWindowSize = async (preset: WindowSizePreset) => {
+  const changeWindowSize = async (preset: WindowSizeMode) => {
     setWindowSizeError(false);
     setWindowSizePending(true);
     try {
-      await applyWindowSizePreset(preset);
+      if (preset === 'custom') await captureCustomWindowSize();
+      else await applyWindowSizePreset(preset);
       setWindowSizePreset(preset);
     } catch (error) {
       console.warn('Unable to change the window size', error);
@@ -122,11 +124,12 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               error={windowSizeError}
               helperText={windowSizeError ? t('windowSizeError') : undefined}
               inputProps={{ 'aria-label': t('windowSize') }}
-              onChange={(event) => void changeWindowSize(event.target.value as WindowSizePreset)}
+              onChange={(event) => void changeWindowSize(event.target.value as WindowSizeMode)}
             >
               <MenuItem value="default">{t('windowSizeDefault')}</MenuItem>
               <MenuItem value="compact">{t('windowSizeCompact')}</MenuItem>
               <MenuItem value="spacious">{t('windowSizeSpacious')}</MenuItem>
+              <MenuItem value="custom">{t('windowSizeCustom')}</MenuItem>
             </TextField>
           </section>
         )}
