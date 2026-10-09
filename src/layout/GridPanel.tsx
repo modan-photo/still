@@ -1,12 +1,13 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { alpha, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, TextField, ToggleButton, ToggleButtonGroup, Tooltip, useTheme } from "@mui/material";
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icons";
 import { ThumbnailImage } from "../components/ThumbnailImage";
 import { useProjectStore } from "../stores/projectStore";
 import { useUIStore } from "../stores/uiStore";
 import { useUndoStore } from "../stores/undoStore";
 import type { SyncModule } from "../render/spec";
+import { photoRangeIds, sortedPhotos, type PhotoSort } from "../services/photoCollection";
 
 const DEFAULT_HEIGHT_PERCENT = 60;
 const MIN_HEIGHT_PERCENT = 30;
@@ -59,6 +60,8 @@ export function GridPanel() {
   const [heightPercent, setHeightPercent] = useState(DEFAULT_HEIGHT_PERCENT);
   const [dragging, setDragging] = useState(false);
   const [thumbnailSize, setThumbnailSize] = useState<ThumbnailSize>("medium");
+  const [sortOrder, setSortOrder] = useState<PhotoSort>('import');
+  const selectionAnchor = useRef<string | null>(null);
   const [gridWidth, setGridWidth] = useState(0);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
@@ -71,6 +74,7 @@ export function GridPanel() {
   });
   const theme = useTheme();
   const photos = useProjectStore((state) => state.photos);
+  const visiblePhotos = sortedPhotos(photos, sortOrder);
   const selectedId = useProjectStore((state) => state.currentPhotoId);
   const selectedIds = useProjectStore((state) => state.selectedIds);
   const selectPhoto = useProjectStore((state) => state.selectPhoto);
@@ -91,7 +95,7 @@ export function GridPanel() {
     ? (gridWidth - gridGap * (columnCount - 1)) / columnCount
     : thumbnailMinWidth;
   const rowHeight = thumbnailWidth * 0.75;
-  const rowCount = Math.ceil(photos.length / columnCount);
+  const rowCount = Math.ceil(visiblePhotos.length / columnCount);
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -99,7 +103,7 @@ export function GridPanel() {
     estimateSize: () => rowHeight + gridGap,
     // A few off-screen rows prevent blank flashes during fast wheel scrolling.
     overscan: 3,
-    getItemKey: (rowIndex) => photos[rowIndex * columnCount]?.id ?? rowIndex,
+    getItemKey: (rowIndex) => visiblePhotos[rowIndex * columnCount]?.id ?? rowIndex,
   });
 
   useEffect(() => {
@@ -133,11 +137,11 @@ export function GridPanel() {
     // Opening the panel should reveal the current photo even when selection changed
     // through the filmstrip or keyboard while the grid was closed.
     if (!gridPanelOpen) return;
-    const selectedIndex = photos.findIndex((photo) => photo.id === selectedId);
+    const selectedIndex = visiblePhotos.findIndex((photo) => photo.id === selectedId);
     if (selectedIndex >= 0) {
       virtualizer.scrollToIndex(Math.floor(selectedIndex / columnCount), { align: "auto" });
     }
-  }, [columnCount, gridPanelOpen, photos.length, selectedId, virtualizer]);
+  }, [columnCount, gridPanelOpen, photos.length, selectedId, sortOrder, virtualizer]);
 
   useEffect(() => {
     // Batch selection is scoped to one open-grid session.
@@ -178,13 +182,13 @@ export function GridPanel() {
         // Ctrl/Cmd+A is intentionally active only while batch selection owns the grid.
         event.preventDefault();
         event.stopImmediatePropagation();
-        setSelectedIds(photos.map((photo) => photo.id));
+        setSelectedIds(visiblePhotos.map((photo) => photo.id));
       }
     };
 
     window.addEventListener("keydown", handleMultiSelectShortcut, { capture: true });
     return () => window.removeEventListener("keydown", handleMultiSelectShortcut, { capture: true });
-  }, [gridPanelOpen, multiSelectMode, photos, setSelectedIds]);
+  }, [gridPanelOpen, multiSelectMode, photos, sortOrder, setSelectedIds]);
 
   // Timers may outlive a closing animation; release them with the panel component.
   useEffect(() => () => {
@@ -274,13 +278,67 @@ export function GridPanel() {
   };
 
   const enterMultiSelect = () => {
+    selectionAnchor.current = selectedId;
     setSelectedIds([]);
     setMultiSelectMode(true);
   };
 
   const exitMultiSelect = () => {
+    selectionAnchor.current = null;
     setMultiSelectMode(false);
     setSelectedIds([]);
+  };
+
+  const selectInGrid = (photoId: string, shift: boolean, toggle: boolean) => {
+    if ((shift || toggle || multiSelectMode) && closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    if (shift) {
+      const anchor = selectionAnchor.current ?? selectedId ?? photoId;
+      selectionAnchor.current = anchor;
+      setMultiSelectMode(true);
+      setSelectedIds(photoRangeIds(visiblePhotos, anchor, photoId));
+      return;
+    }
+    selectionAnchor.current = photoId;
+    if (multiSelectMode || toggle) {
+      setMultiSelectMode(true);
+      toggleSelectedId(photoId);
+    } else selectAndScheduleClose(photoId);
+  };
+
+  const focusGridPhoto = (photoId: string) => {
+    const index = visiblePhotos.findIndex((photo) => photo.id === photoId);
+    if (index < 0) return;
+    virtualizer.scrollToIndex(Math.floor(index / columnCount), { align: 'auto' });
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const buttons = gridSurfaceRef.current?.querySelectorAll<HTMLButtonElement>('[data-grid-photo-id]');
+      [...(buttons ?? [])].find((button) => button.dataset.gridPhotoId === photoId)?.focus();
+    }));
+  };
+
+  const handleGridKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, photoId: string) => {
+    if (multiSelectMode && (event.key === 'Delete' || event.key === 'Backspace')) {
+      event.preventDefault();
+      event.stopPropagation();
+      removeSelectedPhotos();
+      return;
+    }
+    const index = visiblePhotos.findIndex((photo) => photo.id === photoId);
+    const nextIndex = event.key === 'ArrowLeft' ? index - 1
+      : event.key === 'ArrowRight' ? index + 1
+        : event.key === 'ArrowUp' ? index - columnCount
+          : event.key === 'ArrowDown' ? index + columnCount
+            : event.key === 'Home' ? 0
+              : event.key === 'End' ? visiblePhotos.length - 1 : -1;
+    if (nextIndex < 0 || nextIndex >= visiblePhotos.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const nextId = visiblePhotos[nextIndex].id;
+    if (event.shiftKey) selectInGrid(nextId, true, false);
+    else if (!multiSelectMode) selectPhoto(nextId);
+    focusGridPhoto(nextId);
   };
 
   const removeSelectedPhotos = () => {
@@ -395,7 +453,7 @@ export function GridPanel() {
             </Button>
             <Button
               size="small"
-              onClick={() => setSelectedIds(photos.map((photo) => photo.id))}
+              onClick={() => setSelectedIds(visiblePhotos.map((photo) => photo.id))}
               disabled={selectedIds.length === photos.length}
             >
               Select all
@@ -431,6 +489,15 @@ export function GridPanel() {
           </div>
         ) : (
           <div className="flex items-center gap-2">
+            <TextField
+              select size="small" value={sortOrder} label="Sort" aria-label="Sort photos"
+              onChange={(event) => setSortOrder(event.target.value as PhotoSort)}
+              sx={{ minWidth: 135 }}
+            >
+              <MenuItem value="import">Import order</MenuItem>
+              <MenuItem value="name">Name A–Z</MenuItem>
+              <MenuItem value="name-desc">Name Z–A</MenuItem>
+            </TextField>
             <Tooltip title="Select photos" arrow>
               <IconButton
                 size="small"
@@ -507,7 +574,7 @@ export function GridPanel() {
           {virtualizer.getVirtualItems().map((virtualRow) => {
             // Convert the virtual row index back into its contiguous photo slice.
             const firstPhotoIndex = virtualRow.index * columnCount;
-            const rowPhotos = photos.slice(firstPhotoIndex, firstPhotoIndex + columnCount);
+            const rowPhotos = visiblePhotos.slice(firstPhotoIndex, firstPhotoIndex + columnCount);
 
             return (
               <div
@@ -528,6 +595,7 @@ export function GridPanel() {
                   return (
                     <button
                       key={photo.id}
+                      data-grid-photo-id={photo.id}
                       type="button"
                       aria-label={multiSelectMode
                         ? `${selected ? "Deselect" : "Select"} ${label}`
@@ -537,14 +605,12 @@ export function GridPanel() {
                       title={label}
                       className={`group relative aspect-[4/3] min-w-0 overflow-hidden rounded-md border-2 bg-app-elevated outline-none transition-[border-color,box-shadow,transform] duration-fast ease-app hover:-translate-y-0.5 hover:shadow-elev2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "border-accent shadow-elev1" : "border-subtle"}`}
                       onClick={(event) => {
-                        if (multiSelectMode) {
-                          // Ignore the synthetic second click of a double-click so a
-                          // batch item toggles only once.
-                          if (event.detail === 1) toggleSelectedId(photo.id);
-                          return;
-                        }
-                        selectAndScheduleClose(photo.id);
+                        // Ignore the synthetic second click of a double-click so a
+                        // batch item toggles only once.
+                        if (multiSelectMode && event.detail > 1) return;
+                        selectInGrid(photo.id, event.shiftKey, event.ctrlKey || event.metaKey);
                       }}
+                      onKeyDown={(event) => handleGridKeyDown(event, photo.id)}
                       onDoubleClick={() => {
                         if (!multiSelectMode) selectAndKeepOpen(photo.id);
                       }}

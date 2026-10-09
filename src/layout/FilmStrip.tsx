@@ -79,11 +79,27 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
                 style={{ width: virtualItem.size, transform: `translateX(${virtualItem.start}px)` }}
               >
                 <ThumbnailItem
+                  photoId={item.id}
                   label={item.label}
                   thumbPath={item.thumbPath}
                   thumbRevision={item.thumbRevision}
                   selected={selectedId === item.id}
                   onSelect={() => onSelect(item.id)}
+                  onKeyDown={(event) => {
+                    const nextIndex = event.key === 'ArrowLeft' ? virtualItem.index - 1
+                      : event.key === 'ArrowRight' ? virtualItem.index + 1
+                        : event.key === 'Home' ? 0
+                          : event.key === 'End' ? items.length - 1 : -1;
+                    if (nextIndex < 0 || nextIndex >= items.length) return;
+                    event.preventDefault();
+                    const next = items[nextIndex];
+                    onSelect(next.id);
+                    virtualizer.scrollToIndex(nextIndex, { align: 'auto' });
+                    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+                      const buttons = scrollRef.current?.querySelectorAll<HTMLButtonElement>('[data-film-photo-id]');
+                      [...(buttons ?? [])].find((button) => button.dataset.filmPhotoId === next.id)?.focus();
+                    }));
+                  }}
                 />
               </div>
             );

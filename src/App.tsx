@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Snackbar, useMediaQuery, useTheme as useMuiTheme } from '@mui/material';
+import { Alert, Button, Snackbar, useMediaQuery, useTheme as useMuiTheme } from '@mui/material';
 import { isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
 import type { ThemeController } from './hooks/useTheme';
@@ -109,7 +109,7 @@ function App({ theme }: { theme: ThemeController }) {
   const collagePhotoIds = useProjectStore((state) => state.collageDraft.photoIds);
   const selectedId = useProjectStore((state) => state.currentPhotoId);
   const selectPhoto = useProjectStore((state) => state.selectPhoto);
-  const { choosePhotos, chooseFolder, dragActive, error, clearError } = useImageImport();
+  const { choosePhotos, chooseFolder, dragActive, error, clearError, duplicates, clearDuplicates, addCopies } = useImageImport();
   // One dialog serves both export modes, while progress and errors belong to the
   // application shell rather than an individual canvas or inspector component.
   const [exportError, setExportError] = useState<string | null>(null);
@@ -298,6 +298,13 @@ function App({ theme }: { theme: ThemeController }) {
               {error && (
                 <Alert severity="error" onClose={clearError}>
                   {error}
+                </Alert>
+              )}
+              {duplicates.length > 0 && (
+                <Alert severity="info" onClose={clearDuplicates} action={
+                  <Button color="inherit" size="small" onClick={addCopies}>Add copies</Button>
+                }>
+                  {duplicates.length} photo(s) already in this workspace were skipped.
                 </Alert>
               )}
               {exportError && (

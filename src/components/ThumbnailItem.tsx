@@ -5,9 +5,11 @@ type ThumbnailItemProps = {
   label: string;
   selected: boolean;
   onSelect: () => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
+  photoId?: string;
 };
 
-export function ThumbnailItem({ label, selected, onSelect, thumbPath, thumbRevision }: ThumbnailItemProps) {
+export function ThumbnailItem({ label, selected, onSelect, onKeyDown, photoId, thumbPath, thumbRevision }: ThumbnailItemProps) {
   return (
     <button
       type="button"
@@ -15,6 +17,8 @@ export function ThumbnailItem({ label, selected, onSelect, thumbPath, thumbRevis
       aria-label={`Select photo ${label}`}
       aria-pressed={selected}
       onClick={onSelect}
+      onKeyDown={onKeyDown}
+      data-film-photo-id={photoId}
     >
       <ThumbnailImage thumbPath={thumbPath} revision={thumbRevision} label={label} />
     </button>

@@ -10,8 +10,12 @@ type ThumbnailImageProps = {
 
 export function ThumbnailImage({ thumbPath, label, revision = 0 }: ThumbnailImageProps) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => setFailed(false), [revision, thumbPath]);
+  useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [revision, thumbPath]);
 
   if (failed) {
     return (
@@ -26,13 +30,17 @@ export function ThumbnailImage({ thumbPath, label, revision = 0 }: ThumbnailImag
   }
 
   return (
-    <img
-      src={cacheAssetUrl(thumbPath)}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      className="h-full w-full object-contain"
-      onError={() => setFailed(true)}
-    />
+    <span className="relative block h-full w-full bg-app-base">
+      {!loaded && <span className="absolute inset-0 animate-pulse bg-app-elevated" aria-hidden="true" />}
+      <img
+        src={cacheAssetUrl(thumbPath)}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className={`h-full w-full object-contain ${loaded ? '' : 'opacity-0'}`}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </span>
   );
 }

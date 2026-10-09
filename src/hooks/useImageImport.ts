@@ -6,6 +6,7 @@ import { pickImportDirectory } from '../services/directoryPicker';
 import { listImageDirectory, loadImage, normalizeError } from '../services/tauri/image';
 import { useProjectStore } from '../stores/projectStore';
 import type { ImageMeta } from '../types/image';
+import { sourceKey } from '../services/photoCollection';
 
 /**
  * Coordinates every image-import entry point: file picker, folder picker and
@@ -18,26 +19,39 @@ import type { ImageMeta } from '../types/image';
 export function useImageImport() {
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<string[]>([]);
   // Chaining work onto one promise prevents overlapping picker/drop operations from
   // racing each other or committing photos in an unpredictable order.
   const queue = useRef(Promise.resolve());
   // Async native operations can outlive the component. This ref gates every state
   // and store write after unmount without forcing the native work to be cancelled.
   const alive = useRef(true);
-  const importPaths = useCallback((paths: string[]) => {
+  const importPaths = useCallback((paths: string[], allowCopies = false) => {
     queue.current = queue.current
       .then(async () => {
         // Preserve first-seen order while removing duplicate paths from one request.
-        const unique = [...new Set(paths)];
+        const seen = new Set<string>();
+        const unique = paths.filter((path) => {
+          const key = sourceKey(path);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const existing = new Set(useProjectStore.getState().photos.map((photo) => sourceKey(photo.path)));
+        const repeated = allowCopies ? [] : unique.filter((path) => existing.has(sourceKey(path)));
+        const pending = allowCopies ? unique : unique.filter((path) => !existing.has(sourceKey(path)));
         const failures: string[] = [];
         const imported: ImageMeta[] = [];
-        if (alive.current) setError(null);
+        if (alive.current) {
+          setError(null);
+          setDuplicates(repeated);
+        }
         // Two concurrent decoders bound memory; `allSettled` preserves input order and
         // allows valid images in a batch to survive a sibling failure.
-        for (let i = 0; i < unique.length; i += 2) {
+        for (let i = 0; i < pending.length; i += 2) {
           if (!alive.current) break;
           const results = await Promise.allSettled(
-            unique.slice(i, i + 2).map((path) => loadImage(path)),
+            pending.slice(i, i + 2).map((path) => loadImage(path)),
           );
           if (!alive.current) break;
           imported.push(
@@ -141,5 +155,13 @@ export function useImageImport() {
       unlisten?.();
     };
   }, [importPaths]);
-  return { choosePhotos, chooseFolder, dragActive, error, clearError: () => setError(null) };
+  return {
+    choosePhotos, chooseFolder, dragActive, error, clearError: () => setError(null),
+    duplicates, clearDuplicates: () => setDuplicates([]),
+    addCopies: () => {
+      if (!duplicates.length) return;
+      setDuplicates([]);
+      importPaths(duplicates, true);
+    },
+  };
 }
