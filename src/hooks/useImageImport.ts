@@ -7,6 +7,13 @@ import { listImageDirectory, loadImage, normalizeError } from '../services/tauri
 import { useProjectStore } from '../stores/projectStore';
 import type { ImageMeta } from '../types/image';
 import { sourceKey } from '../services/photoCollection';
+import { translate } from '../i18n/messages';
+import { useUIStore } from '../stores/uiStore';
+
+type ImportNotice =
+  | { key: 'importFailedOne' | 'importFailedMany'; count: number; detail: string }
+  | { key: 'desktopImportOnly' | 'desktopFolderOnly' | 'folderNoSupported' }
+  | { raw: string };
 
 /**
  * Coordinates every image-import entry point: file picker, folder picker and
@@ -17,8 +24,9 @@ import { sourceKey } from '../services/photoCollection';
  * were supplied to the application.
  */
 export function useImageImport() {
+  const language = useUIStore((state) => state.language);
   const [dragActive, setDragActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<ImportNotice | null>(null);
   const [duplicates, setDuplicates] = useState<string[]>([]);
   // Chaining work onto one promise prevents overlapping picker/drop operations from
   // racing each other or committing photos in an unpredictable order.
@@ -37,13 +45,17 @@ export function useImageImport() {
           seen.add(key);
           return true;
         });
-        const existing = new Set(useProjectStore.getState().photos.map((photo) => sourceKey(photo.path)));
+        const existing = new Set(
+          useProjectStore.getState().photos.map((photo) => sourceKey(photo.path)),
+        );
         const repeated = allowCopies ? [] : unique.filter((path) => existing.has(sourceKey(path)));
-        const pending = allowCopies ? unique : unique.filter((path) => !existing.has(sourceKey(path)));
+        const pending = allowCopies
+          ? unique
+          : unique.filter((path) => !existing.has(sourceKey(path)));
         const failures: string[] = [];
         const imported: ImageMeta[] = [];
         if (alive.current) {
-          setError(null);
+          setNotice(null);
           setDuplicates(repeated);
         }
         // Two concurrent decoders bound memory; `allSettled` preserves input order and
@@ -75,19 +87,23 @@ export function useImageImport() {
         // Commit once per request to avoid repeated project rerenders while decoding.
         if (alive.current && imported.length) useProjectStore.getState().addPhotos(imported);
         if (alive.current && failures.length)
-          setError(`${failures.length} photo(s) could not be imported. ${failures[0]}`);
+          setNotice({
+            key: failures.length === 1 ? 'importFailedOne' : 'importFailedMany',
+            count: failures.length,
+            detail: failures[0],
+          });
         // Keep the queue usable after an unexpected failure by handling rejection on
         // the chained promise itself.
       })
       .catch((reason) => {
-        if (alive.current) setError(normalizeError(reason).message);
+        if (alive.current) setNotice({ raw: normalizeError(reason).message });
       });
   }, []);
 
   /** Open the native multi-file picker and enqueue its result. */
   const choosePhotos = useCallback(async () => {
     if (!isTauri()) {
-      setError('Open the desktop app to import local photos.');
+      setNotice({ key: 'desktopImportOnly' });
       return;
     }
     try {
@@ -96,20 +112,20 @@ export function useImageImport() {
         directory: false,
         filters: [
           {
-            name: 'Images',
+            name: translate(language, 'images'),
             extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'],
           },
         ],
       });
       if (selected && alive.current) importPaths(Array.isArray(selected) ? selected : [selected]);
     } catch (reason) {
-      if (alive.current) setError(normalizeError(reason).message);
+      if (alive.current) setNotice({ raw: normalizeError(reason).message });
     }
-  }, [importPaths]);
+  }, [importPaths, language]);
   /** Scan one native folder non-recursively, then enqueue supported image paths. */
   const chooseFolder = useCallback(async () => {
     if (!isTauri()) {
-      setError('Open the desktop app to import a photo folder.');
+      setNotice({ key: 'desktopFolderOnly' });
       return;
     }
     try {
@@ -118,12 +134,12 @@ export function useImageImport() {
       const paths = await listImageDirectory(selected);
       if (!alive.current) return;
       if (paths.length === 0) {
-        setError('The selected folder does not contain supported photos.');
+        setNotice({ key: 'folderNoSupported' });
         return;
       }
       importPaths(paths);
     } catch (reason) {
-      if (alive.current) setError(normalizeError(reason).message);
+      if (alive.current) setNotice({ raw: normalizeError(reason).message });
     }
   }, [importPaths]);
   useEffect(() => {
@@ -145,7 +161,7 @@ export function useImageImport() {
           else unlisten = cleanup;
         })
         .catch((reason) => {
-          if (!disposed) setError(normalizeError(reason).message);
+          if (!disposed) setNotice({ raw: normalizeError(reason).message });
         });
     // Unsubscribe from native events and prevent outstanding imports from writing
     // into an unmounted component.
@@ -155,9 +171,23 @@ export function useImageImport() {
       unlisten?.();
     };
   }, [importPaths]);
+  const error = notice
+    ? 'raw' in notice
+      ? notice.raw
+      : translate(
+          language,
+          notice.key,
+          'detail' in notice ? { count: notice.count, detail: notice.detail } : undefined,
+        )
+    : null;
   return {
-    choosePhotos, chooseFolder, dragActive, error, clearError: () => setError(null),
-    duplicates, clearDuplicates: () => setDuplicates([]),
+    choosePhotos,
+    chooseFolder,
+    dragActive,
+    error,
+    clearError: () => setNotice(null),
+    duplicates,
+    clearDuplicates: () => setDuplicates([]),
     addCopies: () => {
       if (!duplicates.length) return;
       setDuplicates([]);

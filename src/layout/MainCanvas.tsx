@@ -30,6 +30,7 @@ import { CollagePreview } from '../components/collage/CollagePreview';
 import { CropOverlay } from '../components/CropOverlay';
 import { useUIStore } from '../stores/uiStore';
 import { useEditHistoryStore } from '../stores/editHistoryStore';
+import { useTranslation } from '../i18n/messages';
 
 type MainCanvasProps = {
   onImport: () => void;
@@ -53,6 +54,7 @@ export function MainCanvas({
   onExport,
   exporting,
 }: MainCanvasProps) {
+  const t = useTranslation();
   const photos = useProjectStore((state) => state.photos);
   const isCollageMode = useUIStore((state) => state.activeRightTab === 'collage');
   const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
@@ -101,7 +103,7 @@ export function MainCanvas({
   return (
     <main
       className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-app-base"
-      aria-label="Photo workspace"
+      aria-label={t('photoWorkspace')}
       tabIndex={0}
       data-editor-shortcut-scope="canvas"
       onDragOver={(event) => event.preventDefault()}
@@ -128,26 +130,40 @@ export function MainCanvas({
         >
           <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
             <Button size="small" onClick={onImport}>
-              Import photos
+              {t('importPhotos')}
             </Button>
             <div className="flex items-center gap-2">
-              <Tooltip title="Undo edit (Ctrl+Z)" arrow>
-                <span><IconButton size="small" aria-label="Undo edit" disabled={!canUndoEdit} onClick={undoEdit}>
-                  <Icon name="undo" size={18} />
-                </IconButton></span>
-              </Tooltip>
-              <Tooltip title="Redo edit (Ctrl+Shift+Z)" arrow>
-                <span><IconButton size="small" aria-label="Redo edit" disabled={!canRedoEdit} onClick={redoEdit}>
-                  <Icon name="redo" size={18} />
-                </IconButton></span>
-              </Tooltip>
-              <Button size="small" disabled={!photo || exporting} onClick={onExport}>
-                {exporting ? 'Exporting…' : 'Export'}
-              </Button>
-              <Tooltip title="Remove current photo (Del)" arrow>
+              <Tooltip title={t('undoEditShortcut')} arrow>
                 <span>
                   <IconButton
-                    aria-label="Remove current photo"
+                    size="small"
+                    aria-label={t('undoEdit')}
+                    disabled={!canUndoEdit}
+                    onClick={undoEdit}
+                  >
+                    <Icon name="undo" size={18} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('redoEditShortcut')} arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label={t('redoEdit')}
+                    disabled={!canRedoEdit}
+                    onClick={redoEdit}
+                  >
+                    <Icon name="redo" size={18} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Button size="small" disabled={!photo || exporting} onClick={onExport}>
+                {exporting ? t('exporting') : t('export')}
+              </Button>
+              <Tooltip title={t('removeCurrentPhotoShortcut')} arrow>
+                <span>
+                  <IconButton
+                    aria-label={t('removeCurrentPhoto')}
                     disabled={!photo}
                     onClick={removeCurrentPhoto}
                     sx={(theme) => {
@@ -204,7 +220,7 @@ export function MainCanvas({
       )}
       {dragActive && (
         <div className="pointer-events-none absolute inset-2 z-20 grid place-items-center rounded-lg border-2 border-dashed border-accent bg-app-surface/90">
-          Drop photos to import
+          {t('dropPhotosToImport')}
         </div>
       )}
     </main>
@@ -237,6 +253,7 @@ function Preview({
   focusedLayout: boolean;
   editable: boolean;
 }) {
+  const t = useTranslation();
   const { image, loading, error } = useImagePreview(path);
   const cropEdit = useCropEdit();
   const cropSession = cropEdit.session?.photoId === photoId ? cropEdit.session : null;
@@ -430,14 +447,14 @@ function Preview({
       ref={viewport}
       className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden"
     >
-      {loading && <CircularProgress size={28} aria-label="Loading preview" />}
+      {loading && <CircularProgress size={28} aria-label={t('loadingPreview')} />}
       {error && (
         <div
           role="alert"
           className="flex max-w-sm flex-col items-center gap-2 rounded-lg border border-subtle bg-app-surface px-6 py-5 text-center text-secondary"
         >
           <Icon name="image-off" size={28} />
-          <span className="text-sm">Unable to load photo</span>
+          <span className="text-sm">{t('photoLoadFailed')}</span>
           <span className="text-xs">{error.message}</span>
         </div>
       )}
@@ -452,7 +469,7 @@ function Preview({
       >
         <canvas
           ref={canvas}
-          aria-label="Photo preview"
+          aria-label={t('photoPreview')}
           data-preview-long-edge={
             image ? Math.max(image.naturalWidth, image.naturalHeight) : undefined
           }
@@ -485,7 +502,7 @@ function Preview({
         />
         <canvas
           ref={cropCanvas}
-          aria-label="Crop source image"
+          aria-label={t('cropSourceImage')}
           aria-hidden={!showCropContext}
           style={{
             display: showCropContext && image ? 'block' : 'none',

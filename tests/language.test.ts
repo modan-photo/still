@@ -28,6 +28,14 @@ describe('language messages', () => {
     expect(translate('zh', 'builtInWhiteBorder')).toBe('白色边框');
   });
 
+  it('translates import and transform status without changing technical details', () => {
+    expect(
+      translate('zh', 'importFailedMany', { count: 2, detail: 'image.jpg: decode failed' }),
+    ).toBe('2 张照片导入失败。image.jpg: decode failed');
+    expect(translate('en', 'transformBatchCountOne')).toBe('This will apply to 1 photo.');
+    expect(translate('zh', 'removedPhotos', { count: 2 })).toBe('已移除 2 张照片');
+  });
+
   it('uses the selected language for stable error codes and preserves unknown details', () => {
     const previous = useUIStore.getState().language;
     try {

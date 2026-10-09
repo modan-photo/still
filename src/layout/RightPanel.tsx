@@ -1,9 +1,9 @@
-import { IconButton, useMediaQuery, useTheme } from "@mui/material";
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Icon } from "../components/Icons";
-import { RightPanelContent } from "./RightPanelContent";
-import { RightPanelTabs } from "./RightPanelTabs.tsx";
-import { useTranslation } from "../i18n/messages";
+import { IconButton, useMediaQuery, useTheme } from '@mui/material';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Icon } from '../components/Icons';
+import { RightPanelContent } from './RightPanelContent';
+import { RightPanelTabs } from './RightPanelTabs.tsx';
+import { useTranslation } from '../i18n/messages';
 
 type RightPanelProps = {
   collapsed: boolean;
@@ -25,7 +25,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
   const [resizing, setResizing] = useState(false);
   const dragStart = useRef({ x: 0, width: 300 });
   const theme = useTheme();
-  const tablet = useMediaQuery(theme.breakpoints.between("md", "lg"));
+  const tablet = useMediaQuery(theme.breakpoints.between('md', 'lg'));
   const effectiveWidth = tablet ? 260 : width;
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -48,7 +48,11 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
     <aside
       id="right-panel"
       className="relative h-full min-h-0 shrink-0 border-l border-subtle bg-app-surface transition-[width] duration-base ease-app"
-      style={{ width: collapsed ? 0 : effectiveWidth, transitionDuration: resizing ? "0ms" : undefined, borderLeftWidth: collapsed ? 0 : undefined }}
+      style={{
+        width: collapsed ? 0 : effectiveWidth,
+        transitionDuration: resizing ? '0ms' : undefined,
+        borderLeftWidth: collapsed ? 0 : undefined,
+      }}
       aria-label={t('inspector')}
       data-collapsed={collapsed}
     >
@@ -57,7 +61,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
         <div
           className="absolute inset-y-0 left-0 z-20 w-1 -translate-x-1/2 cursor-col-resize touch-none outline-none transition-colors duration-fast hover:bg-accent focus-visible:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           role="separator"
-          aria-label="Resize inspector"
+          aria-label={t('resizeInspector')}
           aria-orientation="vertical"
           aria-valuemin={MIN_WIDTH}
           aria-valuemax={MAX_WIDTH}
@@ -72,9 +76,9 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
           onLostPointerCapture={() => setResizing(false)}
           onKeyDown={(event) => {
             // Keyboard resizing mirrors the pointer direction from the left edge.
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
             event.preventDefault();
-            const delta = event.key === "ArrowLeft" ? 8 : -8;
+            const delta = event.key === 'ArrowLeft' ? 8 : -8;
             setWidth((current) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, current + delta)));
           }}
         />
@@ -85,27 +89,27 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
         onClick={() => onCollapsedChange(!collapsed)}
         size="small"
         sx={{
-          position: "absolute",
+          position: 'absolute',
           zIndex: 30,
           top: 12,
           left: -14,
           width: 28,
           height: 28,
-          border: "1px solid",
-          borderColor: "divider",
-          bgcolor: "background.paper",
-          boxShadow: "var(--shadow-elev1)",
-          "&:hover": { bgcolor: "background.default" },
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          boxShadow: 'var(--shadow-elev1)',
+          '&:hover': { bgcolor: 'background.default' },
         }}
       >
-        <span className={collapsed ? "rotate-90" : "-rotate-90"}>
+        <span className={collapsed ? 'rotate-90' : '-rotate-90'}>
           <Icon name="chevron" size={14} />
         </span>
       </IconButton>
 
       <div
         className="flex h-full flex-col"
-        style={{ display: collapsed ? "none" : undefined, minWidth: effectiveWidth }}
+        style={{ display: collapsed ? 'none' : undefined, minWidth: effectiveWidth }}
         aria-hidden={collapsed}
       >
         <InspectorContent />

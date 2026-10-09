@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { cacheAssetUrl } from "../services/tauri/image";
-import { Icon } from "./Icons";
+import { useEffect, useState } from 'react';
+import { cacheAssetUrl } from '../services/tauri/image';
+import { Icon } from './Icons';
+import { useTranslation } from '../i18n/messages';
 
 type ThumbnailImageProps = {
   thumbPath: string;
@@ -9,6 +10,7 @@ type ThumbnailImageProps = {
 };
 
 export function ThumbnailImage({ thumbPath, label, revision = 0 }: ThumbnailImageProps) {
+  const t = useTranslation();
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -21,7 +23,7 @@ export function ThumbnailImage({ thumbPath, label, revision = 0 }: ThumbnailImag
     return (
       <span
         className="grid h-full w-full place-items-center border border-subtle bg-app-base text-secondary"
-        title={`${label} is unavailable`}
+        title={t('thumbnailUnavailable', { name: label })}
         aria-hidden="true"
       >
         <Icon name="image-off" size={22} />
@@ -31,7 +33,9 @@ export function ThumbnailImage({ thumbPath, label, revision = 0 }: ThumbnailImag
 
   return (
     <span className="relative block h-full w-full bg-app-base">
-      {!loaded && <span className="absolute inset-0 animate-pulse bg-app-elevated" aria-hidden="true" />}
+      {!loaded && (
+        <span className="absolute inset-0 animate-pulse bg-app-elevated" aria-hidden="true" />
+      )}
       <img
         src={cacheAssetUrl(thumbPath)}
         alt=""

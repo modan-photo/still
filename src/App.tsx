@@ -1,5 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Button, IconButton, Snackbar, useMediaQuery, useTheme as useMuiTheme } from '@mui/material';
+import {
+  Alert,
+  Button,
+  IconButton,
+  Snackbar,
+  useMediaQuery,
+  useTheme as useMuiTheme,
+} from '@mui/material';
 import { isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
 import type { ThemeController } from './hooks/useTheme';
@@ -87,9 +94,16 @@ function App({ theme }: { theme: ThemeController }) {
         const bundled = fonts.find((entry) => entry.builtin && entry.family === font.family);
         const allowed = bundled ?? fallback;
         if (font.family !== allowed.family || font.path !== allowed.path) {
-          project.updateSpec(photo.id, {
-            watermark: { ...stamp, font: { ...font, family: allowed.family, path: allowed.path } },
-          }, { recordHistory: false });
+          project.updateSpec(
+            photo.id,
+            {
+              watermark: {
+                ...stamp,
+                font: { ...font, family: allowed.family, path: allowed.path },
+              },
+            },
+            { recordHistory: false },
+          );
         }
       }
     });
@@ -113,7 +127,16 @@ function App({ theme }: { theme: ThemeController }) {
   const collagePhotoIds = useProjectStore((state) => state.collageDraft.photoIds);
   const selectedId = useProjectStore((state) => state.currentPhotoId);
   const selectPhoto = useProjectStore((state) => state.selectPhoto);
-  const { choosePhotos, chooseFolder, dragActive, error, clearError, duplicates, clearDuplicates, addCopies } = useImageImport();
+  const {
+    choosePhotos,
+    chooseFolder,
+    dragActive,
+    error,
+    clearError,
+    duplicates,
+    clearDuplicates,
+    addCopies,
+  } = useImageImport();
   // One dialog serves both export modes, while progress and errors belong to the
   // application shell rather than an individual canvas or inspector component.
   const [exportError, setExportError] = useState<string | null>(null);
@@ -276,21 +299,29 @@ function App({ theme }: { theme: ThemeController }) {
       {/* Phones replace the full editor shell during collage editing. Wider layouts
         keep collage inside the standard canvas and inspector composition. */}
       {isMobile && isCollageMode ? (
-        <Suspense fallback={<div role="status">Loading collage editor…</div>}>
+        <Suspense fallback={<div role="status">{t('loadingCollageEditor')}</div>}>
           <MobileCollageEditor onExit={() => setActiveRightTab(previousRightTab.current)} />
         </Suspense>
       ) : (
         <AppShell
           titleBarVisible={!(isTauri() && platform() === 'android')}
-          titleBar={<TitleBar
-            onOpenSettings={() => setSettingsOpen(true)}
-            onToggleTheme={theme.toggleResolvedTheme}
-            themeMode={theme.resolvedTheme}
-          />}
+          titleBar={
+            <TitleBar
+              onOpenSettings={() => setSettingsOpen(true)}
+              onToggleTheme={theme.toggleResolvedTheme}
+              themeMode={theme.resolvedTheme}
+            />
+          }
           mobileHeader={
             <div className="flex h-10 items-center justify-between px-3">
-              <span className="flex items-center gap-2 text-sm font-medium"><StillMark size={18} /> Still</span>
-              <IconButton size="small" aria-label={t('openSettings')} onClick={() => setSettingsOpen(true)}>
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <StillMark size={18} /> Still
+              </span>
+              <IconButton
+                size="small"
+                aria-label={t('openSettings')}
+                onClick={() => setSettingsOpen(true)}
+              >
                 <Icon name="settings" size={18} />
               </IconButton>
             </div>
@@ -304,10 +335,19 @@ function App({ theme }: { theme: ThemeController }) {
                 </Alert>
               )}
               {duplicates.length > 0 && (
-                <Alert severity="info" onClose={clearDuplicates} action={
-                  <Button color="inherit" size="small" onClick={addCopies}>Add copies</Button>
-                }>
-                  {duplicates.length} photo(s) already in this workspace were skipped.
+                <Alert
+                  severity="info"
+                  onClose={clearDuplicates}
+                  action={
+                    <Button color="inherit" size="small" onClick={addCopies}>
+                      {t('addCopies')}
+                    </Button>
+                  }
+                >
+                  {t(
+                    duplicates.length === 1 ? 'duplicatePhotoSkippedOne' : 'duplicatePhotosSkipped',
+                    { count: duplicates.length },
+                  )}
                 </Alert>
               )}
               {exportError && (
@@ -332,7 +372,7 @@ function App({ theme }: { theme: ThemeController }) {
           }
           rightPanel={
             photos.length === 0 ? null : (
-              <Suspense fallback={<div role="status">Loading inspector…</div>}>
+              <Suspense fallback={<div role="status">{t('loadingInspector')}</div>}>
                 {mobileLayout ? (
                   <MobileRightPanel open={inspectorOpen} onOpenChange={setInspectorOpen} />
                 ) : (
@@ -360,14 +400,14 @@ function App({ theme }: { theme: ThemeController }) {
         />
       )}
       {(settingsOpen || settingsMounted) && (
-        <Suspense fallback={<span role="status">Loading settings…</span>}>
+        <Suspense fallback={<span role="status">{t('loadingSettings')}</span>}>
           <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         </Suspense>
       )}
       {/* Export UI remains outside the responsive shell so replacing the mobile layout
         cannot interrupt an open dialog or completion notice. */}
       {(exportDialogOpen || exportDialogMounted) && (
-        <Suspense fallback={<div role="status">Loading export options…</div>}>
+        <Suspense fallback={<div role="status">{t('loadingExportOptions')}</div>}>
           <ExportDialog
             open={exportDialogOpen}
             exportMode={exportMode}
@@ -377,7 +417,7 @@ function App({ theme }: { theme: ThemeController }) {
         </Suspense>
       )}
       {(exportNoticeOpen || exportNoticeMounted) && (
-        <Suspense fallback={<div role="status">Loading export report…</div>}>
+        <Suspense fallback={<div role="status">{t('loadingExportReport')}</div>}>
           <ExportCompletionNotice
             report={exportReport}
             open={exportNoticeOpen}
@@ -396,7 +436,7 @@ function App({ theme }: { theme: ThemeController }) {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert severity="success" variant="filled" onClose={() => setCollageExportPath(null)}>
-          Collage exported to {collageExportPath}
+          {t('collageExportedTo', { path: collageExportPath ?? '' })}
         </Alert>
       </Snackbar>
     </>

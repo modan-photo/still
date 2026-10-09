@@ -1,12 +1,12 @@
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { IconButton, Tooltip, useMediaQuery, useTheme } from "@mui/material";
-import { useEffect, useRef } from "react";
-import { Icon } from "../components/Icons";
-import { ThumbnailItem } from "../components/ThumbnailItem";
-import { useProjectStore } from "../stores/projectStore";
-import { useUIStore } from "../stores/uiStore";
-import { enterCollageMode } from "../services/collageMode";
-import { useTranslation } from "../i18n/messages";
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { IconButton, Tooltip, useMediaQuery, useTheme } from '@mui/material';
+import { useEffect, useRef } from 'react';
+import { Icon } from '../components/Icons';
+import { ThumbnailItem } from '../components/ThumbnailItem';
+import { useProjectStore } from '../stores/projectStore';
+import { useUIStore } from '../stores/uiStore';
+import { enterCollageMode } from '../services/collageMode';
+import { useTranslation } from '../i18n/messages';
 
 export type FilmStripItem = {
   id: string;
@@ -31,7 +31,7 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
   const t = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
-  const compact = useMediaQuery(theme.breakpoints.down("md"));
+  const compact = useMediaQuery(theme.breakpoints.down('md'));
   // Pitch must track the responsive thumbnail width used by ThumbnailItem.
   const itemPitch = compact ? 64 : 80;
   const photoCount = useProjectStore((state) => state.photos.length);
@@ -68,7 +68,7 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
       <div
         ref={scrollRef}
         className="filmstrip-scroll min-w-0 flex-1 overflow-x-auto overflow-y-hidden px-3"
-        aria-label={`${items.length} photos`}
+        aria-label={t('photoCount', { count: items.length })}
       >
         <div className="relative h-full" style={{ width: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((virtualItem) => {
@@ -88,19 +88,32 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
                   selected={selectedId === item.id}
                   onSelect={() => onSelect(item.id)}
                   onKeyDown={(event) => {
-                    const nextIndex = event.key === 'ArrowLeft' ? virtualItem.index - 1
-                      : event.key === 'ArrowRight' ? virtualItem.index + 1
-                        : event.key === 'Home' ? 0
-                          : event.key === 'End' ? items.length - 1 : -1;
+                    const nextIndex =
+                      event.key === 'ArrowLeft'
+                        ? virtualItem.index - 1
+                        : event.key === 'ArrowRight'
+                          ? virtualItem.index + 1
+                          : event.key === 'Home'
+                            ? 0
+                            : event.key === 'End'
+                              ? items.length - 1
+                              : -1;
                     if (nextIndex < 0 || nextIndex >= items.length) return;
                     event.preventDefault();
                     const next = items[nextIndex];
                     onSelect(next.id);
                     virtualizer.scrollToIndex(nextIndex, { align: 'auto' });
-                    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-                      const buttons = scrollRef.current?.querySelectorAll<HTMLButtonElement>('[data-film-photo-id]');
-                      [...(buttons ?? [])].find((button) => button.dataset.filmPhotoId === next.id)?.focus();
-                    }));
+                    window.requestAnimationFrame(() =>
+                      window.requestAnimationFrame(() => {
+                        const buttons =
+                          scrollRef.current?.querySelectorAll<HTMLButtonElement>(
+                            '[data-film-photo-id]',
+                          );
+                        [...(buttons ?? [])]
+                          .find((button) => button.dataset.filmPhotoId === next.id)
+                          ?.focus();
+                      }),
+                    );
                   }}
                 />
               </div>
@@ -117,12 +130,12 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
             sx={{
               width: 40,
               height: 40,
-              border: "1px solid",
-              borderColor: "divider",
-              bgcolor: "background.paper",
-              color: "text.secondary",
-              "&:hover": { bgcolor: "background.default", color: "primary.main" },
-              "&:focus-visible": { outline: "2px solid var(--color-accent)", outlineOffset: 2 },
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              color: 'text.secondary',
+              '&:hover': { bgcolor: 'background.default', color: 'primary.main' },
+              '&:focus-visible': { outline: '2px solid var(--color-accent)', outlineOffset: 2 },
             }}
           >
             <Icon name="plus" size={18} />
@@ -150,7 +163,10 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
                     duration: currentTheme.still.motion.duration.fast,
                     easing: currentTheme.still.motion.easing,
                   }),
-                  '&:hover': { color: collageActive ? colors.accent : colors.text.primary, backgroundColor: colors.bg.elevated },
+                  '&:hover': {
+                    color: collageActive ? colors.accent : colors.text.primary,
+                    backgroundColor: colors.bg.elevated,
+                  },
                   '&.Mui-focusVisible': { outlineColor: colors.accent, outlineOffset: -2 },
                 };
               }}
@@ -174,20 +190,20 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
                 const colors = currentTheme.still.colors[currentTheme.palette.mode];
 
                 return {
-                  width: "100%",
-                  height: "100%",
+                  width: '100%',
+                  height: '100%',
                   borderRadius: 0,
                   color: gridPanelOpen ? colors.accent : colors.text.secondary,
                   backgroundColor: gridPanelOpen ? colors.bg.elevated : undefined,
-                  transition: currentTheme.transitions.create(["background-color", "color"], {
+                  transition: currentTheme.transitions.create(['background-color', 'color'], {
                     duration: currentTheme.still.motion.duration.fast,
                     easing: currentTheme.still.motion.easing,
                   }),
-                  "&:hover": {
+                  '&:hover': {
                     color: gridPanelOpen ? colors.accent : colors.text.primary,
                     backgroundColor: colors.bg.elevated,
                   },
-                  "&.Mui-focusVisible": {
+                  '&.Mui-focusVisible': {
                     outlineColor: colors.accent,
                     outlineOffset: -2,
                   },
