@@ -1,6 +1,7 @@
 import { Drawer, IconButton } from "@mui/material";
 import { Icon } from "../components/Icons";
 import { InspectorContent } from "./RightPanel";
+import { useTranslation } from "../i18n/messages";
 
 type MobileRightPanelProps = {
   open: boolean;
@@ -12,13 +13,14 @@ type MobileRightPanelProps = {
  * Collage is excluded because mobile collage editing has its own full-screen shell.
  */
 export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) {
+  const t = useTranslation();
   return (
     <>
       <Drawer
         anchor="bottom"
         variant="persistent"
         open={open}
-        aria-label="Inspector"
+        aria-label={t('inspector')}
         sx={{
           "& .MuiDrawer-paper": {
             // Dynamic viewport units account for mobile browser/system chrome.
@@ -41,7 +43,7 @@ export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) 
               aria-hidden="true"
             />
             <IconButton
-              aria-label="Close inspector"
+              aria-label={t('closeInspector')}
               onClick={() => onOpenChange(false)}
               size="small"
               sx={{
@@ -62,7 +64,7 @@ export function MobileRightPanel({ open, onOpenChange }: MobileRightPanelProps) 
       {/* When the persistent drawer is closed, expose a floating restore control. */}
       {!open && (
         <IconButton
-          aria-label="Open inspector"
+          aria-label={t('openInspector')}
           onClick={() => onOpenChange(true)}
           sx={{
             position: "fixed",

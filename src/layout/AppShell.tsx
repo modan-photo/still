@@ -4,12 +4,14 @@ import { useUIStore } from "../stores/uiStore";
 import { motionTokens } from "../theme/tokens";
 import { UndoToast } from "../components/UndoToast";
 import { GridPanel } from "./GridPanel";
+import { useTranslation } from "../i18n/messages";
 
 const FAST_MOTION_MS = motionTokens.duration.fast;
 
 type AppShellProps = {
   titleBar: ReactNode;
   titleBarVisible: boolean;
+  mobileHeader: ReactNode;
   mainCanvas: ReactNode;
   rightPanel: ReactNode;
   filmStrip: ReactNode;
@@ -23,7 +25,8 @@ type AppShellProps = {
  * title bar, canvas, inspector, filmstrip and global overlays. Photo count controls
  * whether the filmstrip row exists, while the canvas remains mounted in its slot.
  */
-export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, filmStrip, progress }: AppShellProps) {
+export function AppShell({ titleBar, titleBarVisible, mobileHeader, mainCanvas, rightPanel, filmStrip, progress }: AppShellProps) {
+  const t = useTranslation();
   const photoCount = useProjectStore((state) => state.photos.length);
   const wantsFilmStrip = photoCount >= 2;
   // Mounting and visibility are separate so the row can animate to zero before its
@@ -95,11 +98,8 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
     if (enterFrameRef.current !== null) window.cancelAnimationFrame(enterFrameRef.current);
   }, []);
 
-  // On compact screens the title bar slot is a zero-height row; desktop reserves
-  // the native-title-bar height explicitly to keep canvas sizing deterministic.
-  const shellRowLayout = titleBarVisible
-    ? "grid-rows-[0_minmax(0,1fr)] md:grid-rows-[40px_minmax(0,1fr)]"
-    : "grid-rows-[0_minmax(0,1fr)]";
+  // The desktop title bar and compact header share one fixed-height shell row.
+  const shellRowLayout = "grid-rows-[40px_minmax(0,1fr)]";
   // Grid row animation controls layout height while the footer transition controls
   // its visual slide and opacity.
   const leftColumnRowLayout = filmStripMounted
@@ -111,12 +111,13 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
   return (
     <div className={`grid h-full min-h-0 w-full overflow-hidden bg-app-base text-primary ${shellRowLayout}`}>
       <div className={titleBarVisible ? "relative z-30 hidden min-w-0 border-b border-subtle bg-app-surface md:block" : "hidden"}>{titleBar}</div>
+      <div className={`relative z-30 min-w-0 border-b border-subtle bg-app-surface ${titleBarVisible ? 'md:hidden' : ''}`}>{mobileHeader}</div>
 
       <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {progress}
           <div className={`grid min-h-0 min-w-0 flex-1 overflow-hidden transition-[grid-template-rows] ease-app ${filmStripShown ? "duration-base" : "duration-fast"} ${leftColumnRowLayout}`}>
-            <section className="relative isolate h-full min-h-0 min-w-0 overflow-hidden" aria-label="Editor canvas">
+            <section className="relative isolate h-full min-h-0 min-w-0 overflow-hidden" aria-label={t('editorCanvas')}>
               {mainCanvas}
               {filmStripMounted && <GridPanel />}
             </section>
@@ -124,7 +125,7 @@ export function AppShell({ titleBar, titleBarVisible, mainCanvas, rightPanel, fi
             {filmStripMounted && (
               <footer
                 className={`min-h-0 min-w-0 w-full overflow-hidden border-t border-subtle bg-app-surface transition-[transform,opacity] ease-app ${filmStripShown ? "translate-y-0 opacity-100 duration-base" : "pointer-events-none translate-y-full opacity-0 duration-fast"}`}
-                aria-label="Photo filmstrip"
+                aria-label={t('photoFilmstrip')}
                 aria-hidden={!filmStripShown}
               >
                 {filmStrip}

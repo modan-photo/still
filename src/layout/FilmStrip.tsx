@@ -6,6 +6,7 @@ import { ThumbnailItem } from "../components/ThumbnailItem";
 import { useProjectStore } from "../stores/projectStore";
 import { useUIStore } from "../stores/uiStore";
 import { enterCollageMode } from "../services/collageMode";
+import { useTranslation } from "../i18n/messages";
 
 export type FilmStripItem = {
   id: string;
@@ -27,6 +28,7 @@ type FilmStripProps = {
  * importing, collage entry and grid access are always reachable.
  */
 export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripProps) {
+  const t = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down("md"));
@@ -108,9 +110,9 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
       </div>
 
       <div className="grid w-16 shrink-0 place-items-center border-l border-subtle bg-app-surface">
-        <Tooltip title="Import photos" arrow>
+        <Tooltip title={t('importPhotos')} arrow>
           <IconButton
-            aria-label="Import photos"
+            aria-label={t('importPhotos')}
             onClick={onImport}
             sx={{
               width: 40,
@@ -131,9 +133,9 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
       {/* Collage performs additional draft initialization through the shared service. */}
       {showGridButton && (
         <div className="h-full w-[72px] shrink-0 border-l border-subtle bg-app-surface md:w-[84px] lg:w-[96px]">
-          <Tooltip title="Collage" arrow>
+          <Tooltip title={t('collage')} arrow>
             <IconButton
-              aria-label="Open collage editor"
+              aria-label={t('openCollage')}
               aria-pressed={collageActive}
               onClick={enterCollageMode}
               sx={(currentTheme) => {
@@ -162,9 +164,9 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
       {/* Grid view is mutually exclusive with the collage canvas. */}
       {showGridButton && (
         <div className="h-full w-[72px] shrink-0 border-l border-subtle bg-app-surface md:w-[84px] lg:w-[96px]">
-          <Tooltip title="Grid view (G)" arrow>
+          <Tooltip title={t('gridViewShortcut')} arrow>
             <IconButton
-              aria-label="Grid view"
+              aria-label={t('gridView')}
               aria-pressed={gridPanelOpen}
               disabled={collageActive}
               onClick={toggleGridPanel}

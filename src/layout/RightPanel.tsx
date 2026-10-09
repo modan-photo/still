@@ -3,6 +3,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { Icon } from "../components/Icons";
 import { RightPanelContent } from "./RightPanelContent";
 import { RightPanelTabs } from "./RightPanelTabs.tsx";
+import { useTranslation } from "../i18n/messages";
 
 type RightPanelProps = {
   collapsed: boolean;
@@ -19,6 +20,7 @@ const MAX_WIDTH = 400;
  * the user's drag/keyboard width for the current session.
  */
 export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
+  const t = useTranslation();
   const [width, setWidth] = useState(300);
   const [resizing, setResizing] = useState(false);
   const dragStart = useRef({ x: 0, width: 300 });
@@ -47,7 +49,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
       id="right-panel"
       className="relative h-full min-h-0 shrink-0 border-l border-subtle bg-app-surface transition-[width] duration-base ease-app"
       style={{ width: collapsed ? 0 : effectiveWidth, transitionDuration: resizing ? "0ms" : undefined, borderLeftWidth: collapsed ? 0 : undefined }}
-      aria-label="Inspector"
+      aria-label={t('inspector')}
       data-collapsed={collapsed}
     >
       {/* Tablet width is fixed; only full desktop exposes the resize separator. */}
@@ -79,7 +81,7 @@ export function RightPanel({ collapsed, onCollapsedChange }: RightPanelProps) {
       )}
 
       <IconButton
-        aria-label={collapsed ? "Expand inspector" : "Collapse inspector"}
+        aria-label={t(collapsed ? 'expandInspector' : 'collapseInspector')}
         onClick={() => onCollapsedChange(!collapsed)}
         size="small"
         sx={{

@@ -3,15 +3,17 @@ import { Icon } from "../components/Icons";
 import { enterCollageMode } from "../services/collageMode";
 import { useUIStore } from "../stores/uiStore";
 import { RIGHT_PANEL_TABS, type RightPanelTabId } from "./rightPanelTabs";
+import { useTranslation } from "../i18n/messages";
 
 /** Renders the inspector tab strip and routes mode-aware tab changes. */
 export function RightPanelTabs({ excludeCollage = false }: { excludeCollage?: boolean }) {
+  const t = useTranslation();
   const activeRightTab = useUIStore((state) => state.activeRightTab);
   const setActiveRightTab = useUIStore((state) => state.setActiveRightTab);
 
   return (
     <Tabs
-      aria-label="Inspector panel"
+      aria-label={t('inspectorPanel')}
       value={activeRightTab}
       onChange={(_, value: RightPanelTabId) => {
         // Collage entry initializes its draft and closes grid view; other tabs only
@@ -53,13 +55,13 @@ export function RightPanelTabs({ excludeCollage = false }: { excludeCollage?: bo
         <Tab
           key={tab.id}
           id={`tab-${tab.id}`}
-          aria-label={tab.label}
+          aria-label={t(tab.id)}
           aria-controls={`panel-${tab.id}`}
           value={tab.id}
           disableRipple
           icon={<Icon name={tab.icon} size={18} strokeWidth={1.5} />}
           iconPosition="top"
-          label={tab.label}
+          label={t(tab.id)}
           sx={(theme) => ({
             minWidth: 0,
             minHeight: { xs: 52, md: 56 },

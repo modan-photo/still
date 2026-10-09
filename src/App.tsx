@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Button, Snackbar, useMediaQuery, useTheme as useMuiTheme } from '@mui/material';
+import { Alert, Button, IconButton, Snackbar, useMediaQuery, useTheme as useMuiTheme } from '@mui/material';
 import { isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
 import type { ThemeController } from './hooks/useTheme';
@@ -27,6 +27,9 @@ import { motionTokens } from './theme/tokens';
 import { restoreViewAfterCollage } from './services/collageMode';
 import { createExportRetry, markExportedPhotosClean } from './services/exportCompletion';
 import { errorMessage } from './services/errorMessages';
+import { useTranslation } from './i18n/messages';
+import { StillMark } from './components/StillMark';
+import { Icon } from './components/Icons';
 
 const SettingsDialog = lazy(() =>
   import('./components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })),
@@ -60,6 +63,7 @@ const MobileRightPanel = lazy(() =>
  * callbacks and render-ready data.
  */
 function App({ theme }: { theme: ThemeController }) {
+  const t = useTranslation();
   const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
 
   // Refresh the font catalogue whenever system-font access changes. When system
@@ -278,19 +282,18 @@ function App({ theme }: { theme: ThemeController }) {
       ) : (
         <AppShell
           titleBarVisible={!(isTauri() && platform() === 'android')}
-          titleBar={
-            <>
-              <TitleBar
-                onOpenSettings={() => setSettingsOpen(true)}
-                onToggleTheme={theme.toggleResolvedTheme}
-                themeMode={theme.resolvedTheme}
-              />
-              {(settingsOpen || settingsMounted) && (
-                <Suspense fallback={<span role="status">Loading settings…</span>}>
-                  <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-                </Suspense>
-              )}
-            </>
+          titleBar={<TitleBar
+            onOpenSettings={() => setSettingsOpen(true)}
+            onToggleTheme={theme.toggleResolvedTheme}
+            themeMode={theme.resolvedTheme}
+          />}
+          mobileHeader={
+            <div className="flex h-10 items-center justify-between px-3">
+              <span className="flex items-center gap-2 text-sm font-medium"><StillMark size={18} /> Still</span>
+              <IconButton size="small" aria-label={t('openSettings')} onClick={() => setSettingsOpen(true)}>
+                <Icon name="settings" size={18} />
+              </IconButton>
+            </div>
           }
           progress={
             <>
@@ -355,6 +358,11 @@ function App({ theme }: { theme: ThemeController }) {
             />
           }
         />
+      )}
+      {(settingsOpen || settingsMounted) && (
+        <Suspense fallback={<span role="status">Loading settings…</span>}>
+          <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        </Suspense>
       )}
       {/* Export UI remains outside the responsive shell so replacing the mobile layout
         cannot interrupt an open dialog or completion notice. */}

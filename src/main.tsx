@@ -11,10 +11,13 @@ import { getCssVariables } from "./theme/tokens";
 import { CropEditProvider } from "./hooks/useCropEdit";
 import { initializeWorkspace } from "./services/workspaceInitialization";
 import { installWorkspaceCloseHandler } from "./services/workspaceShutdown";
+import { useUIStore } from "./stores/uiStore";
 import "./theme/global.css";
 
 function Root() {
   const themeController = useTheme();
+  const language = useUIStore((state) => state.language);
+  React.useEffect(() => { document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'; }, [language]);
   const muiTheme = useMemo(
     () => createStillTheme(themeController.resolvedTheme),
     [themeController.resolvedTheme],

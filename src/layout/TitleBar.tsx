@@ -4,6 +4,7 @@ import { platform } from "@tauri-apps/plugin-os";
 import { IconButton as MuiIconButton, Tooltip } from "@mui/material";
 import { Icon } from "../components/Icons";
 import { StillMark } from "../components/StillMark";
+import { useTranslation } from "../i18n/messages";
 
 type TitleBarProps = {
   onOpenSettings: () => void;
@@ -17,6 +18,7 @@ type TitleBarProps = {
  * buttons intentionally sit outside those regions so clicks reach their handlers.
  */
 export function TitleBar({ onOpenSettings, onToggleTheme, themeMode }: TitleBarProps) {
+  const t = useTranslation();
   // Android supplies its own system chrome and must not render desktop controls.
   if (isTauri() && platform() === "android") return null;
 
@@ -47,27 +49,27 @@ export function TitleBar({ onOpenSettings, onToggleTheme, themeMode }: TitleBarP
       <div className="h-full min-w-8 flex-1" data-tauri-drag-region />
 
       <div className="flex h-full shrink-0 items-center">
-        <Tooltip title={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} arrow>
-          <MuiIconButton aria-label={`Switch to ${themeMode === "light" ? "dark" : "light"} theme`} onClick={onToggleTheme} size="small" sx={titleBarActionSx}>
+        <Tooltip title={t(themeMode === 'light' ? 'switchToDark' : 'switchToLight')} arrow>
+          <MuiIconButton aria-label={t(themeMode === 'light' ? 'switchToDark' : 'switchToLight')} onClick={onToggleTheme} size="small" sx={titleBarActionSx}>
             <Icon name={themeMode === "light" ? "moon" : "sun"} size={16} />
           </MuiIconButton>
         </Tooltip>
-        <Tooltip title="Application settings" arrow>
-          <MuiIconButton aria-label="Open application settings" onClick={onOpenSettings} size="small" sx={titleBarActionSx}>
+        <Tooltip title={t('settings')} arrow>
+          <MuiIconButton aria-label={t('openSettings')} onClick={onOpenSettings} size="small" sx={titleBarActionSx}>
             <Icon name="settings" size={16} />
           </MuiIconButton>
         </Tooltip>
       </div>
 
       <div className="flex h-full shrink-0 items-center">
-        <MuiIconButton aria-label="Minimize window" disableRipple onClick={windowAction("minimize")} sx={windowButtonSx}>
+        <MuiIconButton aria-label={t('minimize')} disableRipple onClick={windowAction("minimize")} sx={windowButtonSx}>
           <Icon name="minimize" size={16} />
         </MuiIconButton>
-        <MuiIconButton aria-label="Maximize or restore window" disableRipple onClick={windowAction("maximize")} sx={windowButtonSx}>
+        <MuiIconButton aria-label={t('maximize')} disableRipple onClick={windowAction("maximize")} sx={windowButtonSx}>
           <Icon name="maximize" size={15} />
         </MuiIconButton>
         <MuiIconButton
-          aria-label="Close window"
+          aria-label={t('closeWindow')}
           disableRipple
           onClick={windowAction("close")}
           sx={{ ...windowButtonSx, "&:hover": { bgcolor: "error.main", color: "common.white" } }}

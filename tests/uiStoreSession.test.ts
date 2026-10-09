@@ -44,4 +44,13 @@ describe('in-memory inspector state', () => {
     expect(setItem).toHaveBeenCalledExactlyOnceWith('still.use-system-fonts', 'false');
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it('loads and persists language without restoring workspace state', async () => {
+    getItem.mockImplementation((key: string) => key === 'still.language' ? 'zh' : null);
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState()).toMatchObject({ language: 'zh', activeRightTab: 'frame', gridPanelOpen: false });
+    useUIStore.getState().setLanguage('en');
+    expect(setItem).toHaveBeenCalledExactlyOnceWith('still.language', 'en');
+    expect(useUIStore.getState().language).toBe('en');
+  });
 });

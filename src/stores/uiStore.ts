@@ -8,11 +8,13 @@ export interface UIState {
   inspectorOpen: boolean;
   theme: 'light' | 'dark' | 'system';
   systemFontsEnabled: boolean;
+  language: 'en' | 'zh';
   activeRightTab: RightPanelTabId;
   gridPanelOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
   setTheme: (theme: UIState['theme']) => void;
   setSystemFontsEnabled: (enabled: boolean) => void;
+  setLanguage: (language: UIState['language']) => void;
   setActiveRightTab: (tab: UIState['activeRightTab']) => void;
   setGridPanelOpen: (open: boolean) => void;
   toggleGridPanel: () => void;
@@ -20,11 +22,17 @@ export interface UIState {
 }
 const SYSTEM_FONTS_KEY = 'still.use-system-fonts';
 const storedSystemFontsEnabled = () => typeof localStorage !== 'undefined' && localStorage.getItem(SYSTEM_FONTS_KEY) === 'true';
+const LANGUAGE_KEY = 'still.language';
+const storedLanguage = (): UIState['language'] => {
+  if (typeof localStorage === 'undefined') return 'en';
+  return localStorage.getItem(LANGUAGE_KEY) === 'zh' ? 'zh' : 'en';
+};
 
 export const useUIStore = createSessionStore<UIState>((set) => ({
   inspectorOpen: true,
   theme: 'system',
   systemFontsEnabled: storedSystemFontsEnabled(),
+  language: storedLanguage(),
   activeRightTab: DEFAULT_RIGHT_PANEL_TAB,
   gridPanelOpen: false,
   setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
@@ -32,6 +40,10 @@ export const useUIStore = createSessionStore<UIState>((set) => ({
   setSystemFontsEnabled: (systemFontsEnabled) => {
     if (typeof localStorage !== 'undefined') localStorage.setItem(SYSTEM_FONTS_KEY, String(systemFontsEnabled));
     set({ systemFontsEnabled });
+  },
+  setLanguage: (language) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(LANGUAGE_KEY, language);
+    set({ language });
   },
   setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
   setGridPanelOpen: (gridPanelOpen) => set({ gridPanelOpen }),
