@@ -7,9 +7,15 @@ import {
   Switch,
   TextField,
 } from '@mui/material';
+import { useState } from 'react';
 import { useUIStore } from '../stores/uiStore';
 import { useTranslation } from '../i18n/messages';
 import type { MessageKey } from '../i18n/messages';
+import {
+  applyWindowSizePreset,
+  desktopWindowAvailable,
+  type WindowSizePreset,
+} from '../services/windowPreferences';
 import { Icon } from './Icons';
 
 type SettingsDialogProps = { open: boolean; onClose: () => void };
@@ -36,6 +42,24 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setSingleKeyShortcutsEnabled = useUIStore((state) => state.setSingleKeyShortcutsEnabled);
   const language = useUIStore((state) => state.language);
   const setLanguage = useUIStore((state) => state.setLanguage);
+  const windowSizePreset = useUIStore((state) => state.windowSizePreset);
+  const setWindowSizePreset = useUIStore((state) => state.setWindowSizePreset);
+  const [windowSizeError, setWindowSizeError] = useState(false);
+  const [windowSizePending, setWindowSizePending] = useState(false);
+
+  const changeWindowSize = async (preset: WindowSizePreset) => {
+    setWindowSizeError(false);
+    setWindowSizePending(true);
+    try {
+      await applyWindowSizePreset(preset);
+      setWindowSizePreset(preset);
+    } catch (error) {
+      console.warn('Unable to change the window size', error);
+      setWindowSizeError(true);
+    } finally {
+      setWindowSizePending(false);
+    }
+  };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" aria-labelledby="settings-title">
@@ -70,6 +94,35 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             <MenuItem value="zh">{t('chinese')}</MenuItem>
           </TextField>
         </section>
+        {desktopWindowAvailable() && (
+          <section
+            className="mb-3 rounded-lg border border-subtle bg-app-base p-4"
+            aria-labelledby="window-settings-heading"
+          >
+            <h3 id="window-settings-heading" className="m-0 text-sm font-semibold text-primary">
+              {t('windowSize')}
+            </h3>
+            <p className="mb-3 mt-1 text-xs leading-5 text-secondary">
+              {t('windowSizeDescription')}
+            </p>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label={t('windowSize')}
+              value={windowSizePreset}
+              disabled={windowSizePending}
+              error={windowSizeError}
+              helperText={windowSizeError ? t('windowSizeError') : undefined}
+              inputProps={{ 'aria-label': t('windowSize') }}
+              onChange={(event) => void changeWindowSize(event.target.value as WindowSizePreset)}
+            >
+              <MenuItem value="default">{t('windowSizeDefault')}</MenuItem>
+              <MenuItem value="compact">{t('windowSizeCompact')}</MenuItem>
+              <MenuItem value="spacious">{t('windowSizeSpacious')}</MenuItem>
+            </TextField>
+          </section>
+        )}
         <section
           className="mb-3 rounded-lg border border-subtle bg-app-base p-4"
           aria-labelledby="shortcut-settings-heading"

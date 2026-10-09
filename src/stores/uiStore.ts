@@ -1,5 +1,10 @@
 import { createSessionStore } from './createSessionStore';
 import { DEFAULT_RIGHT_PANEL_TAB, type RightPanelTabId } from '../layout/rightPanelTabs';
+import {
+  readWindowSizePreset,
+  WINDOW_SIZE_KEY,
+  type WindowSizePreset,
+} from '../services/windowPreferences';
 
 export interface UIState {
   inspectorOpen: boolean;
@@ -7,6 +12,7 @@ export interface UIState {
   systemFontsEnabled: boolean;
   singleKeyShortcutsEnabled: boolean;
   language: 'en' | 'zh';
+  windowSizePreset: WindowSizePreset;
   activeRightTab: RightPanelTabId;
   gridPanelOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
@@ -14,6 +20,7 @@ export interface UIState {
   setSystemFontsEnabled: (enabled: boolean) => void;
   setSingleKeyShortcutsEnabled: (enabled: boolean) => void;
   setLanguage: (language: UIState['language']) => void;
+  setWindowSizePreset: (preset: WindowSizePreset) => void;
   setActiveRightTab: (tab: UIState['activeRightTab']) => void;
   setGridPanelOpen: (open: boolean) => void;
   toggleGridPanel: () => void;
@@ -38,6 +45,7 @@ export const useUIStore = createSessionStore<UIState>(
     systemFontsEnabled: storedSystemFontsEnabled(),
     singleKeyShortcutsEnabled: storedSingleKeyShortcutsEnabled(),
     language: storedLanguage(),
+    windowSizePreset: readWindowSizePreset(),
     activeRightTab: DEFAULT_RIGHT_PANEL_TAB,
     gridPanelOpen: false,
     setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
@@ -55,6 +63,11 @@ export const useUIStore = createSessionStore<UIState>(
     setLanguage: (language) => {
       if (typeof localStorage !== 'undefined') localStorage.setItem(LANGUAGE_KEY, language);
       set({ language });
+    },
+    setWindowSizePreset: (windowSizePreset) => {
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(WINDOW_SIZE_KEY, windowSizePreset);
+      set({ windowSizePreset });
     },
     setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
     setGridPanelOpen: (gridPanelOpen) => set({ gridPanelOpen }),

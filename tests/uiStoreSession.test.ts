@@ -91,4 +91,19 @@ describe('in-memory inspector state', () => {
       gridPanelOpen: false,
     });
   });
+
+  it('persists window size independently of the session state', async () => {
+    getItem.mockImplementation((key: string) =>
+      key === 'still.window.size-preset' ? 'compact' : null,
+    );
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState()).toMatchObject({
+      windowSizePreset: 'compact',
+      activeRightTab: 'frame',
+    });
+    useUIStore.getState().setWindowSizePreset('spacious');
+    expect(setItem).toHaveBeenCalledExactlyOnceWith('still.window.size-preset', 'spacious');
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState().windowSizePreset).toBe('spacious');
+  });
 });
