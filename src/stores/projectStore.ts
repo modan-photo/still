@@ -7,12 +7,15 @@ import { cropForAspect } from '../render/crop';
 import { rotatedDimensions, transformBatchDisabledReason } from '../render/rotation';
 import { colorTokens } from '../theme/tokens';
 import { applyRenderSettings, syncRenderSettings, type SyncModule } from '../render/spec';
+import { useEditHistoryStore, type EditChange, type EditStep } from './editHistoryStore';
 
 export interface ProjectPhoto extends ImageMeta {
   id: string;
   spec: RenderSpec;
   dirty: boolean;
   thumbRevision: number;
+  /** Last imported/exported state, used to keep dirty accurate through undo/redo. */
+  cleanSpec?: RenderSpec;
 }
 export type CollageLayout = '1x2' | '1x3' | '2x1' | '2x2' | '2x3' | '3x3' | 'v-strip' | 'h-strip';
 export type CollageAspect = '1:1' | '4:3' | '16:9' | '9:16' | 'auto';
@@ -52,7 +55,9 @@ export interface ProjectState {
   toggleSelectedId: (id: string) => void;
   updateCollageDraft: (patch: Partial<CollageDraft>) => void;
   resetCollageDraft: () => void;
-  updateSpec: (id: string, patch: SpecPatch) => void;
+  updateSpec: (id: string, patch: SpecPatch, options?: { recordHistory?: boolean }) => void;
+  undoEdit: () => void;
+  redoEdit: () => void;
   applySpecToPhotos: (sourceId: string, targetIds: string[]) => void;
   syncSpecModules: (sourceId: string, targetIds: string[], modules: SyncModule[]) => void;
   applyBorderToAll: (border: BorderSpec) => void;
@@ -85,6 +90,38 @@ function invalidatePhotoCaches(photos: ProjectPhoto[]) {
     hashes.forEach((hash) => {
       if (pendingCacheInvalidations.get(hash) === request) pendingCacheInvalidations.delete(hash);
     });
+  });
+}
+
+const sameSpec = (left: RenderSpec, right: RenderSpec) => JSON.stringify(left) === JSON.stringify(right);
+
+function editedPhoto(photo: ProjectPhoto, spec: RenderSpec): ProjectPhoto {
+  if (sameSpec(photo.spec, spec)) return photo;
+  return { ...photo, spec, dirty: photo.cleanSpec ? !sameSpec(spec, photo.cleanSpec) : true };
+}
+
+function recordEditChanges(before: ProjectPhoto[], after: ProjectPhoto[], mergeKey?: string) {
+  const previous = new Map(before.map((photo) => [photo.id, photo]));
+  const changes: EditChange[] = after.flatMap((photo) => {
+    const old = previous.get(photo.id);
+    if (!old || sameSpec(old.spec, photo.spec)) return [];
+    return [{
+      id: photo.id,
+      before: { spec: old.spec, dirty: old.dirty },
+      after: { spec: photo.spec, dirty: photo.dirty },
+    }];
+  });
+  useEditHistoryStore.getState().push(changes, mergeKey);
+}
+
+function restoreEditStep(photos: ProjectPhoto[], step: EditStep, side: 'before' | 'after') {
+  const values = new Map(step.changes.map((change) => [change.id, change[side]]));
+  return photos.map((photo) => {
+    const value = values.get(photo.id);
+    if (!value) return photo;
+    const spec = structuredClone(value.spec);
+    spec.source = structuredClone(photo.spec.source);
+    return { ...photo, spec, dirty: photo.cleanSpec ? !sameSpec(spec, photo.cleanSpec) : value.dirty };
   });
 }
 
@@ -128,7 +165,7 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
       usedIds.add(id);
       const spec = structuredClone(DEFAULT_RENDER_SPEC);
       spec.source = { path: meta.path, width: meta.width, height: meta.height };
-      return { ...meta, id, dirty: false, thumbRevision: 0, spec };
+      return { ...meta, id, dirty: false, thumbRevision: 0, spec, cleanSpec: structuredClone(spec) };
     });
     const currentPhotoId = state.currentPhotoId ?? added[0]?.id ?? null;
     return { photos: [...state.photos, ...added], currentPhotoId };
@@ -168,45 +205,71 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
     },
   })),
   resetCollageDraft: () => set((state) => ({ collageDraft: { ...structuredClone(DEFAULT_COLLAGE_DRAFT), photoIds: [...state.collageDraft.photoIds] } })),
-  updateSpec: (id, patch) => set((state) => ({ photos: state.photos.map((photo) => photo.id === id
-    ? { ...photo, spec: { ...photo.spec, ...structuredClone(patch) }, dirty: true } : photo) })),
-  applySpecToPhotos: (sourceId, targetIds) => set((state) => {
-    const template = state.photos.find((photo) => photo.id === sourceId)?.spec;
-    if (!template) return state;
-    const targets = new Set(targetIds);
-    return {
-      photos: state.photos.map((photo) => targets.has(photo.id) && photo.id !== sourceId
-        ? { ...photo, spec: applyRenderSettings(photo.spec, template), dirty: true }
-        : photo),
-    };
-  }),
-  syncSpecModules: (sourceId, targetIds, modules) => set((state) => {
-    const template = state.photos.find((photo) => photo.id === sourceId)?.spec;
-    if (!template || modules.length === 0) return state;
-    const targets = new Set(targetIds);
-    return {
-      photos: state.photos.map((photo) => targets.has(photo.id) && photo.id !== sourceId
-        ? { ...photo, spec: syncRenderSettings(photo.spec, template, modules), dirty: true }
-        : photo),
-    };
-  }),
-  applyBorderToAll: (border) => set((state) => ({ photos: state.photos.map((photo) => ({
-    ...photo,
-    spec: { ...photo.spec, border: structuredClone(border) },
-    dirty: true,
-  })) })),
+  updateSpec: (id, patch, options) => {
+    const before = get().photos;
+    set((state) => ({ photos: state.photos.map((photo) => photo.id === id
+      ? editedPhoto(photo, { ...photo.spec, ...structuredClone(patch) }) : photo) }));
+    const keys = Object.keys(patch);
+    const mergeKey = keys.length === 1 && ['border', 'watermark', 'adjustments'].includes(keys[0])
+      ? `${id}:${keys[0]}` : undefined;
+    if (options?.recordHistory !== false) recordEditChanges(before, get().photos, mergeKey);
+  },
+  undoEdit: () => {
+    const step = useEditHistoryStore.getState().takeUndo();
+    if (step) set((state) => ({ photos: restoreEditStep(state.photos, step, 'before') }));
+  },
+  redoEdit: () => {
+    const step = useEditHistoryStore.getState().takeRedo();
+    if (step) set((state) => ({ photos: restoreEditStep(state.photos, step, 'after') }));
+  },
+  applySpecToPhotos: (sourceId, targetIds) => {
+    const before = get().photos;
+    set((state) => {
+      const template = state.photos.find((photo) => photo.id === sourceId)?.spec;
+      if (!template) return state;
+      const targets = new Set(targetIds);
+      return {
+        photos: state.photos.map((photo) => targets.has(photo.id) && photo.id !== sourceId
+          ? editedPhoto(photo, applyRenderSettings(photo.spec, template))
+          : photo),
+      };
+    });
+    recordEditChanges(before, get().photos);
+  },
+  syncSpecModules: (sourceId, targetIds, modules) => {
+    const before = get().photos;
+    set((state) => {
+      const template = state.photos.find((photo) => photo.id === sourceId)?.spec;
+      if (!template || modules.length === 0) return state;
+      const targets = new Set(targetIds);
+      return {
+        photos: state.photos.map((photo) => targets.has(photo.id) && photo.id !== sourceId
+          ? editedPhoto(photo, syncRenderSettings(photo.spec, template, modules))
+          : photo),
+      };
+    });
+    recordEditChanges(before, get().photos);
+  },
+  applyBorderToAll: (border) => {
+    const before = get().photos;
+    set((state) => ({ photos: state.photos.map((photo) =>
+      editedPhoto(photo, { ...photo.spec, border: structuredClone(border) })) }));
+    recordEditChanges(before, get().photos);
+  },
   applyCropToAll: (sourceId, expectedAspect) => {
     const source = get().photos.find(photo => photo.id === sourceId);
     const crop = source?.spec.crop;
     if (!crop?.enabled || crop.aspect !== expectedAspect || crop.aspect === 'free' || crop.aspect === 'original') return 0;
     const count = get().photos.length - 1;
     if (count < 1) return 0;
+    const before = get().photos;
     set(state => ({ photos: state.photos.map(photo => photo.id === sourceId
-      ? { ...photo, dirty: true }
-      : { ...photo, dirty: true, spec: {
+      ? photo
+      : editedPhoto(photo, {
         ...photo.spec,
         crop: cropForAspect(crop.aspect, photo.spec.source.width, photo.spec.source.height),
-      } }) }));
+      })) }));
+    recordEditChanges(before, get().photos);
     return count;
   },
   applyTransformToAll: (sourceId, expectedAspect, includeRotation = false, expectedRotation) => {
@@ -221,21 +284,20 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
     set({ photos: state.photos.map(photo => {
       const targetRotation = includeRotation ? rotation : photo.spec.rotation;
       const size = rotatedDimensions(photo.spec.source.width, photo.spec.source.height, targetRotation);
-      return {
-        ...photo, dirty: true,
-        spec: {
-          ...photo.spec,
-          ...(includeRotation ? { rotation: structuredClone(rotation) } : {}),
-          // Omitting the current crop produces the maximal centered rectangle.
-          crop: cropForAspect(crop.aspect, size.width, size.height),
-        },
-      };
+      return editedPhoto(photo, {
+        ...photo.spec,
+        ...(includeRotation ? { rotation: structuredClone(rotation) } : {}),
+        // Omitting the current crop produces the maximal centered rectangle.
+        crop: cropForAspect(crop.aspect, size.width, size.height),
+      });
     }) });
+    recordEditChanges(state.photos, get().photos);
     return state.photos.length;
   },
   // Export completion must not clear edits made while the export was running.
   markClean: (id, exportedSpec) => set((state) => ({ photos: state.photos.map((photo) =>
-    photo.id === id && JSON.stringify(photo.spec) === JSON.stringify(exportedSpec) ? { ...photo, dirty: false } : photo) })),
+    photo.id === id && sameSpec(photo.spec, exportedSpec)
+      ? { ...photo, dirty: false, cleanSpec: structuredClone(exportedSpec) } : photo) })),
   removePhotos: (ids) => {
     const state = get();
     const targetIds = new Set(ids);
@@ -255,6 +317,8 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
       previousCollagePhotoIds: [...state.collageDraft.photoIds],
     };
     if (removedPhotos.length === 0) return snapshot;
+
+    useEditHistoryStore.getState().prunePhotos(removedPhotos.map((photo) => photo.id));
 
     const photos = state.photos.filter((photo) => !targetIds.has(photo.id));
     let currentPhotoId = previousCurrentId;
@@ -305,6 +369,7 @@ export const useProjectStore = createSessionStore<ProjectState>((set, get) => ({
   removePhoto: (id) => { get().removePhotos([id]); },
   clear: () => { get().clearAll(); },
   resetSession: () => {
+    useEditHistoryStore.getState().clear();
     photoSelectionRequest++;
     set({
       photos: [], selectedIds: [], currentPhotoId: null,

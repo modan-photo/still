@@ -29,6 +29,7 @@ import { listWatermarkFonts } from '../services/tauri/watermark';
 import { CollagePreview } from '../components/collage/CollagePreview';
 import { CropOverlay } from '../components/CropOverlay';
 import { useUIStore } from '../stores/uiStore';
+import { useEditHistoryStore } from '../stores/editHistoryStore';
 
 type MainCanvasProps = {
   onImport: () => void;
@@ -58,6 +59,10 @@ export function MainCanvas({
   const selectedId = useProjectStore((state) => state.currentPhotoId);
   const removePhotos = useProjectStore((state) => state.removePhotos);
   const pushUndo = useUndoStore((state) => state.push);
+  const canUndoEdit = useEditHistoryStore((state) => state.undoStack.length > 0);
+  const canRedoEdit = useEditHistoryStore((state) => state.redoStack.length > 0);
+  const undoEdit = useProjectStore((state) => state.undoEdit);
+  const redoEdit = useProjectStore((state) => state.redoEdit);
   const photo = photos.find((entry) => entry.id === selectedId);
   // A single-photo project can afford more canvas padding than the filmstrip layout.
   const focusedLayout = photos.length <= 1;
@@ -126,6 +131,16 @@ export function MainCanvas({
               Import photos
             </Button>
             <div className="flex items-center gap-2">
+              <Tooltip title="Undo edit (Ctrl+Z)" arrow>
+                <span><IconButton size="small" aria-label="Undo edit" disabled={!canUndoEdit} onClick={undoEdit}>
+                  <Icon name="undo" size={18} />
+                </IconButton></span>
+              </Tooltip>
+              <Tooltip title="Redo edit (Ctrl+Shift+Z)" arrow>
+                <span><IconButton size="small" aria-label="Redo edit" disabled={!canRedoEdit} onClick={redoEdit}>
+                  <Icon name="redo" size={18} />
+                </IconButton></span>
+              </Tooltip>
               <Button size="small" disabled={!photo || exporting} onClick={onExport}>
                 {exporting ? 'Exporting…' : 'Export'}
               </Button>

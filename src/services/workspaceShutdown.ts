@@ -4,6 +4,7 @@ import { platform } from '@tauri-apps/plugin-os';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { useUndoStore } from '../stores/undoStore';
+import { useEditHistoryStore } from '../stores/editHistoryStore';
 
 const CLOSE_TIMEOUT_MS = 500;
 
@@ -11,6 +12,7 @@ const CLOSE_TIMEOUT_MS = 500;
 export function discardWorkspaceSession() {
   const resets = [
     () => useUndoStore.getState().clear(),
+    () => useEditHistoryStore.getState().clear(),
     () => useProjectStore.getState().resetSession(),
     () => useUIStore.getState().resetSession(),
   ];

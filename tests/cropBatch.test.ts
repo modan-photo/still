@@ -35,7 +35,7 @@ describe('batch crop application', () => {
     expect(horizontal.spec.adjustments).toEqual(landscape.spec.adjustments);
     expect(vertical.spec.source).toEqual(portrait.spec.source);
     expect(horizontal.spec.crop?.rect).not.toBe(vertical.spec.crop?.rect);
-    expect(useProjectStore.getState().photos.every(photo => photo.dirty)).toBe(true);
+    expect(useProjectStore.getState().photos.map(photo => photo.dirty)).toEqual([false, true, true]);
     expect(portrait.spec.crop?.aspect).toBe('free');
   });
 

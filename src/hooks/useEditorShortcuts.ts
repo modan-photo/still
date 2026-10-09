@@ -40,6 +40,15 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       const textEntryActive = target.isContentEditable || Boolean(target.closest(
         'input, textarea, select, [role="combobox"], [role="dialog"]',
       ));
+      if (!textEntryActive && (event.ctrlKey || event.metaKey) && !event.altKey
+        && (event.key.toLowerCase() === 'z' || event.key.toLowerCase() === 'y')) {
+        const redo = event.key.toLowerCase() === 'y' || event.shiftKey;
+        if (event.key.toLowerCase() === 'y' && event.shiftKey) return;
+        event.preventDefault();
+        if (redo) useProjectStore.getState().redoEdit();
+        else useProjectStore.getState().undoEdit();
+        return;
+      }
       if (
         !textEntryActive
         && !event.ctrlKey

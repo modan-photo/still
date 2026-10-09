@@ -3,6 +3,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { DEFAULT_CROP, DEFAULT_ROTATION, type CropSpec } from '../types/renderSpec';
 import { computeTransformEdit, type TransformAction } from '../render/rotation';
+import { useEditHistoryStore } from '../stores/editHistoryStore';
 
 interface CropSession { photoId: string; baseline: CropSpec; draft: CropSpec | null; dismissed: boolean }
 interface CropEditContextValue {
@@ -22,6 +23,7 @@ export function CropEditProvider({ children }: { children: ReactNode }) {
   const photoId = useProjectStore(state => state.currentPhotoId);
   const tab = useUIStore(state => state.activeRightTab);
   const gridOpen = useUIStore(state => state.gridPanelOpen);
+  const historyRevision = useEditHistoryStore(state => state.appliedRevision);
   const [session, setSession] = useState<CropSession | null>(null);
   useEffect(() => {
     // Crop requires the single-photo canvas, including after collage restores its previous view.
@@ -32,7 +34,7 @@ export function CropEditProvider({ children }: { children: ReactNode }) {
     setSession(tab === 'transform' && photo ? {
       photoId: photo.id, baseline: structuredClone(photo.spec.crop ?? DEFAULT_CROP), draft: null, dismissed: false,
     } : null);
-  }, [photoId, tab]);
+  }, [photoId, tab, historyRevision]);
 
   const value: CropEditContextValue = {
     session,

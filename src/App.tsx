@@ -89,7 +89,7 @@ function App({ theme }: { theme: ThemeController }) {
         if (font.family !== allowed.family || font.path !== allowed.path) {
           project.updateSpec(photo.id, {
             watermark: { ...stamp, font: { ...font, family: allowed.family, path: allowed.path } },
-          });
+          }, { recordHistory: false });
         }
       }
     });

@@ -3,6 +3,7 @@ import type { CloseRequestedEvent } from '@tauri-apps/api/window';
 import { useProjectStore, DEFAULT_COLLAGE_DRAFT } from '../src/stores/projectStore';
 import { useUIStore } from '../src/stores/uiStore';
 import { useUndoStore } from '../src/stores/undoStore';
+import { useEditHistoryStore } from '../src/stores/editHistoryStore';
 import { discardWorkspaceSession, installWorkspaceCloseHandler } from '../src/services/workspaceShutdown';
 import { DEFAULT_BORDER } from '../src/types/renderSpec';
 
@@ -64,6 +65,7 @@ function closeEvent() {
 function expectCleanSession() {
   expect(useProjectStore.getState()).toMatchObject({ photos: [], currentPhotoId: null, selectedIds: [], collageDraft: DEFAULT_COLLAGE_DRAFT });
   expect(useUndoStore.getState()).toMatchObject({ snapshot: null, expiresAt: null, count: 0, notice: null });
+  expect(useEditHistoryStore.getState()).toMatchObject({ undoStack: [], redoStack: [] });
   expect(useUIStore.getState()).toMatchObject({ activeRightTab: 'frame', inspectorOpen: true, gridPanelOpen: false, theme: 'dark', systemFontsEnabled: true });
   expect(setItem).not.toHaveBeenCalled();
   expect(mocks.invoke).not.toHaveBeenCalled();

@@ -6,7 +6,8 @@ export type IconName =
   | "check" | "chevron" | "sidebar" | "frame" | "crop" | "stamp" | "info"
   | "transform" | "rotate-left" | "rotate-right" | "flip-horizontal" | "flip-vertical" | "reset" | "minimize" | "maximize" | "plus" | "copy"
   | "grid" | "single" | "trash" | "select" | "image-off" | "more" | "save"
-  | "gap" | "radius" | "background" | "aspect" | "photos";
+  | "gap" | "radius" | "background" | "aspect" | "photos"
+  | "undo" | "redo";
 
 /** name selects the icon; size controls both SVG dimensions and defaults to 18 pixels. */
 type IconProps = { name: IconName; size?: number; strokeWidth?: number };
@@ -56,6 +57,8 @@ const paths: Record<IconName, ReactNode> = {
   "flip-horizontal": <><path d="M12 3v18" strokeDasharray="2 2"/><path d="m3 7 6 5-6 5V7ZM21 7l-6 5 6 5V7Z"/></>,
   "flip-vertical": <><path d="M3 12h18" strokeDasharray="2 2"/><path d="m7 3 5 6 5-6H7ZM7 21l5-6 5 6H7Z"/></>,
   reset: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></>,
+  undo: <><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 6 6"/></>,
+  redo: <><path d="m15 7 5 5-5 5"/><path d="M20 12H10a6 6 0 0 0-6 6"/></>,
 };
 
 /**
