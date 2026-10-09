@@ -195,7 +195,21 @@ fn replace_with_rollback(
 fn encode_jpeg(image: &DynamicImage, writer: &mut impl Write, quality: u8) -> Result<(), AppError> {
     let pixels: Cow<'_, RgbImage> = match image.as_rgb8() {
         Some(pixels) => Cow::Borrowed(pixels),
-        None => Cow::Owned(image.to_rgb8()),
+        None => {
+            // JPEG has no alpha channel. Dropping alpha would expose hidden RGB
+            // values from transparent PNG/WebP pixels, so flatten onto white.
+            let rgba = image.to_rgba8();
+            let mut rgb = RgbImage::new(rgba.width(), rgba.height());
+            for (target, source) in rgb.pixels_mut().zip(rgba.pixels()) {
+                let alpha = u32::from(source[3]);
+                for channel in 0..3 {
+                    target[channel] =
+                        ((u32::from(source[channel]) * alpha + 255 * (255 - alpha) + 127) / 255)
+                            as u8;
+                }
+            }
+            Cow::Owned(rgb)
+        }
     };
     JpegEncoder::new_with_quality(writer, quality.clamp(1, 100)).encode(
         pixels.as_raw(),
@@ -207,6 +221,15 @@ fn encode_jpeg(image: &DynamicImage, writer: &mut impl Write, quality: u8) -> Re
 }
 
 fn encode_png(image: &DynamicImage, writer: &mut impl Write) -> Result<(), AppError> {
+    // PNG has no floating-point sample type. Retain 16-bit precision when
+    // converting TIFF/HDR float buffers instead of failing at encode time.
+    let converted = match image {
+        DynamicImage::ImageRgb32F(_) | DynamicImage::ImageRgba32F(_) => {
+            Some(DynamicImage::ImageRgba16(image.to_rgba16()))
+        }
+        _ => None,
+    };
+    let image = converted.as_ref().unwrap_or(image);
     PngEncoder::new(writer).write_image(
         image.as_bytes(),
         image.width(),
@@ -851,6 +874,94 @@ mod tests {
         }
 
         fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn jpeg_flattens_transparency_onto_white() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-jpeg-alpha-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let destination = directory.join("flattened.jpg");
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_fn(48, 16, |x, _| {
+            if x < 16 {
+                Rgba([255, 0, 0, 0])
+            } else if x < 32 {
+                Rgba([0, 255, 0, 128])
+            } else {
+                Rgba([0, 0, 255, 255])
+            }
+        }));
+        save_image_atomic(
+            &image,
+            &destination,
+            &OutputSpec {
+                format: OutputFormat::Jpeg,
+                quality: 100,
+            },
+            &CancellationToken::new(),
+        )
+        .unwrap();
+        let result = image::open(&destination).unwrap().to_rgb8();
+        let transparent = result.get_pixel(8, 8).0;
+        assert!(
+            transparent.iter().all(|channel| *channel > 245),
+            "{transparent:?}"
+        );
+        let partial = result.get_pixel(24, 8).0;
+        assert!(partial[0] > 115 && partial[0] < 140, "{partial:?}");
+        assert!(partial[1] > 245, "{partial:?}");
+        assert!(partial[2] > 115 && partial[2] < 140, "{partial:?}");
+        let opaque = result.get_pixel(40, 8).0;
+        assert!(
+            opaque[0] < 10 && opaque[1] < 10 && opaque[2] > 245,
+            "{opaque:?}"
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn png_accepts_float_source_pixels() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-png-float-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let destination = directory.join("float.png");
+        let image = DynamicImage::ImageRgb32F(image::Rgb32FImage::from_pixel(
+            2,
+            2,
+            image::Rgb([0.25, 0.5, 0.75]),
+        ));
+        save_image_atomic(
+            &image,
+            &destination,
+            &OutputSpec {
+                format: OutputFormat::Png,
+                quality: 100,
+            },
+            &CancellationToken::new(),
+        )
+        .unwrap();
+        assert_eq!(image::image_dimensions(&destination).unwrap(), (2, 2));
+        let pixel = image::open(&destination)
+            .unwrap()
+            .to_rgba16()
+            .get_pixel(0, 0)
+            .0;
+        assert!((16_000..=16_800).contains(&pixel[0]), "{pixel:?}");
+        assert!((32_000..=33_000).contains(&pixel[1]), "{pixel:?}");
+        assert!((48_500..=49_500).contains(&pixel[2]), "{pixel:?}");
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
