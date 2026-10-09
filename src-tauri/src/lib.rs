@@ -12,6 +12,7 @@ pub fn run() {
             documents::document_pick_directory,
             commands::exif::exif_read,
             commands::exif::exif_write,
+            commands::exif::exif_write_batch,
             commands::image::image_load,
             commands::image::image_list_directory,
             commands::image::cache_invalidate,

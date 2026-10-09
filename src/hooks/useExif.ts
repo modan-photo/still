@@ -17,6 +17,15 @@ const cache = new Map<string, CacheEntry>();
 // One promise per photo prevents duplicate native reads when multiple consumers
 // request the same metadata before the first request completes.
 const pending = new Map<string, Promise<ExifData>>();
+const revisions = new Map<string, number>();
+
+export function invalidateExifCache(photoIds: readonly string[]): void {
+  for (const id of photoIds) {
+    cache.delete(id);
+    pending.delete(id);
+    revisions.set(id, (revisions.get(id) ?? 0) + 1);
+  }
+}
 
 /** Return a valid entry and promote it to the most-recently-used position. */
 function cached(photoId: string, path: string): ExifData | null {
@@ -59,6 +68,7 @@ function request(photoId: string, path: string): Promise<ExifData> {
   const inFlight = pending.get(photoId);
   if (inFlight) return inFlight;
 
+  const revision = revisions.get(photoId) ?? 0;
   const operation = readExif(path)
     .then((data) => {
       // A read may finish after its photo was removed or replaced. Only cache the
@@ -66,7 +76,7 @@ function request(photoId: string, path: string): Promise<ExifData> {
       const photoStillExists = useProjectStore
         .getState()
         .photos.some((photo) => photo.id === photoId && photo.path === path);
-      if (photoStillExists) store(photoId, path, data);
+      if (photoStillExists && (revisions.get(photoId) ?? 0) === revision) store(photoId, path, data);
       return data;
     })
     .finally(() => {
@@ -84,6 +94,9 @@ const unsubscribeFromProject = useProjectStore.subscribe((state, previousState) 
   const available = new Set(state.photos.map((photo) => photo.id));
   for (const photoId of cache.keys()) {
     if (!available.has(photoId)) cache.delete(photoId);
+  }
+  for (const photoId of revisions.keys()) {
+    if (!available.has(photoId)) revisions.delete(photoId);
   }
 });
 

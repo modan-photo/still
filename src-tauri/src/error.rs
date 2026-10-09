@@ -58,6 +58,12 @@ pub enum AppError {
         rollback_error: String,
     },
 
+    #[error("EXIF batch stopped at {path}: {cause}. No batch edits remain committed.")]
+    ExifBatchFailed { path: String, cause: String },
+
+    #[error("EXIF batch could not fully restore source files: {details}. Keep the listed backups for recovery.")]
+    ExifBatchRecoveryRequired { details: String },
+
     #[error("task cancelled")]
     Cancelled,
 }
@@ -79,6 +85,8 @@ impl AppError {
             Self::DocumentCleanupRequired { .. } => "document_cleanup_required",
             Self::ExportRecoveryRequired { .. } => "export_recovery_required",
             Self::ExifRecoveryRequired { .. } => "exif_recovery_required",
+            Self::ExifBatchFailed { .. } => "exif_batch_failed",
+            Self::ExifBatchRecoveryRequired { .. } => "exif_batch_recovery_required",
             Self::Cancelled => "cancelled",
         }
     }

@@ -1,9 +1,10 @@
-import { Box, Button, Skeleton, Snackbar, SnackbarContent } from "@mui/material";
+import { Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Skeleton, Snackbar, SnackbarContent, TextField } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useCallback, useEffect, useState } from "react";
-import { useExif } from "../../hooks/useExif";
-import { writeExif } from "../../services/tauri/exif";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { invalidateExifCache, useExif } from "../../hooks/useExif";
+import { trackExifSave } from "../../services/exifSaveCoordinator";
+import { writeExif, writeExifBatch } from "../../services/tauri/exif";
 import { normalizeError } from "../../services/tauri/image";
 import { useProjectStore } from "../../stores/projectStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -23,8 +24,18 @@ export function ExifPanel() {
     state.photos.find((photo) => photo.id === state.currentPhotoId)?.path ?? null,
   );
   const activeRightTab = useUIStore((state) => state.activeRightTab);
+  const photos = useProjectStore((state) => state.photos);
+  const selectedIds = useProjectStore((state) => state.selectedIds);
+  const batchItems = useMemo(() => photos.filter((photo) => selectedIds.includes(photo.id)).map((photo) => ({ id: photo.id, path: photo.path })), [photos, selectedIds]);
   const { data, loading, error, retry, update } = useExif(currentPhotoId);
   const [notice, setNotice] = useState<Notice>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
+  const [batchFields, setBatchFields] = useState({
+    artist: { apply: false, value: "" },
+    copyright: { apply: false, value: "" },
+    keywords: { apply: false, value: "" },
+  });
 
   const copy = useCallback(async (text: string, successMessage: string) => {
     try {
@@ -62,6 +73,34 @@ export function ExifPanel() {
     }
   }, [currentPath, currentPhotoId, update]);
 
+  const saveBatch = async () => {
+    const edits: ExifEdits = {};
+    for (const field of ["artist", "copyright", "keywords"] as const) {
+      if (batchFields[field].apply) edits[field] = batchFields[field].value;
+    }
+    if (Object.keys(edits).length === 0) return;
+    setBatchSaving(true);
+    try {
+      const result = await trackExifSave(writeExifBatch(batchItems, edits));
+      invalidateExifCache(photos.map((photo) => photo.id));
+      if (currentPhotoId) retry();
+      setBatchOpen(false);
+      setNotice(result.backupCleanupPaths.length
+        ? { message: `Saved ${result.sourceCount} source files. Verify them, then remove these old backups: ${result.backupCleanupPaths.join(", ")}`, persistent: true }
+        : { message: `Saved EXIF on ${result.sourceCount} source files.` });
+    } catch (reason) {
+      const failure = normalizeError(reason);
+      if (failure.code === "exif_batch_recovery_required") {
+        invalidateExifCache(photos.map((photo) => photo.id));
+        if (currentPhotoId) retry();
+      }
+      setNotice({ message: exifSaveErrorMessage(failure.code, failure.message), error: true,
+        persistent: failure.code === "exif_batch_recovery_required" || failure.code === "exif_recovery_required" });
+    } finally {
+      setBatchSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (activeRightTab !== "exif" || !data) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -83,6 +122,10 @@ export function ExifPanel() {
     <Box>
       <ExifSummary data={data} onCopy={copyAll} />
       <Box sx={{ px: 2 }}>
+        {batchItems.length > 1 && <Button size="small" variant="outlined" sx={{ mt: 1 }} disabled={batchItems.length > 100} onClick={() => setBatchOpen(true)}>
+          Edit EXIF on {batchItems.length} selected photos
+        </Button>}
+        {batchItems.length > 100 && <Box sx={{ fontSize: 11, color: "text.secondary" }}>Select at most 100 photos for one EXIF batch.</Box>}
         {empty && (
           <Box sx={{ py: 2, color: "text.secondary", fontSize: 12, textAlign: "center" }}>
             This image does not contain EXIF metadata.
@@ -139,6 +182,22 @@ export function ExifPanel() {
           />
         </ExifGroup>
       </Box>
+      <Dialog open={batchOpen} onClose={batchSaving ? undefined : () => setBatchOpen(false)} fullWidth maxWidth="sm" aria-labelledby="batch-exif-title">
+        <DialogTitle id="batch-exif-title">Edit selected source files</DialogTitle>
+        <DialogContent sx={{ display: "grid", gap: 2 }}>
+          <Box sx={{ fontSize: 12, color: "text.secondary" }}>
+            {batchItems.length} selected photos refer to {new Set(batchItems.map((item) => item.path)).size} source paths. All selected sources are prepared before writing; a failure triggers rollback. Check a field to change it. A checked blank field clears it.
+          </Box>
+          {(["artist", "copyright", "keywords"] as const).map((field) => <Box key={field} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <FormControlLabel control={<Checkbox disabled={batchSaving} checked={batchFields[field].apply} onChange={(event) => setBatchFields((current) => ({ ...current, [field]: { ...current[field], apply: event.target.checked } }))} />} label={`Change ${field}`} sx={{ minWidth: 150 }} />
+            <TextField size="small" fullWidth label={field} disabled={batchSaving || !batchFields[field].apply} value={batchFields[field].value} onChange={(event) => setBatchFields((current) => ({ ...current, [field]: { ...current[field], value: event.target.value } }))} />
+          </Box>)}
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={batchSaving} onClick={() => setBatchOpen(false)}>Cancel</Button>
+          <Button variant="contained" disabled={batchSaving || !Object.values(batchFields).some((field) => field.apply)} onClick={() => void saveBatch()}>{batchSaving ? "Saving…" : "Save source files"}</Button>
+        </DialogActions>
+      </Dialog>
       <ExifNotice notice={notice} onClose={() => setNotice(null)} />
     </Box>
   );
