@@ -16,6 +16,7 @@ import {
   desktopWindowAvailable,
   type WindowSizePreset,
 } from '../services/windowPreferences';
+import type { SingleKeyAction } from '../services/shortcutPreferences';
 import { Icon } from './Icons';
 
 type SettingsDialogProps = { open: boolean; onClose: () => void };
@@ -28,11 +29,11 @@ const MODIFIER_SHORTCUTS = [
 ] as const satisfies ReadonlyArray<{ label: MessageKey; keys: string }>;
 
 const SINGLE_KEY_SHORTCUTS = [
-  { label: 'gridView', keys: 'G' },
-  { label: 'removeCurrentPhoto', keys: 'Delete / Backspace' },
-  { label: 'shortcutToggleInspector', keys: 'Tab' },
-  { label: 'shortcutPhotoNavigation', keys: '← / →' },
-] as const satisfies ReadonlyArray<{ label: MessageKey; keys: string }>;
+  { id: 'grid', label: 'gridView', keys: 'G' },
+  { id: 'remove', label: 'removeCurrentPhoto', keys: 'Delete / Backspace' },
+  { id: 'inspector', label: 'shortcutToggleInspector', keys: 'Tab' },
+  { id: 'photoNavigation', label: 'shortcutPhotoNavigation', keys: '← / →' },
+] as const satisfies ReadonlyArray<{ id: SingleKeyAction; label: MessageKey; keys: string }>;
 
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const t = useTranslation();
@@ -40,6 +41,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setSystemFontsEnabled = useUIStore((state) => state.setSystemFontsEnabled);
   const singleKeyShortcutsEnabled = useUIStore((state) => state.singleKeyShortcutsEnabled);
   const setSingleKeyShortcutsEnabled = useUIStore((state) => state.setSingleKeyShortcutsEnabled);
+  const singleKeyActions = useUIStore((state) => state.singleKeyActions);
+  const setSingleKeyActionEnabled = useUIStore((state) => state.setSingleKeyActionEnabled);
   const language = useUIStore((state) => state.language);
   const setLanguage = useUIStore((state) => state.setLanguage);
   const windowSizePreset = useUIStore((state) => state.windowSizePreset);
@@ -155,14 +158,23 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               onChange={(event) => setSingleKeyShortcutsEnabled(event.target.checked)}
             />
           </div>
-          <dl className="mb-0 mt-3 space-y-2 text-xs" aria-disabled={!singleKeyShortcutsEnabled}>
+          <div className="mt-3 space-y-2 border-t border-subtle pt-3">
             {SINGLE_KEY_SHORTCUTS.map((shortcut) => (
-              <div key={shortcut.label} className="flex justify-between gap-3">
-                <dt className="text-secondary">{t(shortcut.label)}</dt>
-                <dd className="m-0 shrink-0 text-right font-mono text-primary">{shortcut.keys}</dd>
+              <div key={shortcut.id} className="flex items-center justify-between gap-3">
+                <div className="text-xs">
+                  <div className="text-primary">{t(shortcut.label)}</div>
+                  <div className="font-mono text-secondary">{shortcut.keys}</div>
+                </div>
+                <Switch
+                  size="small"
+                  inputProps={{ 'aria-label': t(shortcut.label) }}
+                  disabled={!singleKeyShortcutsEnabled}
+                  checked={singleKeyActions[shortcut.id]}
+                  onChange={(event) => setSingleKeyActionEnabled(shortcut.id, event.target.checked)}
+                />
               </div>
             ))}
-          </dl>
+          </div>
         </section>
         <section
           className="rounded-lg border border-subtle bg-app-base p-4"

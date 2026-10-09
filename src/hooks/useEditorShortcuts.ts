@@ -5,6 +5,7 @@ import { useUIStore } from '../stores/uiStore';
 import { useUndoStore } from '../stores/undoStore';
 import { enterCollageMode } from '../services/collageMode';
 import { adjacentPhoto } from '../services/photoCollection';
+import { singleKeyActionEnabled } from '../services/shortcutPreferences';
 
 /**
  * Registers the editor-level keyboard shortcuts for the lifetime of the caller.
@@ -55,7 +56,11 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         return;
       }
       if (
-        useUIStore.getState().singleKeyShortcutsEnabled &&
+        singleKeyActionEnabled(
+          useUIStore.getState().singleKeyShortcutsEnabled,
+          useUIStore.getState().singleKeyActions,
+          'grid',
+        ) &&
         !textEntryActive &&
         !event.ctrlKey &&
         !event.metaKey &&
@@ -112,10 +117,12 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       }
       // Remaining shortcuts are intentionally unmodified single-key actions.
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-      if (!useUIStore.getState().singleKeyShortcutsEnabled) return;
+      const { singleKeyShortcutsEnabled, singleKeyActions } = useUIStore.getState();
+      if (!singleKeyShortcutsEnabled) return;
 
       if (
         (event.key === 'Delete' || event.key === 'Backspace') &&
+        singleKeyActions.remove &&
         !useUIStore.getState().gridPanelOpen
       ) {
         const project = useProjectStore.getState();
@@ -130,10 +137,17 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
 
       // Tab only toggles the inspector when focus is explicitly within the canvas
       // shortcut scope; normal browser focus navigation remains intact elsewhere.
-      if (event.key === 'Tab' && target.matches('[data-editor-shortcut-scope="canvas"]')) {
+      if (
+        event.key === 'Tab' &&
+        singleKeyActions.inspector &&
+        target.matches('[data-editor-shortcut-scope="canvas"]')
+      ) {
         event.preventDefault();
         onTogglePanel();
-      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      } else if (
+        singleKeyActions.photoNavigation &&
+        (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+      ) {
         // Navigation is bounded naturally: no state change occurs beyond either end.
         event.preventDefault();
         const { photos, currentPhotoId, selectPhoto } = useProjectStore.getState();

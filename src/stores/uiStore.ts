@@ -6,12 +6,19 @@ import {
   type WindowSizePreset,
 } from '../services/windowPreferences';
 import type { PhotoSort } from '../services/photoCollection';
+import {
+  readSingleKeyActions,
+  SINGLE_KEY_ACTIONS_KEY,
+  type SingleKeyAction,
+  type SingleKeyActions,
+} from '../services/shortcutPreferences';
 
 export interface UIState {
   inspectorOpen: boolean;
   theme: 'light' | 'dark' | 'system';
   systemFontsEnabled: boolean;
   singleKeyShortcutsEnabled: boolean;
+  singleKeyActions: SingleKeyActions;
   language: 'en' | 'zh';
   windowSizePreset: WindowSizePreset;
   photoSort: PhotoSort;
@@ -21,6 +28,7 @@ export interface UIState {
   setTheme: (theme: UIState['theme']) => void;
   setSystemFontsEnabled: (enabled: boolean) => void;
   setSingleKeyShortcutsEnabled: (enabled: boolean) => void;
+  setSingleKeyActionEnabled: (action: SingleKeyAction, enabled: boolean) => void;
   setLanguage: (language: UIState['language']) => void;
   setWindowSizePreset: (preset: WindowSizePreset) => void;
   setPhotoSort: (sort: PhotoSort) => void;
@@ -42,11 +50,12 @@ const storedLanguage = (): UIState['language'] => {
 };
 
 export const useUIStore = createSessionStore<UIState>(
-  (set) => ({
+  (set, get) => ({
     inspectorOpen: true,
     theme: 'system',
     systemFontsEnabled: storedSystemFontsEnabled(),
     singleKeyShortcutsEnabled: storedSingleKeyShortcutsEnabled(),
+    singleKeyActions: readSingleKeyActions(),
     language: storedLanguage(),
     windowSizePreset: readWindowSizePreset(),
     photoSort: 'import',
@@ -63,6 +72,12 @@ export const useUIStore = createSessionStore<UIState>(
       if (typeof localStorage !== 'undefined')
         localStorage.setItem(SINGLE_KEY_SHORTCUTS_KEY, String(singleKeyShortcutsEnabled));
       set({ singleKeyShortcutsEnabled });
+    },
+    setSingleKeyActionEnabled: (action, enabled) => {
+      const singleKeyActions = { ...get().singleKeyActions, [action]: enabled };
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(SINGLE_KEY_ACTIONS_KEY, JSON.stringify(singleKeyActions));
+      set({ singleKeyActions });
     },
     setLanguage: (language) => {
       if (typeof localStorage !== 'undefined') localStorage.setItem(LANGUAGE_KEY, language);

@@ -40,6 +40,7 @@ export function FilmStrip({ items, onImport, selectedId, onSelect, sortOrder }: 
   const showGridButton = photoCount >= 2;
   const gridPanelOpen = useUIStore((state) => state.gridPanelOpen);
   const singleKeyShortcutsEnabled = useUIStore((state) => state.singleKeyShortcutsEnabled);
+  const gridShortcutEnabled = useUIStore((state) => state.singleKeyActions.grid);
   const toggleGridPanel = useUIStore((state) => state.toggleGridPanel);
   const activeRightTab = useUIStore((state) => state.activeRightTab);
   const collageActive = activeRightTab === 'collage';
@@ -183,7 +184,12 @@ export function FilmStrip({ items, onImport, selectedId, onSelect, sortOrder }: 
       {/* Grid view is mutually exclusive with the collage canvas. */}
       {showGridButton && (
         <div className="h-full w-[72px] shrink-0 border-l border-subtle bg-app-surface md:w-[84px] lg:w-[96px]">
-          <Tooltip title={t(singleKeyShortcutsEnabled ? 'gridViewShortcut' : 'gridView')} arrow>
+          <Tooltip
+            title={t(
+              singleKeyShortcutsEnabled && gridShortcutEnabled ? 'gridViewShortcut' : 'gridView',
+            )}
+            arrow
+          >
             <IconButton
               aria-label={t('gridView')}
               aria-pressed={gridPanelOpen}

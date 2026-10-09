@@ -92,6 +92,30 @@ describe('in-memory inspector state', () => {
     });
   });
 
+  it('persists individual shortcut choices without restoring workspace state', async () => {
+    getItem.mockImplementation((key: string) =>
+      key === 'still.shortcuts.single-key-actions' ? JSON.stringify({ grid: false }) : null,
+    );
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState()).toMatchObject({
+      singleKeyActions: {
+        grid: false,
+        remove: true,
+        inspector: true,
+        photoNavigation: true,
+      },
+      activeRightTab: 'frame',
+      gridPanelOpen: false,
+    });
+    useUIStore.getState().setSingleKeyActionEnabled('remove', false);
+    expect(setItem).toHaveBeenCalledExactlyOnceWith(
+      'still.shortcuts.single-key-actions',
+      JSON.stringify({ grid: false, remove: false, inspector: true, photoNavigation: true }),
+    );
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState().singleKeyActions.remove).toBe(false);
+  });
+
   it('persists window size independently of the session state', async () => {
     getItem.mockImplementation((key: string) =>
       key === 'still.window.size-preset' ? 'compact' : null,

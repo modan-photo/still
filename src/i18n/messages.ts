@@ -25,7 +25,7 @@ const messages = {
     keyboardShortcutsDescription: 'Editor shortcuts are ignored while typing or using a dialog.',
     singleKeyShortcuts: 'Enable editor single-key shortcuts',
     singleKeyShortcutsDescription:
-      'Turn off G, Delete/Backspace, canvas Tab and left/right photo navigation. Modifier shortcuts and controls keep working.',
+      'Turn off all editor single-key actions. Modifier shortcuts and controls keep working. Use the switches below to choose individual actions.',
     shortcutInspectorTabs: 'Switch inspector tabs (desktop)',
     shortcutToggleInspector: 'Toggle inspector (canvas focus)',
     shortcutPhotoNavigation: 'Previous / next photo',
@@ -499,7 +499,7 @@ const messages = {
     keyboardShortcutsDescription: '输入文字或使用对话框时，编辑器快捷键不会触发。',
     singleKeyShortcuts: '启用编辑器单键快捷键',
     singleKeyShortcutsDescription:
-      '关闭后停用 G、Delete/Backspace、画布 Tab 和左右切图；组合键及控件自身的键盘操作不受影响。',
+      '关闭后停用所有编辑器单键操作；组合键及控件自身的键盘操作不受影响。可用下方开关分别控制各项操作。',
     shortcutInspectorTabs: '切换检查器标签（桌面）',
     shortcutToggleInspector: '展开或收起检查器（画布获焦）',
     shortcutPhotoNavigation: '上一张 / 下一张照片',
