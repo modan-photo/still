@@ -4,6 +4,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { useUndoStore } from '../stores/undoStore';
 import { enterCollageMode } from '../services/collageMode';
+import { adjacentPhoto } from '../services/photoCollection';
 
 /**
  * Registers the editor-level keyboard shortcuts for the lifetime of the caller.
@@ -136,8 +137,12 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         // Navigation is bounded naturally: no state change occurs beyond either end.
         event.preventDefault();
         const { photos, currentPhotoId, selectPhoto } = useProjectStore.getState();
-        const index = photos.findIndex((photo) => photo.id === currentPhotoId);
-        const next = photos[index + (event.key === 'ArrowLeft' ? -1 : 1)];
+        const next = adjacentPhoto(
+          photos,
+          useUIStore.getState().photoSort,
+          currentPhotoId,
+          event.key === 'ArrowLeft' ? -1 : 1,
+        );
         if (next) selectPhoto(next.id);
       }
     };

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { photoRangeIds, sortedPhotos, sourceKey } from '../src/services/photoCollection';
+import {
+  adjacentPhoto,
+  photoRangeIds,
+  sortedPhotos,
+  sourceKey,
+} from '../src/services/photoCollection';
 import type { ProjectPhoto } from '../src/stores/projectStore';
 
 const photos = [
@@ -20,6 +25,14 @@ describe('photo collection navigation', () => {
     const ordered = sortedPhotos(photos, 'name');
     expect(photoRangeIds(ordered, 'a', 'b')).toEqual(['b', 'c', 'a']);
     expect(photoRangeIds(ordered, 'missing', 'c')).toEqual(['c']);
+  });
+
+  it('navigates adjacent photos in the selected sort order without changing import order', () => {
+    expect(adjacentPhoto(photos, 'name', 'b', 1)?.id).toBe('c');
+    expect(adjacentPhoto(photos, 'name', 'a', -1)?.id).toBe('c');
+    expect(adjacentPhoto(photos, 'import', 'b', 1)?.id).toBe('c');
+    expect(adjacentPhoto(photos, 'name-desc', 'a', -1)).toBeUndefined();
+    expect(photos.map((photo) => photo.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('folds Windows path spelling without folding provider URI identity', () => {

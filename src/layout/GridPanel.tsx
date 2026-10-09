@@ -85,7 +85,6 @@ export function GridPanel() {
   const [heightPercent, setHeightPercent] = useState(DEFAULT_HEIGHT_PERCENT);
   const [dragging, setDragging] = useState(false);
   const [thumbnailSize, setThumbnailSize] = useState<ThumbnailSize>('medium');
-  const [sortOrder, setSortOrder] = useState<PhotoSort>('import');
   const selectionAnchor = useRef<string | null>(null);
   const [gridWidth, setGridWidth] = useState(0);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -99,6 +98,7 @@ export function GridPanel() {
   });
   const theme = useTheme();
   const photos = useProjectStore((state) => state.photos);
+  const sortOrder = useUIStore((state) => state.photoSort);
   const visiblePhotos = sortedPhotos(photos, sortOrder);
   const selectedId = useProjectStore((state) => state.currentPhotoId);
   const selectedIds = useProjectStore((state) => state.selectedIds);
@@ -110,6 +110,7 @@ export function GridPanel() {
   const syncSpecModules = useProjectStore((state) => state.syncSpecModules);
   const pushUndo = useUndoStore((state) => state.push);
   const gridPanelOpen = useUIStore((state) => state.gridPanelOpen);
+  const setSortOrder = useUIStore((state) => state.setPhotoSort);
   const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
   const gridGap = theme.still.spacing.md;
   // Derive a complete row model from the measured surface width. The same values

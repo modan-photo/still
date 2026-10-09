@@ -106,4 +106,13 @@ describe('in-memory inspector state', () => {
     useUIStore.getState().resetSession();
     expect(useUIStore.getState().windowSizePreset).toBe('spacious');
   });
+
+  it('shares photo sort within the session and resets it without storing it', async () => {
+    const { useUIStore } = await import('../src/stores/uiStore');
+    useUIStore.getState().setPhotoSort('name-desc');
+    expect(useUIStore.getState().photoSort).toBe('name-desc');
+    expect(setItem).not.toHaveBeenCalled();
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState().photoSort).toBe('import');
+  });
 });

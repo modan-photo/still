@@ -5,6 +5,7 @@ import {
   WINDOW_SIZE_KEY,
   type WindowSizePreset,
 } from '../services/windowPreferences';
+import type { PhotoSort } from '../services/photoCollection';
 
 export interface UIState {
   inspectorOpen: boolean;
@@ -13,6 +14,7 @@ export interface UIState {
   singleKeyShortcutsEnabled: boolean;
   language: 'en' | 'zh';
   windowSizePreset: WindowSizePreset;
+  photoSort: PhotoSort;
   activeRightTab: RightPanelTabId;
   gridPanelOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
@@ -21,6 +23,7 @@ export interface UIState {
   setSingleKeyShortcutsEnabled: (enabled: boolean) => void;
   setLanguage: (language: UIState['language']) => void;
   setWindowSizePreset: (preset: WindowSizePreset) => void;
+  setPhotoSort: (sort: PhotoSort) => void;
   setActiveRightTab: (tab: UIState['activeRightTab']) => void;
   setGridPanelOpen: (open: boolean) => void;
   toggleGridPanel: () => void;
@@ -46,6 +49,7 @@ export const useUIStore = createSessionStore<UIState>(
     singleKeyShortcutsEnabled: storedSingleKeyShortcutsEnabled(),
     language: storedLanguage(),
     windowSizePreset: readWindowSizePreset(),
+    photoSort: 'import',
     activeRightTab: DEFAULT_RIGHT_PANEL_TAB,
     gridPanelOpen: false,
     setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
@@ -69,6 +73,7 @@ export const useUIStore = createSessionStore<UIState>(
         localStorage.setItem(WINDOW_SIZE_KEY, windowSizePreset);
       set({ windowSizePreset });
     },
+    setPhotoSort: (photoSort) => set({ photoSort }),
     setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
     setGridPanelOpen: (gridPanelOpen) => set({ gridPanelOpen }),
     toggleGridPanel: () => set((state) => ({ gridPanelOpen: !state.gridPanelOpen })),
@@ -77,6 +82,7 @@ export const useUIStore = createSessionStore<UIState>(
         activeRightTab: DEFAULT_RIGHT_PANEL_TAB,
         inspectorOpen: true,
         gridPanelOpen: false,
+        photoSort: 'import',
       }),
   }),
   import.meta.hot?.data.uiStore,

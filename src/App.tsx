@@ -34,6 +34,7 @@ import { motionTokens } from './theme/tokens';
 import { restoreViewAfterCollage } from './services/collageMode';
 import { createExportRetry, markExportedPhotosClean } from './services/exportCompletion';
 import { errorMessage } from './services/errorMessages';
+import { sortedPhotos } from './services/photoCollection';
 import { useTranslation } from './i18n/messages';
 import { StillMark } from './components/StillMark';
 import { Icon } from './components/Icons';
@@ -72,6 +73,7 @@ const MobileRightPanel = lazy(() =>
 function App({ theme }: { theme: ThemeController }) {
   const t = useTranslation();
   const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
+  const photoSort = useUIStore((state) => state.photoSort);
 
   // Refresh the font catalogue whenever system-font access changes. When system
   // fonts are disabled, migrate existing watermark specs onto trusted bundled fonts.
@@ -386,7 +388,7 @@ function App({ theme }: { theme: ThemeController }) {
           }
           filmStrip={
             <FilmStrip
-              items={photos.map((photo) => ({
+              items={sortedPhotos(photos, photoSort).map((photo) => ({
                 id: photo.id,
                 label: photo.path.split(/[\\/]/).pop() ?? photo.path,
                 thumbPath: photo.thumbUrl,
@@ -395,6 +397,7 @@ function App({ theme }: { theme: ThemeController }) {
               selectedId={selectedId}
               onSelect={selectPhoto}
               onImport={choosePhotos}
+              sortOrder={photoSort}
             />
           }
         />

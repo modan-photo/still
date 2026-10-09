@@ -26,6 +26,17 @@ export function sortedPhotos(photos: ProjectPhoto[], order: PhotoSort): ProjectP
     .map(({ photo }) => photo);
 }
 
+export function adjacentPhoto(
+  photos: ProjectPhoto[],
+  order: PhotoSort,
+  currentId: string | null,
+  direction: -1 | 1,
+): ProjectPhoto | undefined {
+  const ordered = sortedPhotos(photos, order);
+  const index = ordered.findIndex((photo) => photo.id === currentId);
+  return ordered[index + direction];
+}
+
 export function photoRangeIds(
   photos: Pick<ProjectPhoto, 'id'>[],
   anchorId: string,

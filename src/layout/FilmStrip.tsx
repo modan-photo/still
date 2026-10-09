@@ -7,6 +7,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { enterCollageMode } from '../services/collageMode';
 import { useTranslation } from '../i18n/messages';
+import type { PhotoSort } from '../services/photoCollection';
 
 export type FilmStripItem = {
   id: string;
@@ -20,6 +21,7 @@ type FilmStripProps = {
   onImport: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  sortOrder: PhotoSort;
 };
 
 /**
@@ -27,7 +29,7 @@ type FilmStripProps = {
  * Only visible thumbnail cells are mounted; the trailing controls remain fixed so
  * importing, collage entry and grid access are always reachable.
  */
-export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripProps) {
+export function FilmStrip({ items, onImport, selectedId, onSelect, sortOrder }: FilmStripProps) {
   const t = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
@@ -62,7 +64,7 @@ export function FilmStrip({ items, onImport, selectedId, onSelect }: FilmStripPr
     // visible even when the user did not click inside this component.
     const index = items.findIndex((item) => item.id === selectedId);
     if (index >= 0) virtualizer.scrollToIndex(index, { align: 'auto' });
-  }, [selectedId, items.length, virtualizer]);
+  }, [selectedId, items.length, sortOrder, virtualizer]);
 
   return (
     <div className="flex h-full min-w-0 bg-app-surface">
