@@ -10,6 +10,7 @@ import {
   TextField,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useTranslation } from '../i18n/messages';
 import type { FramePreset } from '../types/frame';
 import type { FramePresetActionPosition } from './FramePresetSelect';
 
@@ -39,6 +40,7 @@ export function FramePresetActions({
   defaultPresetId,
   onError,
 }: FramePresetActionsProps) {
+  const t = useTranslation();
   const [renamePreset, setRenamePreset] = useState<FramePreset | null>(null);
   const [deletePreset, setDeletePreset] = useState<FramePreset | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -60,7 +62,7 @@ export function FramePresetActions({
     if (!target) return;
     const preset = target.preset;
     onCloseMenu();
-    void onDuplicate(preset).catch(() => onError('Unable to duplicate this preset.'));
+    void onDuplicate(preset).catch(() => onError(t('presetDuplicateFailed')));
   };
   const beginDelete = () => {
     if (!target) return;
@@ -77,7 +79,7 @@ export function FramePresetActions({
       await onRename(renamePreset, name);
       setRenamePreset(null);
     } catch {
-      setDialogError('Unable to rename this preset.');
+      setDialogError(t('presetRenameFailed'));
     } finally {
       setBusy(false);
     }
@@ -90,7 +92,7 @@ export function FramePresetActions({
       await onDelete(deletePreset);
       setDeletePreset(null);
     } catch {
-      setDialogError('Unable to delete this preset.');
+      setDialogError(t('presetDeleteFailed'));
     } finally {
       setBusy(false);
     }
@@ -114,16 +116,21 @@ export function FramePresetActions({
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: dialogPaper }}
       >
-        <MenuItem onClick={() => { if (target) onToggleDefault(target.preset); onCloseMenu(); }}>
-          {target?.preset.id === defaultPresetId ? 'Clear default' : 'Set as default'}
+        <MenuItem
+          onClick={() => {
+            if (target) onToggleDefault(target.preset);
+            onCloseMenu();
+          }}
+        >
+          {target?.preset.id === defaultPresetId ? t('clearDefault') : t('setAsDefault')}
         </MenuItem>
-        <MenuItem onClick={beginRename}>Rename</MenuItem>
-        <MenuItem onClick={duplicate}>Duplicate</MenuItem>
+        <MenuItem onClick={beginRename}>{t('rename')}</MenuItem>
+        <MenuItem onClick={duplicate}>{t('duplicate')}</MenuItem>
         <MenuItem
           onClick={beginDelete}
           sx={(theme) => ({ color: theme.still.colors[theme.palette.mode].danger })}
         >
-          Delete
+          {t('delete')}
         </MenuItem>
       </Menu>
 
@@ -135,12 +142,12 @@ export function FramePresetActions({
         maxWidth="xs"
         slotProps={{ paper: dialogPaper }}
       >
-        <DialogTitle id="rename-frame-preset-title">Rename preset</DialogTitle>
+        <DialogTitle id="rename-frame-preset-title">{t('renamePreset')}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             fullWidth
-            label="Preset name"
+            label={t('presetName')}
             value={renameDraft}
             disabled={busy}
             error={Boolean(dialogError)}
@@ -159,9 +166,15 @@ export function FramePresetActions({
           />
         </DialogContent>
         <DialogActions>
-          <Button disabled={busy} onClick={() => setRenamePreset(null)}>Cancel</Button>
-          <Button variant="contained" disabled={!renameDraft.trim() || busy} onClick={() => void rename()}>
-            {busy ? 'Saving…' : 'Save'}
+          <Button disabled={busy} onClick={() => setRenamePreset(null)}>
+            {t('cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!renameDraft.trim() || busy}
+            onClick={() => void rename()}
+          >
+            {busy ? t('saving') : t('save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -174,17 +187,23 @@ export function FramePresetActions({
         maxWidth="xs"
         slotProps={{ paper: dialogPaper }}
       >
-        <DialogTitle id="delete-frame-preset-title">Delete preset?</DialogTitle>
+        <DialogTitle id="delete-frame-preset-title">{t('deletePreset')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Delete preset “{deletePreset?.name}”? This action cannot be undone.
+            {t('deletePresetHint', { name: deletePreset?.name ?? '' })}
           </DialogContentText>
-          {dialogError && <div className="mt-2 text-xs text-danger" role="alert">{dialogError}</div>}
+          {dialogError && (
+            <div className="mt-2 text-xs text-danger" role="alert">
+              {dialogError}
+            </div>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button disabled={busy} onClick={() => setDeletePreset(null)}>Cancel</Button>
+          <Button disabled={busy} onClick={() => setDeletePreset(null)}>
+            {t('cancel')}
+          </Button>
           <Button color="error" variant="contained" disabled={busy} onClick={() => void remove()}>
-            {busy ? 'Deleting…' : 'Delete'}
+            {busy ? t('deleting') : t('delete')}
           </Button>
         </DialogActions>
       </Dialog>

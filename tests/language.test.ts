@@ -20,6 +20,14 @@ describe('language messages', () => {
     expect(translate('zh', 'templateTokens')).toContain('{name}');
   });
 
+  it('translates grid actions and preset feedback with names and counts', () => {
+    expect(translate('zh', 'selectedPhotosCount', { count: 3 })).toBe('已选择 3 张');
+    expect(translate('zh', 'frameApplyAllHint', { count: 3 })).toContain('3 张照片');
+    expect(translate('zh', 'stampDefaultSet', { name: '旅行' })).toContain('旅行');
+    expect(translate('en', 'builtInWhiteBorder')).toBe('White Border');
+    expect(translate('zh', 'builtInWhiteBorder')).toBe('白色边框');
+  });
+
   it('uses the selected language for stable error codes and preserves unknown details', () => {
     const previous = useUIStore.getState().language;
     try {

@@ -8,6 +8,7 @@ import {
   TextField,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useTranslation } from '../i18n/messages';
 import type { FramePreset, FrameStyle } from '../types/frame';
 import { FrameMiniPreview } from './FrameMiniPreview';
 
@@ -34,6 +35,7 @@ export function SaveFramePresetDialog({
   onClose,
   onSave,
 }: SaveFramePresetDialogProps) {
+  const t = useTranslation();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -54,7 +56,7 @@ export function SaveFramePresetDialog({
       await onSave(trimmedName);
       onClose();
     } catch {
-      setError('Unable to save this preset.');
+      setError(t('presetSaveFailed'));
       setSaving(false);
     }
   };
@@ -76,12 +78,12 @@ export function SaveFramePresetDialog({
         },
       }}
     >
-      <DialogTitle id="save-frame-preset-title">Save as preset</DialogTitle>
+      <DialogTitle id="save-frame-preset-title">{t('saveAsPreset')}</DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
           fullWidth
-          label="Preset name"
+          label={t('presetName')}
           value={name}
           error={Boolean(error)}
           helperText={error || ' '}
@@ -116,22 +118,22 @@ export function SaveFramePresetDialog({
             preset={preset}
             originalWidth={originalWidth}
             originalHeight={originalHeight}
-            label="Preset preview"
+            label={t('presetPreview')}
           />
           <div className="min-w-0">
-            <div className="text-xs text-secondary">Based on</div>
-            <div className="truncate text-sm text-primary">{frameStyleLabel(preset.style)}</div>
+            <div className="text-xs text-secondary">{t('basedOn')}</div>
+            <div className="truncate text-sm text-primary">
+              {t(frameStyleLabelKey(preset.style))}
+            </div>
           </div>
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button disabled={saving} onClick={onClose}>Cancel</Button>
-        <Button
-          variant="contained"
-          disabled={!name.trim() || saving}
-          onClick={() => void submit()}
-        >
-          {saving ? 'Saving…' : 'Save'}
+        <Button disabled={saving} onClick={onClose}>
+          {t('cancel')}
+        </Button>
+        <Button variant="contained" disabled={!name.trim() || saving} onClick={() => void submit()}>
+          {saving ? t('saving') : t('save')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -154,11 +156,17 @@ function suggestFramePresetName(existingNames: readonly string[]): string {
   return `My Preset ${number}`;
 }
 
-function frameStyleLabel(style: FrameStyle): string {
+function frameStyleLabelKey(
+  style: FrameStyle,
+): 'styleSolid' | 'styleGradient' | 'styleShadow' | 'stylePolaroid' {
   switch (style) {
-    case 'solid': return 'Solid';
-    case 'gradient': return 'Gradient';
-    case 'shadow': return 'Shadow';
-    case 'polaroid': return 'Polaroid';
+    case 'solid':
+      return 'styleSolid';
+    case 'gradient':
+      return 'styleGradient';
+    case 'shadow':
+      return 'styleShadow';
+    case 'polaroid':
+      return 'stylePolaroid';
   }
 }

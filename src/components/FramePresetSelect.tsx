@@ -12,6 +12,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { useTranslation, type MessageKey } from '../i18n/messages';
 import type { FramePreset } from '../types/frame';
 import { FrameMiniPreview } from './FrameMiniPreview';
 import { Icon } from './Icons';
@@ -21,6 +22,14 @@ type FramePreviewPreset = Pick<FramePreset, 'style' | 'params'>;
 const NO_FRAME_PREVIEW: FramePreviewPreset = {
   style: 'solid',
   params: { width: 0, unit: 'px', color: '#FFFFFF', radius: 0 },
+};
+
+const BUILTIN_NAME_KEYS: Record<string, MessageKey> = {
+  'builtin-solid': 'builtInWhiteBorder',
+  'builtin-minimal-black': 'builtInBlackFrame',
+  'builtin-rounded-white-card': 'builtInWhiteCard',
+  'builtin-gradient': 'builtInGradientBorder',
+  'builtin-shadow': 'builtInFloatingShadow',
 };
 
 export interface FramePresetSelectProps {
@@ -57,6 +66,7 @@ export function FramePresetSelect({
   saveCurrentDisabled = false,
   onPresetActions,
 }: FramePresetSelectProps) {
+  const t = useTranslation();
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('md'));
   const listboxId = useId();
@@ -68,6 +78,11 @@ export function FramePresetSelect({
   const selectedPreset = selectedPresetId
     ? presets.find((preset) => preset.id === selectedPresetId)
     : undefined;
+  const selectedPresetName = selectedPreset
+    ? BUILTIN_NAME_KEYS[selectedPreset.id]
+      ? t(BUILTIN_NAME_KEYS[selectedPreset.id])
+      : selectedPreset.name
+    : t('noFrame');
 
   useEffect(() => {
     if (!open || mobile) return;
@@ -135,18 +150,21 @@ export function FramePresetSelect({
             originalHeight={originalHeight}
           />
           <span className="min-w-0 flex-1 truncate text-left text-sm">
-            {selectedPreset?.name ?? 'No Frame'}{modified ? ' *' : ''}
+            {selectedPresetName}
+            {modified ? ' *' : ''}
           </span>
-          <span className={`absolute right-2 text-secondary transition-transform duration-fast ${open ? 'rotate-180' : ''}`}>
+          <span
+            className={`absolute right-2 text-secondary transition-transform duration-fast ${open ? 'rotate-180' : ''}`}
+          >
             <Icon name="chevron" size={14} />
           </span>
         </ButtonBase>
         {modified && selectedPreset && onQuickSave && (
-          <Tooltip title="Save changes">
+          <Tooltip title={t('saveChanges')}>
             <IconButton
               type="button"
               size="small"
-              aria-label={`Save changes to ${selectedPreset.name}`}
+              aria-label={t('saveChangesTo', { name: selectedPresetName })}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -200,7 +218,8 @@ export function FramePresetSelect({
                     flexDirection: 'column',
                     overflow: 'hidden',
                     borderRadius: `${currentTheme.still.radius.lg}px`,
-                    backgroundColor: currentTheme.still.colors[currentTheme.palette.mode].bg.elevated,
+                    backgroundColor:
+                      currentTheme.still.colors[currentTheme.palette.mode].bg.elevated,
                     boxShadow: currentTheme.still.shadow.elev3,
                     animation: `frame-preset-enter ${currentTheme.still.motion.duration.fast}ms ${currentTheme.still.motion.easing}`,
                     '@keyframes frame-preset-enter': {
@@ -278,7 +297,7 @@ export function FramePresetSelect({
             })}
           />
         </Box>
-        <div className="px-4 pb-2 text-base font-semibold text-primary">Presets</div>
+        <div className="px-4 pb-2 text-base font-semibold text-primary">{t('presets')}</div>
         <PresetPanelContent
           id={mobileListboxId}
           presets={presets}
@@ -328,11 +347,17 @@ function PresetPanelContent({
   onPresetActions?: (preset: FramePreset, position: FramePresetActionPosition) => void;
   onSaveCurrent: () => void;
 }) {
+  const t = useTranslation();
   return (
-    <div id={id} role="listbox" aria-label="Frame presets" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      id={id}
+      role="listbox"
+      aria-label={t('framePresets')}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
         <PresetGroup
-          title="Presets"
+          title={t('presets')}
           showHeading={showHeading}
           presets={presets}
           selectedPresetId={selectedPresetId}
@@ -368,7 +393,7 @@ function PresetPanelContent({
           })}
         >
           <Icon name="plus" size={14} />
-          Save current settings as preset
+          {t('saveCurrentAsPreset')}
         </ButtonBase>
       </div>
     </div>
@@ -400,7 +425,9 @@ function PresetGroup({
 }) {
   return (
     <div role="group" aria-label={title}>
-      {showHeading && <div className="px-3 pb-1 pt-2 text-[11px] font-medium text-secondary">{title}</div>}
+      {showHeading && (
+        <div className="px-3 pb-1 pt-2 text-[11px] font-medium text-secondary">{title}</div>
+      )}
       {presets.map((preset) => (
         <PresetItem
           key={preset.id}
@@ -437,6 +464,7 @@ function PresetItem({
   onPresetActions?: (preset: FramePreset, position: FramePresetActionPosition) => void;
   mobile?: boolean;
 }) {
+  const t = useTranslation();
   const openActions = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -457,7 +485,9 @@ function PresetItem({
           justifyContent: 'flex-start',
           gap: `${theme.still.spacing.sm}px`,
           padding: `0 ${theme.still.spacing.sm}px`,
-          paddingRight: preset.builtin ? `${theme.still.spacing.sm}px` : `${theme.still.spacing.xxl * 2}px`,
+          paddingRight: preset.builtin
+            ? `${theme.still.spacing.sm}px`
+            : `${theme.still.spacing.xxl * 2}px`,
           borderRadius: `${theme.still.radius.sm}px`,
           color: theme.still.colors[theme.palette.mode].text.primary,
         })}
@@ -468,14 +498,20 @@ function PresetItem({
           originalWidth={originalWidth}
           originalHeight={originalHeight}
         />
-        <span className="min-w-0 flex-1 truncate text-left text-sm">{preset.name}</span>
-        {selected && <span className="shrink-0 text-accent"><Icon name="check" size={16} /></span>}
+        <span className="min-w-0 flex-1 truncate text-left text-sm">
+          {BUILTIN_NAME_KEYS[preset.id] ? t(BUILTIN_NAME_KEYS[preset.id]) : preset.name}
+        </span>
+        {selected && (
+          <span className="shrink-0 text-accent">
+            <Icon name="check" size={16} />
+          </span>
+        )}
       </ButtonBase>
       {!preset.builtin && (
         <IconButton
           type="button"
           size="small"
-          aria-label={`Actions for ${preset.name}`}
+          aria-label={t('actionsFor', { name: preset.name })}
           onClick={openActions}
           sx={(theme) => ({
             position: 'absolute',
@@ -484,7 +520,9 @@ function PresetItem({
             height: 28,
             opacity: mobile ? 1 : 0,
             color: theme.still.colors[theme.palette.mode].text.secondary,
-            transition: theme.transitions.create('opacity', { duration: theme.still.motion.duration.fast }),
+            transition: theme.transitions.create('opacity', {
+              duration: theme.still.motion.duration.fast,
+            }),
             '.group:hover &': { opacity: 1 },
             '&:focus-visible': { opacity: 1 },
           })}
