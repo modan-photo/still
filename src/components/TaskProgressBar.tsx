@@ -3,12 +3,18 @@ import { useState } from 'react';
 import { useTaskStore } from '../stores/taskStore';
 import { cancelTask, normalizeError } from '../services/tauri/image';
 import { errorMessage } from '../services/errorMessages';
+import { useTranslation } from '../i18n/messages';
 
 export function TaskProgressBar() {
+  const t = useTranslation();
   const tasks = useTaskStore((state) => state.tasks);
   const dismiss = useTaskStore((state) => state.dismiss);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const active = Object.values(tasks).filter((task) => task.status === 'running');
+  const exportStage =
+    active.length === 1 && active[0].operation === 'image_export_batch'
+      ? /^(Preparing|Exporting) (\d+)\/(\d+)$/.exec(active[0].stage)
+      : null;
   const failed = Object.values(tasks).find((task) => task.status === 'failed');
   const cancel = async () => {
     setCancelError(null);
@@ -26,7 +32,7 @@ export function TaskProgressBar() {
       {active.length > 0 && (
         <>
           <LinearProgress
-            aria-label="Image processing progress"
+            aria-label={t('imageProcessingProgress')}
             variant="determinate"
             value={active.reduce((sum, task) => sum + task.progress, 0) / active.length}
             sx={{
@@ -44,12 +50,15 @@ export function TaskProgressBar() {
             }}
           >
             <span role="status">
-              {active.length === 1 && active[0].operation === 'image_export_batch'
-                ? active[0].stage
-                : `Processing ${active.length} task(s)…`}
+              {exportStage
+                ? t(exportStage[1] === 'Preparing' ? 'progressPreparing' : 'progressExporting', {
+                    done: exportStage[2],
+                    total: exportStage[3],
+                  })
+                : t('processingTasks', { count: active.length })}
             </span>
             <Button size="small" onClick={() => void cancel()}>
-              Cancel
+              {t('cancel')}
             </Button>
           </Box>
         </>

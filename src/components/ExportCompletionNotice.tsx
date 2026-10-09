@@ -16,6 +16,7 @@ import { useState } from 'react';
 import type { BatchExportReport } from '../types/export';
 import { errorMessage } from '../services/errorMessages';
 import { normalizeError } from '../services/tauri/image';
+import { useTranslation } from '../i18n/messages';
 
 type Props = {
   report: BatchExportReport | null;
@@ -26,11 +27,20 @@ type Props = {
 };
 
 export function ExportCompletionNotice({ report, open, onClose, canRetry, onRetry }: Props) {
+  const t = useTranslation();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
   if (!report) return null;
   const mobile = isTauri() && platform() === 'android';
-  const summary = `${report.cancellationRequested ? 'Cancelled · ' : ''}Exported ${report.succeeded} · Failed ${report.failed}${report.skipped ? ` · Skipped ${report.skipped}` : ''}${report.cancelled ? ` · Not exported ${report.cancelled}` : ''}`;
+  const summary = [
+    report.cancellationRequested ? t('cancelledSummary') : null,
+    t('exportedSummary', { count: report.succeeded }),
+    t('failedSummary', { count: report.failed }),
+    report.skipped ? t('skippedSummary', { count: report.skipped }) : null,
+    report.cancelled ? t('notExportedSummary', { count: report.cancelled }) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const needsAttention = report.failed > 0 || report.cancellationRequested;
   const showDetails = () => {
     onClose();
@@ -66,7 +76,7 @@ export function ExportCompletionNotice({ report, open, onClose, canRetry, onRetr
               <div>{summary}</div>
               {mobile && (
                 <div className="mt-0.5 max-w-[52vw] truncate text-[11px] opacity-70">
-                  Saved to {report.outputDirectory}
+                  {t('savedTo', { path: report.outputDirectory })}
                 </div>
               )}
             </div>
@@ -74,15 +84,15 @@ export function ExportCompletionNotice({ report, open, onClose, canRetry, onRetr
           action={
             <div className="flex items-center">
               <Button size="small" onClick={showDetails}>
-                Details
+                {t('details')}
               </Button>
               {!mobile && (
                 <Button size="small" onClick={() => void openFolder()}>
-                  Open folder
+                  {t('openFolder')}
                 </Button>
               )}
               <Button size="small" onClick={onClose}>
-                Dismiss
+                {t('dismiss')}
               </Button>
             </div>
           }
@@ -109,7 +119,7 @@ export function ExportCompletionNotice({ report, open, onClose, canRetry, onRetr
         maxWidth="sm"
         aria-labelledby="export-report-title"
       >
-        <DialogTitle id="export-report-title">Export report</DialogTitle>
+        <DialogTitle id="export-report-title">{t('exportReport')}</DialogTitle>
         <DialogContent dividers>
           <div className="mb-4 text-sm text-secondary">{summary}</div>
           {folderError && (
@@ -121,7 +131,16 @@ export function ExportCompletionNotice({ report, open, onClose, canRetry, onRetr
             {report.results.map((item) => (
               <div key={item.itemId} className="rounded-md border border-subtle p-3">
                 <div className="truncate text-sm text-primary" title={item.sourcePath}>
-                  {item.sourcePath.split(/[\\/]/).pop()} · {item.status}
+                  {item.sourcePath.split(/[\\/]/).pop()} ·{' '}
+                  {t(
+                    item.status === 'success'
+                      ? 'statusSucceeded'
+                      : item.status === 'failed'
+                        ? 'statusFailed'
+                        : item.status === 'skipped'
+                          ? 'statusSkipped'
+                          : 'statusCancelled',
+                  )}
                 </div>
                 {item.outputPath && (
                   <div className="mt-1 break-all text-xs text-secondary">{item.outputPath}</div>
@@ -133,7 +152,7 @@ export function ExportCompletionNotice({ report, open, onClose, canRetry, onRetr
                 )}
                 {item.message && (
                   <details className="mt-1 text-xs text-secondary">
-                    <summary>Technical details</summary>
+                    <summary>{t('technicalDetails')}</summary>
                     <div className="mt-1 break-all">
                       {item.code}: {item.message}
                     </div>
@@ -142,16 +161,11 @@ export function ExportCompletionNotice({ report, open, onClose, canRetry, onRetr
               </div>
             ))}
           </div>
-          {canRetry && (
-            <p className="mb-0 text-xs leading-5 text-secondary">
-              Retry uses the original edit snapshots and numbering for failed or cancelled photos
-              still in the workspace. Existing files are kept; new names are chosen automatically.
-            </p>
-          )}
+          {canRetry && <p className="mb-0 text-xs leading-5 text-secondary">{t('retryHint')}</p>}
         </DialogContent>
         <DialogActions>
-          {canRetry && <Button onClick={retry}>Retry unfinished</Button>}
-          <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+          {canRetry && <Button onClick={retry}>{t('retryUnfinished')}</Button>}
+          <Button onClick={() => setDetailsOpen(false)}>{t('close')}</Button>
         </DialogActions>
       </Dialog>
     </>

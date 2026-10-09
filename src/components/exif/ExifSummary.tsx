@@ -1,6 +1,7 @@
-import { Box, IconButton, Tooltip } from "@mui/material";
-import type { ExifData } from "../../types/exif";
-import { Icon } from "../Icons";
+import { Box, IconButton, Tooltip } from '@mui/material';
+import type { ExifData } from '../../types/exif';
+import { Icon } from '../Icons';
+import { useTranslation } from '../../i18n/messages';
 
 type ExifSummaryProps = {
   data: ExifData;
@@ -8,6 +9,7 @@ type ExifSummaryProps = {
 };
 
 export function ExifSummary({ data, onCopy }: ExifSummaryProps) {
+  const t = useTranslation();
   const summary = [
     data.camera.model,
     data.camera.lens,
@@ -16,17 +18,21 @@ export function ExifSummary({ data, onCopy }: ExifSummaryProps) {
       data.exposure.aperture,
       data.exposure.shutterSpeed,
       data.exposure.iso === null ? null : `ISO${data.exposure.iso}`,
-    ].filter(Boolean).join(" ") || null,
-  ].filter(Boolean).join(" · ");
+    ]
+      .filter(Boolean)
+      .join(' ') || null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <Box
       sx={(theme) => ({
-        position: "sticky",
+        position: 'sticky',
         zIndex: 2,
         top: 0,
-        display: "flex",
-        alignItems: "center",
+        display: 'flex',
+        alignItems: 'center',
         minHeight: 44,
         gap: 1,
         px: 2,
@@ -35,21 +41,26 @@ export function ExifSummary({ data, onCopy }: ExifSummaryProps) {
       })}
     >
       <Box
-        title={summary || "No camera details"}
+        title={summary || t('exifNoCameraDetails')}
         sx={{
           minWidth: 0,
           flex: 1,
-          overflow: "hidden",
-          color: summary ? "text.primary" : "text.secondary",
+          overflow: 'hidden',
+          color: summary ? 'text.primary' : 'text.secondary',
           fontSize: 12,
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
       >
-        {summary || "No camera details"}
+        {summary || t('exifNoCameraDetails')}
       </Box>
-      <Tooltip title="Copy all EXIF">
-        <IconButton aria-label="Copy all EXIF" size="small" onClick={onCopy} sx={{ flex: "none" }}>
+      <Tooltip title={t('exifCopyAll')}>
+        <IconButton
+          aria-label={t('exifCopyAll')}
+          size="small"
+          onClick={onCopy}
+          sx={{ flex: 'none' }}
+        >
           <Icon name="copy" size={15} />
         </IconButton>
       </Tooltip>

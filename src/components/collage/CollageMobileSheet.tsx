@@ -8,23 +8,25 @@ import { EffectsPanel } from './panels/EffectsPanel';
 import { LayoutPanel } from './panels/LayoutPanel';
 import { PhotoPickerPanel } from './panels/PhotoPickerPanel';
 import { RadiusPanel } from './panels/RadiusPanel';
+import { useTranslation, type MessageKey } from '../../i18n/messages';
 
 type CollageMobileSheetProps = {
   activePanel: CollagePanelId | null;
   onClose: () => void;
 };
 
-const TITLES: Record<CollagePanelId, string> = {
-  layout: 'Layout',
-  gap: 'Gap',
-  radius: 'Corner radius',
-  background: 'Background',
-  effects: 'Whole collage effects',
-  aspect: 'Canvas ratio',
-  photos: 'Photos',
+const TITLES: Record<CollagePanelId, MessageKey> = {
+  layout: 'layout',
+  gap: 'gap',
+  radius: 'cornerRadius',
+  background: 'background',
+  effects: 'wholeCollageEffects',
+  aspect: 'canvasRatio',
+  photos: 'photos',
 };
 
 export function CollageMobileSheet({ activePanel, onClose }: CollageMobileSheetProps) {
+  const t = useTranslation();
   const theme = useTheme();
   const dragStart = useRef<number | null>(null);
   const tall = activePanel === 'layout' || activePanel === 'photos';
@@ -106,7 +108,7 @@ export function CollageMobileSheet({ activePanel, onClose }: CollageMobileSheetP
             fontWeight: 600,
           }}
         >
-          {activePanel ? TITLES[activePanel] : ''}
+          {activePanel ? t(TITLES[activePanel]) : ''}
         </Typography>
         <Box
           sx={{
@@ -118,14 +120,14 @@ export function CollageMobileSheet({ activePanel, onClose }: CollageMobileSheetP
             pb: `${theme.still.spacing.xl}px`,
           }}
         >
-          {renderPanel(activePanel, onClose)}
+          {renderPanel(activePanel, onClose, t('done'))}
         </Box>
       </Box>
     </Drawer>
   );
 }
 
-function renderPanel(panel: CollagePanelId | null, onClose: () => void) {
+function renderPanel(panel: CollagePanelId | null, onClose: () => void, done: string) {
   switch (panel) {
     case 'layout':
       return <LayoutPanel />;
@@ -144,7 +146,7 @@ function renderPanel(panel: CollagePanelId | null, onClose: () => void) {
         <Box sx={(theme) => ({ display: 'grid', gap: `${theme.still.spacing.lg}px` })}>
           <PhotoPickerPanel expanded />
           <Button variant="contained" onClick={onClose}>
-            Done
+            {done}
           </Button>
         </Box>
       );

@@ -8,12 +8,14 @@ import { renderCroppedPreview } from '../../render/crop';
 import { applyAdjustmentsToImageData } from '../../render/adjustments';
 import { borderGeometry, renderBorderPreview } from '../../render/border';
 import { renderWatermarkPreview } from '../../render/watermark';
+import { useTranslation } from '../../i18n/messages';
 
 type PreviewImageMap = Record<string, HTMLImageElement>;
 type CellImageMap = Record<string, HTMLImageElement | HTMLCanvasElement>;
 type Size = { width: number; height: number };
 
 export function CollagePreview({ className }: { className?: string }) {
+  const t = useTranslation();
   const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -152,7 +154,7 @@ export function CollagePreview({ className }: { className?: string }) {
     <Box
       ref={containerRef}
       className={className}
-      aria-label="Collage preview"
+      aria-label={t('collagePreview')}
       sx={{
         position: 'relative',
         display: 'grid',
@@ -185,7 +187,7 @@ export function CollagePreview({ className }: { className?: string }) {
       {isLoading && (
         <CircularProgress
           size={28}
-          aria-label="Loading collage preview"
+          aria-label={t('loadingCollagePreview')}
           sx={{ position: 'absolute' }}
         />
       )}

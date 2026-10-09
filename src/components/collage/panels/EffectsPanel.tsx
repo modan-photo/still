@@ -1,9 +1,11 @@
 import { Box, Button, MenuItem, Slider, Stack, TextField, Typography } from '@mui/material';
 import { useProjectStore } from '../../../stores/projectStore';
 import { DEFAULT_BORDER, DEFAULT_WATERMARK, type BorderStyle } from '../../../types/renderSpec';
+import { useTranslation } from '../../../i18n/messages';
 
 /** Effects are owned by the finished collage, never by its source cells. */
 export function EffectsPanel() {
+  const t = useTranslation();
   const draft = useProjectStore((state) => state.collageDraft);
   const currentPhotoId = useProjectStore((state) => state.currentPhotoId);
   const current = useProjectStore((state) =>
@@ -15,9 +17,7 @@ export function EffectsPanel() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="caption">
-        Applied once to the finished collage, after spacing and rounded corners.
-      </Typography>
+      <Typography variant="caption">{t('collageEffectsHint')}</Typography>
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         <Button
           size="small"
@@ -28,7 +28,7 @@ export function EffectsPanel() {
             })
           }
         >
-          {border ? 'Remove border' : 'Add border'}
+          {border ? t('removeBorder') : t('addBorder')}
         </Button>
         <Button
           size="small"
@@ -41,7 +41,7 @@ export function EffectsPanel() {
             })
           }
         >
-          {watermark ? 'Remove watermark' : 'Add watermark'}
+          {watermark ? t('removeWatermark') : t('addWatermark')}
         </Button>
       </Box>
       {border && (
@@ -49,7 +49,7 @@ export function EffectsPanel() {
           <TextField
             select
             size="small"
-            label="Border style"
+            label={t('borderStyle')}
             value={border.style}
             onChange={(event) =>
               update({ border: { ...border, style: event.target.value as BorderStyle } })
@@ -57,24 +57,32 @@ export function EffectsPanel() {
           >
             {(['solid', 'gradient', 'polaroid', 'film'] as const).map((style) => (
               <MenuItem key={style} value={style}>
-                {style}
+                {t(
+                  style === 'solid'
+                    ? 'styleSolid'
+                    : style === 'gradient'
+                      ? 'styleGradient'
+                      : style === 'polaroid'
+                        ? 'stylePolaroid'
+                        : 'styleFilm',
+                )}
               </MenuItem>
             ))}
           </TextField>
           <TextField
             size="small"
             type="color"
-            label="Border color"
+            label={t('borderColor')}
             value={border.color.slice(0, 7)}
             onChange={(event) => update({ border: { ...border, color: event.target.value } })}
             InputLabelProps={{ shrink: true }}
           />
           <Typography variant="caption">
-            Border width: {border.width}
+            {t('borderWidth')}: {border.width}
             {border.unit === 'percent' ? '%' : ' px'}
           </Typography>
           <Slider
-            aria-label="Border width"
+            aria-label={t('borderWidth')}
             value={border.width}
             min={0}
             max={border.unit === 'percent' ? 20 : 200}
@@ -87,7 +95,7 @@ export function EffectsPanel() {
           {watermark.type === 'text' && (
             <TextField
               size="small"
-              label="Watermark text"
+              label={t('watermarkText')}
               value={watermark.content}
               onChange={(event) =>
                 update({ watermark: { ...watermark, content: event.target.value } })
@@ -96,12 +104,14 @@ export function EffectsPanel() {
           )}
           {watermark.type === 'image' && (
             <Typography variant="caption" noWrap title={watermark.path}>
-              Image: {watermark.path}
+              {t('watermarkImage', { path: watermark.path ?? '' })}
             </Typography>
           )}
-          <Typography variant="caption">Opacity: {Math.round(watermark.opacity * 100)}%</Typography>
+          <Typography variant="caption">
+            {t('watermarkOpacity')}: {Math.round(watermark.opacity * 100)}%
+          </Typography>
           <Slider
-            aria-label="Watermark opacity"
+            aria-label={t('watermarkOpacity')}
             value={watermark.opacity}
             min={0}
             max={1}

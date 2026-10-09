@@ -9,31 +9,33 @@ import { PhotoPickerPanel } from '../../../components/collage/panels/PhotoPicker
 import { RadiusPanel } from '../../../components/collage/panels/RadiusPanel';
 import { PanelSection } from '../../../components/PanelSection';
 import { useProjectStore } from '../../../stores/projectStore';
+import { useTranslation } from '../../../i18n/messages';
 
 /** Desktop collage settings panel with a scrollable body and fixed actions. */
 export function CollageTab() {
+  const t = useTranslation();
   const reset = useProjectStore((state) => state.resetCollageDraft);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100%', flexDirection: 'column' }}>
       <Box sx={{ flex: 1 }}>
-        <PanelSection title="Photos">
+        <PanelSection title={t('photos')}>
           <PhotoPickerPanel />
         </PanelSection>
-        <PanelSection title="Layout">
+        <PanelSection title={t('layout')}>
           <LayoutPanel />
         </PanelSection>
-        <PanelSection title="Spacing">
+        <PanelSection title={t('gap')}>
           <GapPanel />
           <RadiusPanel />
         </PanelSection>
-        <PanelSection title="Background">
+        <PanelSection title={t('background')}>
           <BackgroundPanel />
         </PanelSection>
-        <PanelSection title="Whole collage effects">
+        <PanelSection title={t('wholeCollageEffects')}>
           <EffectsPanel />
         </PanelSection>
-        <PanelSection title="Canvas ratio">
+        <PanelSection title={t('canvasRatio')}>
           <AspectPanel />
         </PanelSection>
       </Box>
@@ -53,7 +55,7 @@ export function CollageTab() {
       >
         <CollageExportButton />
         <Button size="small" onClick={reset}>
-          Reset settings
+          {t('resetSettings')}
         </Button>
       </Box>
     </Box>

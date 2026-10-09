@@ -38,6 +38,7 @@ import {
   recentFilesystemDirectories,
 } from '../services/exportPaths';
 import { pickImportDirectory } from '../services/directoryPicker';
+import { useTranslation } from '../i18n/messages';
 
 type ExportScope = 'all' | 'current' | 'selected';
 type Props = {
@@ -73,6 +74,7 @@ const defaultOptions = (): ExportOptions => ({
 });
 
 export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
+  const t = useTranslation();
   const photos = useProjectStore((state) => state.photos);
   const collageDraft = useProjectStore((state) => state.collageDraft);
   const selectedId = useProjectStore((state) => state.currentPhotoId);
@@ -151,7 +153,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
 
   const chooseDirectory = async () => {
     const value = await pickImportDirectory(
-      'Choose export folder',
+      t('chooseExportFolder'),
       isDocumentUri(options.outputDirectory) ? undefined : options.outputDirectory || undefined,
     );
     if (typeof value === 'string')
@@ -194,12 +196,15 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
   const chooseCollageFile = async () => {
     const extension = collageFormat === 'jpeg' ? 'jpg' : collageFormat;
     const value = await saveDialog({
-      title: 'Export collage',
+      title: t('exportCollage'),
       defaultPath:
         (!isDocumentUri(collageOutputPath) && collageOutputPath) || `still-collage.${extension}`,
       filters: [
         {
-          name: collageFormat === 'jpeg' ? 'JPEG image' : `${collageFormat.toUpperCase()} image`,
+          name:
+            collageFormat === 'jpeg'
+              ? t('jpegImage')
+              : t('genericImage', { format: collageFormat.toUpperCase() }),
           extensions: [extension],
         },
       ],
@@ -243,19 +248,23 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
       >
         <DialogTitle id="collage-export-dialog-title" sx={{ pb: 1 }}>
           <div className="flex items-baseline justify-between gap-4">
-            <span>Export collage</span>
+            <span>{t('exportCollage')}</span>
             <span className="text-xs font-normal text-secondary">
-              {collagePhotoCount} photos · {collageSize.width} × {collageSize.height}px
+              {t('photoCountSize', {
+                count: collagePhotoCount,
+                width: collageSize.width,
+                height: collageSize.height,
+              })}
             </span>
           </div>
         </DialogTitle>
         <DialogContent dividers>
           <div className="space-y-5 py-1">
-            <Section title="File">
+            <Section title={t('file')}>
               <FormControl size="small" fullWidth>
-                <InputLabel>Format</InputLabel>
+                <InputLabel>{t('format')}</InputLabel>
                 <Select
-                  label="Format"
+                  label={t('format')}
                   value={collageFormat}
                   onChange={(event) => {
                     const format = event.target.value as OutputFormat;
@@ -273,7 +282,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
               {(collageFormat === 'jpeg' || collageFormat === 'webp') && (
                 <div>
                   <div className="mb-1 flex justify-between text-xs text-secondary">
-                    <span>Quality</span>
+                    <span>{t('quality')}</span>
                     <span>{collageQuality}</span>
                   </div>
                   <Slider
@@ -281,34 +290,34 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                     max={100}
                     value={collageQuality}
                     onChange={(_, value) => setCollageQuality(value as number)}
-                    aria-label="Collage export quality"
+                    aria-label={t('collageExportQuality')}
                   />
                 </div>
               )}
             </Section>
-            <Section title="Destination">
+            <Section title={t('destination')}>
               <div className="flex gap-2">
                 <TextField
                   size="small"
                   fullWidth
-                  label="Output file"
+                  label={t('outputFile')}
                   value={collageOutputPath}
                   onChange={(event) => setCollageOutputPath(event.target.value)}
                 />
                 <Button variant="outlined" onClick={() => void chooseCollageFile()}>
-                  {platform() === 'android' ? 'Choose and export' : 'Choose'}
+                  {platform() === 'android' ? t('chooseAndExport') : t('choose')}
                 </Button>
               </div>
               {isDocumentUri(collageOutputPath) && (
                 <p role="alert" className="mt-2 text-xs text-secondary">
-                  Use “Choose and export” to create an Android document.
+                  {t('androidDocumentHint')}
                 </p>
               )}
             </Section>
           </div>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t('cancel')}</Button>
           <Button
             variant="contained"
             disabled={
@@ -316,7 +325,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
             }
             onClick={submitCollage}
           >
-            Export collage
+            {t('exportCollage')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -338,35 +347,37 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
     >
       <DialogTitle id="export-dialog-title" sx={{ pb: 1 }}>
         <div className="flex items-baseline justify-between gap-4">
-          <span>Export</span>
+          <span>{t('export')}</span>
           <span className="text-xs font-normal text-secondary">
-            {targetPhotos.length} photos · approx. {formatBytes(estimate)}
+            {t('photoCountEstimate', { count: targetPhotos.length, size: formatBytes(estimate) })}
           </span>
         </div>
       </DialogTitle>
       <DialogContent dividers sx={{ p: 0 }}>
         <div className="grid md:grid-cols-2">
           <div className="space-y-5 p-5 md:border-r md:border-subtle">
-            <Section title="Files">
+            <Section title={t('files')}>
               <div className="grid grid-cols-2 gap-3">
                 <FormControl size="small">
-                  <InputLabel>Photos</InputLabel>
+                  <InputLabel>{t('photos')}</InputLabel>
                   <Select
-                    label="Photos"
+                    label={t('photos')}
                     value={scope}
                     onChange={(event) => setScope(event.target.value as ExportScope)}
                   >
-                    <MenuItem value="all">All photos ({photos.length})</MenuItem>
-                    <MenuItem value="current">Current photo</MenuItem>
+                    <MenuItem value="all">{t('allPhotos', { count: photos.length })}</MenuItem>
+                    <MenuItem value="current">{t('currentPhoto')}</MenuItem>
                     {selectedIds.length > 0 && (
-                      <MenuItem value="selected">Selected ({selectedIds.length})</MenuItem>
+                      <MenuItem value="selected">
+                        {t('selectedCount', { count: selectedIds.length })}
+                      </MenuItem>
                     )}
                   </Select>
                 </FormControl>
                 <FormControl size="small">
-                  <InputLabel>Format</InputLabel>
+                  <InputLabel>{t('format')}</InputLabel>
                   <Select
-                    label="Format"
+                    label={t('format')}
                     value={options.format}
                     onChange={(event) => patch('format', event.target.value as OutputFormat)}
                   >
@@ -379,7 +390,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
               {(options.format === 'jpeg' || options.format === 'webp') && (
                 <div className="pt-2">
                   <div className="mb-1 flex justify-between text-xs text-secondary">
-                    <span>Quality</span>
+                    <span>{t('quality')}</span>
                     <span>{options.quality}</span>
                   </div>
                   <Slider
@@ -387,12 +398,12 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                     max={100}
                     value={options.quality}
                     onChange={(_, value) => patch('quality', value as number)}
-                    aria-label="Export quality"
+                    aria-label={t('exportQuality')}
                   />
                 </div>
               )}
             </Section>
-            <Section title="Size">
+            <Section title={t('size')}>
               <ToggleButtonGroup
                 exclusive
                 size="small"
@@ -400,14 +411,14 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                 value={options.size.mode}
                 onChange={(_, value: ResizeMode | null) => value && patchSize({ mode: value })}
               >
-                <ToggleButton value="original">Original</ToggleButton>
-                <ToggleButton value="longEdge">Long edge</ToggleButton>
-                <ToggleButton value="percent">Percent</ToggleButton>
-                <ToggleButton value="exact">Exact</ToggleButton>
+                <ToggleButton value="original">{t('original')}</ToggleButton>
+                <ToggleButton value="longEdge">{t('longEdge')}</ToggleButton>
+                <ToggleButton value="percent">{t('percent')}</ToggleButton>
+                <ToggleButton value="exact">{t('exact')}</ToggleButton>
               </ToggleButtonGroup>
               {options.size.mode === 'longEdge' && (
                 <NumberField
-                  label="Long edge"
+                  label={t('longEdge')}
                   value={options.size.longEdge ?? 2400}
                   suffix="px"
                   onChange={(value) => patchSize({ longEdge: value })}
@@ -415,7 +426,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
               )}
               {options.size.mode === 'percent' && (
                 <NumberField
-                  label="Scale"
+                  label={t('scale')}
                   value={options.size.percent ?? 100}
                   suffix="%"
                   onChange={(value) => patchSize({ percent: value })}
@@ -425,7 +436,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <NumberField
-                      label="Width"
+                      label={t('width')}
                       value={options.size.width ?? 2400}
                       suffix="px"
                       onChange={(width) =>
@@ -438,7 +449,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                       }
                     />
                     <NumberField
-                      label="Height"
+                      label={t('height')}
                       value={options.size.height ?? 1600}
                       suffix="px"
                       onChange={(height) =>
@@ -459,31 +470,31 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                         onChange={(event) => patchSize({ lockAspect: event.target.checked })}
                       />
                     }
-                    label="Lock aspect ratio"
+                    label={t('lockAspectRatio')}
                   />
                 </>
               )}
             </Section>
           </div>
           <div className="space-y-5 p-5">
-            <Section title="Naming">
+            <Section title={t('naming')}>
               <FormControl size="small" fullWidth>
-                <InputLabel>Pattern</InputLabel>
+                <InputLabel>{t('pattern')}</InputLabel>
                 <Select
-                  label="Pattern"
+                  label={t('pattern')}
                   value={options.naming.mode}
                   onChange={(event) => patchNaming({ mode: event.target.value as NamingMode })}
                 >
-                  <MenuItem value="originalSuffix">Original name + suffix</MenuItem>
-                  <MenuItem value="prefixSequence">Custom prefix + sequence</MenuItem>
-                  <MenuItem value="template">Custom template</MenuItem>
+                  <MenuItem value="originalSuffix">{t('originalSuffix')}</MenuItem>
+                  <MenuItem value="prefixSequence">{t('prefixSequence')}</MenuItem>
+                  <MenuItem value="template">{t('customTemplate')}</MenuItem>
                 </Select>
               </FormControl>
               {options.naming.mode === 'originalSuffix' && (
                 <TextField
                   size="small"
                   fullWidth
-                  label="Suffix"
+                  label={t('suffix')}
                   value={options.naming.suffix}
                   onChange={(event) => patchNaming({ suffix: event.target.value })}
                 />
@@ -492,12 +503,12 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                 <div className="grid grid-cols-[1fr_112px] gap-3">
                   <TextField
                     size="small"
-                    label="Prefix"
+                    label={t('prefix')}
                     value={options.naming.prefix}
                     onChange={(event) => patchNaming({ prefix: event.target.value })}
                   />
                   <NumberField
-                    label="Starts at"
+                    label={t('startsAt')}
                     value={options.naming.startNumber}
                     onChange={(startNumber) => patchNaming({ startNumber })}
                   />
@@ -507,34 +518,34 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                 <TextField
                   size="small"
                   fullWidth
-                  label="Template"
-                  helperText="Tokens: {name}, {n}, {ext}"
+                  label={t('template')}
+                  helperText={t('templateTokens')}
                   value={options.naming.template}
                   onChange={(event) => patchNaming({ template: event.target.value })}
                 />
               )}
             </Section>
-            <Section title="Destination">
+            <Section title={t('destination')}>
               <div className="flex gap-2">
                 <TextField
                   size="small"
                   fullWidth
-                  label="Output folder"
+                  label={t('outputFolder')}
                   value={options.outputDirectory}
                   onChange={(event) => patch('outputDirectory', event.target.value)}
                 />
                 <Button variant="outlined" onClick={() => void chooseDirectory()}>
-                  Choose
+                  {t('choose')}
                 </Button>
               </div>
               {isDocumentUri(options.outputDirectory) && (
                 <p role="alert" className="mt-2 text-xs text-secondary">
-                  Android documents support Skip and Rename automatically. Overwrite is unavailable.
+                  {t('androidExportHint')}
                 </p>
               )}
               {recent.length > 0 && (
                 <div>
-                  <div className="mb-1 text-[11px] text-secondary">Recent folders</div>
+                  <div className="mb-1 text-[11px] text-secondary">{t('recentFolders')}</div>
                   <div className="flex flex-wrap gap-1">
                     {recent.map((directory) => (
                       <Button
@@ -550,23 +561,23 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                 </div>
               )}
               <FormControl size="small" fullWidth>
-                <InputLabel>If a file exists</InputLabel>
+                <InputLabel>{t('ifFileExists')}</InputLabel>
                 <Select
-                  label="If a file exists"
+                  label={t('ifFileExists')}
                   value={options.conflict}
                   onChange={(event) =>
                     patch('conflict', event.target.value as ExportOptions['conflict'])
                   }
                 >
-                  <MenuItem value="skip">Skip</MenuItem>
+                  <MenuItem value="skip">{t('skip')}</MenuItem>
                   <MenuItem value="overwrite" disabled={isDocumentUri(options.outputDirectory)}>
-                    Overwrite
+                    {t('overwrite')}
                   </MenuItem>
-                  <MenuItem value="rename">Rename automatically</MenuItem>
+                  <MenuItem value="rename">{t('renameAutomatically')}</MenuItem>
                 </Select>
               </FormControl>
             </Section>
-            <Section title="Metadata">
+            <Section title={t('metadata')}>
               <FormControlLabel
                 control={
                   <Switch
@@ -574,18 +585,15 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
                     onChange={(event) => patch('preserveExif', event.target.checked)}
                   />
                 }
-                label="Keep EXIF metadata"
+                label={t('keepExif')}
               />
-              <div className="-mt-2 text-[11px] leading-4 text-secondary">
-                Camera and capture data are retained. Orientation is normalized after rendering. The
-                original ICC colour profile is preserved.
-              </div>
+              <div className="-mt-2 text-[11px] leading-4 text-secondary">{t('metadataHint')}</div>
             </Section>
           </div>
         </div>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('cancel')}</Button>
         <Button
           variant="contained"
           disabled={
@@ -595,7 +603,7 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
           }
           onClick={submit}
         >
-          Export {targetPhotos.length}
+          {t('exportCount', { count: targetPhotos.length })}
         </Button>
       </DialogActions>
     </Dialog>

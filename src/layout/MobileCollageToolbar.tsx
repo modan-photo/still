@@ -1,17 +1,18 @@
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { Icon, type IconName } from '../components/Icons';
+import { useTranslation, type MessageKey } from '../i18n/messages';
 
 export type CollagePanelId =
   'layout' | 'gap' | 'radius' | 'background' | 'effects' | 'aspect' | 'photos';
 
-const ITEMS: ReadonlyArray<{ id: CollagePanelId; label: string; icon: IconName }> = [
-  { id: 'layout', label: 'Layout', icon: 'grid' },
-  { id: 'gap', label: 'Gap', icon: 'gap' },
-  { id: 'radius', label: 'Radius', icon: 'radius' },
-  { id: 'background', label: 'Background', icon: 'background' },
-  { id: 'effects', label: 'Effects', icon: 'background' },
-  { id: 'aspect', label: 'Ratio', icon: 'aspect' },
-  { id: 'photos', label: 'Photos', icon: 'photos' },
+const ITEMS: ReadonlyArray<{ id: CollagePanelId; label: MessageKey; icon: IconName }> = [
+  { id: 'layout', label: 'layout', icon: 'grid' },
+  { id: 'gap', label: 'gap', icon: 'gap' },
+  { id: 'radius', label: 'radius', icon: 'radius' },
+  { id: 'background', label: 'background', icon: 'background' },
+  { id: 'effects', label: 'effects', icon: 'background' },
+  { id: 'aspect', label: 'ratio', icon: 'aspect' },
+  { id: 'photos', label: 'photos', icon: 'photos' },
 ];
 
 type MobileCollageToolbarProps = {
@@ -19,14 +20,15 @@ type MobileCollageToolbarProps = {
   onPanelChange: (panel: CollagePanelId | null) => void;
 };
 
-/** Compact six-action navigator for the mobile collage settings sheet. */
+/** Compact navigator for the mobile collage settings sheet. */
 export function MobileCollageToolbar({ activePanel, onPanelChange }: MobileCollageToolbarProps) {
+  const t = useTranslation();
   const theme = useTheme();
 
   return (
     <Box
       component="nav"
-      aria-label="Collage settings"
+      aria-label={t('collageSettings')}
       sx={{
         display: 'grid',
         // Equal columns fill wide screens; the minimum width allows horizontal
@@ -47,7 +49,7 @@ export function MobileCollageToolbar({ activePanel, onPanelChange }: MobileColla
         return (
           <ButtonBase
             key={item.id}
-            aria-label={`${item.label} settings`}
+            aria-label={`${t(item.label)} · ${t('collageSettings')}`}
             aria-pressed={active}
             // Tapping the active tool toggles its sheet closed.
             onClick={() => onPanelChange(active ? null : item.id)}
@@ -72,7 +74,7 @@ export function MobileCollageToolbar({ activePanel, onPanelChange }: MobileColla
             }}
           >
             <Icon name={item.icon} size={20} strokeWidth={1.5} />
-            <Box component="span">{item.label}</Box>
+            <Box component="span">{t(item.label)}</Box>
           </ButtonBase>
         );
       })}
