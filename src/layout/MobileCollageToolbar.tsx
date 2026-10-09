@@ -1,13 +1,15 @@
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { Icon, type IconName } from '../components/Icons';
 
-export type CollagePanelId = 'layout' | 'gap' | 'radius' | 'background' | 'aspect' | 'photos';
+export type CollagePanelId =
+  'layout' | 'gap' | 'radius' | 'background' | 'effects' | 'aspect' | 'photos';
 
 const ITEMS: ReadonlyArray<{ id: CollagePanelId; label: string; icon: IconName }> = [
   { id: 'layout', label: 'Layout', icon: 'grid' },
   { id: 'gap', label: 'Gap', icon: 'gap' },
   { id: 'radius', label: 'Radius', icon: 'radius' },
   { id: 'background', label: 'Background', icon: 'background' },
+  { id: 'effects', label: 'Effects', icon: 'background' },
   { id: 'aspect', label: 'Ratio', icon: 'aspect' },
   { id: 'photos', label: 'Photos', icon: 'photos' },
 ];
@@ -29,7 +31,7 @@ export function MobileCollageToolbar({ activePanel, onPanelChange }: MobileColla
         display: 'grid',
         // Equal columns fill wide screens; the minimum width allows horizontal
         // scrolling instead of shrinking touch targets on narrow devices.
-        gridTemplateColumns: 'repeat(6, minmax(54px, 1fr))',
+        gridTemplateColumns: 'repeat(7, minmax(54px, 1fr))',
         width: '100%',
         height: 64,
         flex: '0 0 64px',

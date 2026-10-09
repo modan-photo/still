@@ -2,7 +2,7 @@ import { createSessionStore } from './createSessionStore';
 import { hasPendingExifSaves, waitForPendingExifSaves } from '../services/exifSaveCoordinator';
 import { getCachedImage, invalidateCache, normalizeError } from '../services/tauri/image';
 import type { ImageMeta } from '../types/image';
-import { DEFAULT_CROP, DEFAULT_RENDER_SPEC, DEFAULT_ROTATION, type BorderSpec, type CropAspect, type RenderSpec, type RotationSpec } from '../types/renderSpec';
+import { DEFAULT_CROP, DEFAULT_RENDER_SPEC, DEFAULT_ROTATION, type BorderSpec, type CropAspect, type RenderSpec, type RotationSpec, type WatermarkSpec } from '../types/renderSpec';
 import { cropForAspect } from '../render/crop';
 import { rotatedDimensions, transformBatchDisabledReason } from '../render/rotation';
 import { colorTokens } from '../theme/tokens';
@@ -26,6 +26,9 @@ export interface CollageDraft {
   radius: number;
   background: { type: 'color' | 'transparent'; color: string };
   aspect: CollageAspect;
+  border?: BorderSpec;
+  watermark?: WatermarkSpec;
+  effectsInitialized?: boolean;
 }
 export const DEFAULT_COLLAGE_DRAFT: CollageDraft = {
   photoIds: [],
@@ -34,6 +37,7 @@ export const DEFAULT_COLLAGE_DRAFT: CollageDraft = {
   radius: 0,
   background: { type: 'color', color: colorTokens.light.bg.surface },
   aspect: '1:1',
+  effectsInitialized: false,
 };
 export type SpecPatch = Partial<Omit<RenderSpec, 'version' | 'source'>>;
 export interface RemovePhotosSnapshot {

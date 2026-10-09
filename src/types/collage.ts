@@ -22,6 +22,8 @@ export interface CollageCell {
 export interface CollageItem {
   id: string;
   path: string;
+  /** Snapshot of this source's single-photo edits; whole-collage effects live in config. */
+  renderSpec?: import('./renderSpec').RenderSpec;
   transform: CollageTransform;
   cell: CollageCell;
 }
@@ -44,13 +46,15 @@ export interface CollageConfig {
   cornerRadius: number;
   shadow: { enabled: boolean; color: string; blur: number; offsetX: number; offsetY: number };
   background: CollageBackground;
+  border?: import('./renderSpec').BorderSpec;
+  watermark?: import('./renderSpec').WatermarkSpec;
   quality: number;
 }
 export interface CollageTemplate {
   id: string;
   name: string;
   config: Omit<CollageConfig, 'outputPath'>;
-  items: Array<Omit<CollageItem, 'id' | 'path'>>;
+  items: Array<Omit<CollageItem, 'id' | 'path' | 'renderSpec'>>;
 }
 
 export const DEFAULT_COLLAGE_CONFIG: CollageConfig = {

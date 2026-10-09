@@ -6,11 +6,22 @@ let gridWasOpenBeforeCollage = false;
 export function enterCollageMode() {
   const project = useProjectStore.getState();
   if (project.photos.length < 2) return;
+  if (!project.collageDraft.effectsInitialized) {
+    const current = project.photos.find((photo) => photo.id === project.currentPhotoId);
+    project.updateCollageDraft({
+      border: current?.spec.border ? structuredClone(current.spec.border) : undefined,
+      watermark: current?.spec.watermark ? structuredClone(current.spec.watermark) : undefined,
+      effectsInitialized: true,
+    });
+  }
   const available = new Set(project.photos.map((photo) => photo.id));
   const retained = project.collageDraft.photoIds.filter((id) => available.has(id));
   if (retained.length < 2) {
     const selected = project.selectedIds.filter((id) => available.has(id));
-    project.updateCollageDraft({ photoIds: selected.length >= 2 ? selected : project.photos.slice(0, 4).map((photo) => photo.id) });
+    project.updateCollageDraft({
+      photoIds:
+        selected.length >= 2 ? selected : project.photos.slice(0, 4).map((photo) => photo.id),
+    });
   }
   const ui = useUIStore.getState();
   if (ui.activeRightTab !== 'collage') gridWasOpenBeforeCollage = ui.gridPanelOpen;

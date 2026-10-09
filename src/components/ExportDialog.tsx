@@ -29,6 +29,7 @@ import type {
 } from '../types/export';
 import type { OutputFormat, RenderSpec } from '../types/renderSpec';
 import { getCollageCanvasSize } from './collage/collageModel';
+import { borderGeometry } from '../render/border';
 import { cropPixelRect } from '../render/crop';
 import {
   isDocumentUri,
@@ -137,7 +138,16 @@ export function ExportDialog({ open, exportMode, onClose, onExport }: Props) {
   const collagePhotoCount = collageDraft.photoIds.filter((id) =>
     photos.some((photo) => photo.id === id),
   ).length;
-  const collageSize = getCollageCanvasSize(collageDraft, collagePhotoCount);
+  const collageCanvasSize = getCollageCanvasSize(collageDraft, collagePhotoCount);
+  const collageSize = collageDraft.border
+    ? borderGeometry(
+        collageCanvasSize.width,
+        collageCanvasSize.height,
+        collageCanvasSize.width,
+        collageCanvasSize.height,
+        collageDraft.border,
+      )
+    : collageCanvasSize;
 
   const chooseDirectory = async () => {
     const value = await pickImportDirectory(

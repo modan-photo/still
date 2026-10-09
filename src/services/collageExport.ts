@@ -10,13 +10,16 @@ export function createCollageExportPayload(
   quality: number,
 ): { items: CollageItem[]; config: CollageConfig } {
   const byId = new Map(photos.map((photo) => [photo.id, photo]));
-  const selected = draft.photoIds.map((id) => byId.get(id)).filter((photo): photo is ProjectPhoto => Boolean(photo));
+  const selected = draft.photoIds
+    .map((id) => byId.get(id))
+    .filter((photo): photo is ProjectPhoto => Boolean(photo));
   const shape = getGridShape(draft.layout);
   const strip = draft.layout === 'v-strip' || draft.layout === 'h-strip';
   const capacity = strip ? selected.length : shape.columns * shape.rows;
   const items = selected.slice(0, capacity).map((photo, index): CollageItem => ({
     id: photo.id,
     path: photo.path,
+    renderSpec: { ...photo.spec, border: undefined, watermark: undefined, output: undefined },
     transform: { scale: 1, offsetX: 0, offsetY: 0, rotation: 0, fit: 'cover' },
     cell: {
       row: Math.floor(index / shape.columns),
@@ -44,8 +47,19 @@ export function createCollageExportPayload(
       outerMargin: 0,
       gap: draft.gap,
       cornerRadius: draft.radius,
-      shadow: { enabled: false, color: colorTokens.dark.text.primary, blur: 0, offsetX: 0, offsetY: 0 },
-      background: { type: 'color', color: draft.background.type === 'transparent' ? '#00000000' : draft.background.color },
+      shadow: {
+        enabled: false,
+        color: colorTokens.dark.text.primary,
+        blur: 0,
+        offsetX: 0,
+        offsetY: 0,
+      },
+      background: {
+        type: 'color',
+        color: draft.background.type === 'transparent' ? '#00000000' : draft.background.color,
+      },
+      border: draft.border,
+      watermark: draft.watermark,
       quality,
     },
   };

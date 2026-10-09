@@ -3,8 +3,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { cacheAssetUrl, getCachedImage } from '../../services/tauri/image';
 import { useProjectStore, type CollageDraft, type ProjectPhoto } from '../../stores/projectStore';
 import { getCollageAspectRatio, getCollageCanvasSize, getGridShape } from './collageModel';
+import { renderRotatedPreview } from '../../render/rotation';
+import { renderCroppedPreview } from '../../render/crop';
+import { applyAdjustmentsToImageData } from '../../render/adjustments';
+import { borderGeometry, renderBorderPreview } from '../../render/border';
+import { renderWatermarkPreview } from '../../render/watermark';
 
 type PreviewImageMap = Record<string, HTMLImageElement>;
+type CellImageMap = Record<string, HTMLImageElement | HTMLCanvasElement>;
 type Size = { width: number; height: number };
 
 export function CollagePreview({ className }: { className?: string }) {
@@ -17,10 +23,32 @@ export function CollagePreview({ className }: { className?: string }) {
   const [images, setImages] = useState<PreviewImageMap>({});
   const selectedPhotos = useMemo(() => {
     const byId = new Map(photos.map((photo) => [photo.id, photo]));
-    return draft.photoIds.map((id) => byId.get(id)).filter((photo): photo is ProjectPhoto => Boolean(photo));
+    return draft.photoIds
+      .map((id) => byId.get(id))
+      .filter((photo): photo is ProjectPhoto => Boolean(photo));
   }, [draft.photoIds, photos]);
+  const renderedImages = useMemo<CellImageMap>(() => {
+    const result: CellImageMap = {};
+    selectedPhotos.forEach((photo) => {
+      const image = images[photo.id];
+      if (image) result[photo.id] = renderCellImage(image, photo);
+    });
+    return result;
+  }, [selectedPhotos, images]);
   const aspectRatio = getCollageAspectRatio(draft, selectedPhotos.length);
-  const displaySize = fitWithin(containerSize, aspectRatio);
+  const logicalSize = getCollageCanvasSize(draft, selectedPhotos.length);
+  const borderSize = draft.border
+    ? borderGeometry(
+        logicalSize.width,
+        logicalSize.height,
+        logicalSize.width,
+        logicalSize.height,
+        draft.border,
+      )
+    : logicalSize;
+  const displaySize = fitWithin(containerSize, borderSize.width / borderSize.height);
+  const baseWidth = (displaySize.width * logicalSize.width) / borderSize.width;
+  const baseSize = { width: baseWidth, height: baseWidth / aspectRatio };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -36,40 +64,87 @@ export function CollagePreview({ className }: { className?: string }) {
   useEffect(() => {
     let disposed = false;
     const loaded: PreviewImageMap = {};
-    void Promise.all(selectedPhotos.map(async (photo) => {
-      try {
-        const cached = await getCachedImage(photo.path, 'preview');
-        const image = new Image();
-        image.src = cacheAssetUrl(cached.path);
-        await image.decode();
-        loaded[photo.id] = image;
-      } catch {
-        // Missing previews are rendered as themed empty cells.
-      }
-    })).then(() => {
+    void Promise.all(
+      selectedPhotos.map(async (photo) => {
+        try {
+          const cached = await getCachedImage(photo.path, 'preview');
+          const image = new Image();
+          image.src = cacheAssetUrl(cached.path);
+          await image.decode();
+          loaded[photo.id] = image;
+        } catch {
+          // Missing previews are rendered as themed empty cells.
+        }
+      }),
+    ).then(() => {
       if (!disposed) setImages(loaded);
     });
     return () => {
       disposed = true;
       Object.values(loaded).forEach((image) => image.removeAttribute('src'));
     };
-  }, [selectedPhotos]);
+  }, [
+    draft.photoIds,
+    photos.map((photo) => `${photo.id}:${photo.path}:${photo.thumbRevision}`).join('|'),
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || displaySize.width <= 0 || displaySize.height <= 0) return;
+    let disposed = false;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.max(1, Math.round(displaySize.width * dpr));
-    canvas.height = Math.max(1, Math.round(displaySize.height * dpr));
-    const context = canvas.getContext('2d');
+    const base = document.createElement('canvas');
+    base.width = Math.max(1, Math.round(baseSize.width * dpr));
+    base.height = Math.max(1, Math.round(baseSize.height * dpr));
+    const context = base.getContext('2d');
     if (!context) return;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    renderCollagePreview(context, displaySize, draft, selectedPhotos, images, {
+    renderCollagePreview(context, baseSize, draft, selectedPhotos, renderedImages, {
       emptyCell: theme.still.colors[theme.palette.mode].bg.elevated,
       checkerA: theme.still.colors[theme.palette.mode].bg.surface,
       checkerB: theme.still.colors[theme.palette.mode].border.subtle,
     });
-  }, [displaySize.height, displaySize.width, draft, images, selectedPhotos, theme]);
+    const output = document.createElement('canvas');
+    if (draft.border)
+      renderBorderPreview(output, base, draft.border, logicalSize.width, logicalSize.height);
+    else {
+      output.width = base.width;
+      output.height = base.height;
+      output.getContext('2d')?.drawImage(base, 0, 0);
+    }
+    const finish = async () => {
+      if (draft.watermark) {
+        await renderWatermarkPreview(
+          output,
+          draft.watermark,
+          logicalSize.width > logicalSize.height ? logicalSize.width : logicalSize.height,
+          base.width / logicalSize.width,
+        );
+      }
+      if (disposed) return;
+      canvas.width = output.width;
+      canvas.height = output.height;
+      canvas.getContext('2d')?.drawImage(output, 0, 0);
+    };
+    void finish().catch(() => {
+      if (disposed) return;
+      canvas.width = output.width;
+      canvas.height = output.height;
+      canvas.getContext('2d')?.drawImage(output, 0, 0);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    baseSize.height,
+    baseSize.width,
+    displaySize.height,
+    displaySize.width,
+    draft,
+    renderedImages,
+    selectedPhotos,
+    theme,
+  ]);
 
   const isLoading = selectedPhotos.length > 0 && Object.keys(images).length === 0;
 
@@ -107,7 +182,13 @@ export function CollagePreview({ className }: { className?: string }) {
           }),
         }}
       />
-      {isLoading && <CircularProgress size={28} aria-label="Loading collage preview" sx={{ position: 'absolute' }} />}
+      {isLoading && (
+        <CircularProgress
+          size={28}
+          aria-label="Loading collage preview"
+          sx={{ position: 'absolute' }}
+        />
+      )}
     </Box>
   );
 }
@@ -117,7 +198,7 @@ function renderCollagePreview(
   size: Size,
   draft: CollageDraft,
   photos: ProjectPhoto[],
-  images: PreviewImageMap,
+  images: CellImageMap,
   colors: { emptyCell: string; checkerA: string; checkerB: string },
 ) {
   context.clearRect(0, 0, size.width, size.height);
@@ -150,16 +231,26 @@ function renderCollagePreview(
 
 function calculateCells(draft: CollageDraft, photoCount: number, size: Size) {
   const logicalSize = getCollageCanvasSize(draft, photoCount);
-  const gap = draft.gap * size.width / logicalSize.width;
+  const gap = (draft.gap * size.width) / logicalSize.width;
   if (draft.layout === 'v-strip') {
     const count = Math.max(1, photoCount);
     const height = (size.height - gap * (count - 1)) / count;
-    return Array.from({ length: count }, (_, index) => ({ x: 0, y: index * (height + gap), width: size.width, height }));
+    return Array.from({ length: count }, (_, index) => ({
+      x: 0,
+      y: index * (height + gap),
+      width: size.width,
+      height,
+    }));
   }
   if (draft.layout === 'h-strip') {
     const count = Math.max(1, photoCount);
     const width = (size.width - gap * (count - 1)) / count;
-    return Array.from({ length: count }, (_, index) => ({ x: index * (width + gap), y: 0, width, height: size.height }));
+    return Array.from({ length: count }, (_, index) => ({
+      x: index * (width + gap),
+      y: 0,
+      width,
+      height: size.height,
+    }));
   }
   const { columns, rows } = getGridShape(draft.layout);
   const cellWidth = (size.width - gap * (columns - 1)) / columns;
@@ -180,24 +271,74 @@ function fitWithin(container: Size, aspectRatio: number): Size {
   return { width, height: width / aspectRatio };
 }
 
-function drawCheckerboard(context: CanvasRenderingContext2D, size: Size, first: string, second: string) {
+function drawCheckerboard(
+  context: CanvasRenderingContext2D,
+  size: Size,
+  first: string,
+  second: string,
+) {
   const tile = 12;
   for (let y = 0; y < size.height; y += tile) {
     for (let x = 0; x < size.width; x += tile) {
-      context.fillStyle = ((x / tile + y / tile) % 2 === 0) ? first : second;
+      context.fillStyle = (x / tile + y / tile) % 2 === 0 ? first : second;
       context.fillRect(x, y, tile, tile);
     }
   }
 }
 
-function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, cell: { x: number; y: number; width: number; height: number }) {
-  const scale = Math.max(cell.width / image.naturalWidth, cell.height / image.naturalHeight);
-  const width = image.naturalWidth * scale;
-  const height = image.naturalHeight * scale;
-  context.drawImage(image, cell.x + (cell.width - width) / 2, cell.y + (cell.height - height) / 2, width, height);
+function renderCellImage(
+  image: HTMLImageElement,
+  photo: ProjectPhoto,
+): HTMLImageElement | HTMLCanvasElement {
+  const { rotation, crop, adjustments } = photo.spec;
+  let result: HTMLImageElement | HTMLCanvasElement = rotation
+    ? renderRotatedPreview(image, rotation)
+    : image;
+  if (crop?.enabled) result = renderCroppedPreview(result, crop);
+  if (adjustments) {
+    const width = result instanceof HTMLImageElement ? result.naturalWidth : result.width;
+    const height = result instanceof HTMLImageElement ? result.naturalHeight : result.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.drawImage(result, 0, 0);
+      const pixels = context.getImageData(0, 0, width, height);
+      context.putImageData(applyAdjustmentsToImageData(pixels, adjustments), 0, 0);
+    }
+    result = canvas;
+  }
+  return result;
 }
 
-function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+function drawCover(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement | HTMLCanvasElement,
+  cell: { x: number; y: number; width: number; height: number },
+) {
+  const sourceWidth = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
+  const sourceHeight = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
+  const scale = Math.max(cell.width / sourceWidth, cell.height / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  context.drawImage(
+    image,
+    cell.x + (cell.width - width) / 2,
+    cell.y + (cell.height - height) / 2,
+    width,
+    height,
+  );
+}
+
+function roundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
   context.beginPath();
   context.roundRect(x, y, width, height, Math.min(radius, width / 2, height / 2));
 }

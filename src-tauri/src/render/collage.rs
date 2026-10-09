@@ -12,7 +12,12 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     error::AppError,
     image_io::save::save_image_atomic,
-    render::spec::{OutputFormat, OutputSpec},
+    render::{
+        border::apply_border,
+        pipeline::apply_render_spec,
+        spec::{BorderConfig, OutputFormat, OutputSpec, RenderSpec, WatermarkSpec},
+        watermark::apply_watermark,
+    },
 };
 
 const MAX_PIXELS: u64 = 100_000_000;
@@ -21,6 +26,8 @@ const MAX_PIXELS: u64 = 100_000_000;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CollageItem {
     pub path: String,
+    #[serde(default)]
+    pub render_spec: Option<RenderSpec>,
     #[serde(default)]
     pub transform: ItemTransform,
     #[serde(default)]
@@ -151,6 +158,10 @@ pub struct CollageConfig {
     pub shadow: ShadowConfig,
     #[serde(default)]
     pub background: Background,
+    #[serde(default)]
+    pub border: Option<BorderConfig>,
+    #[serde(default)]
+    pub watermark: Option<WatermarkSpec>,
     #[serde(default = "default_quality")]
     pub quality: u8,
 }
@@ -273,6 +284,16 @@ pub fn compose(
             5 + (((position + 1) * 86 / items.len()) as u8),
         );
     }
+    if let Some(border) = &config.border {
+        check_cancelled(token)?;
+        canvas = apply_border(&canvas, border);
+    }
+    if let Some(watermark) = &config.watermark {
+        check_cancelled(token)?;
+        let long_edge = config.width.max(config.height);
+        apply_watermark(&mut canvas, watermark, long_edge)?;
+    }
+    check_cancelled(token)?;
     Ok(canvas)
 }
 
@@ -296,15 +317,48 @@ fn validate(items: &[CollageItem], config: &CollageConfig) -> Result<(), AppErro
         return Err(AppError::InvalidInput("canvas is too large".into()));
     }
     for item in items {
-        if !Path::new(&item.path).is_file() {
+        if !crate::image_io::source::resolve(Path::new(&item.path))?.is_file() {
             return Err(AppError::InvalidInput(format!(
                 "source image does not exist: {}",
                 item.path
             )));
         }
+        if let Some(spec) = &item.render_spec {
+            if spec.source.path != item.path {
+                return Err(AppError::InvalidInput(
+                    "collage item RenderSpec source must match item path".into(),
+                ));
+            }
+            if spec.border.is_some() || spec.watermark.is_some() {
+                return Err(AppError::InvalidInput(
+                    "collage item effects must be applied to the whole output".into(),
+                ));
+            }
+            spec.validate().map_err(AppError::InvalidInput)?;
+        }
         if !item.transform.scale.is_finite() || item.transform.scale <= 0.0 {
             return Err(AppError::InvalidInput("item scale must be positive".into()));
         }
+    }
+    if let Some(border) = &config.border {
+        let spec = RenderSpec {
+            version: 1,
+            source: crate::render::spec::SourceSpec {
+                path: "collage".into(),
+                width: config.width,
+                height: config.height,
+            },
+            rotation: None,
+            crop: None,
+            border: Some(border.clone()),
+            watermark: None,
+            adjustments: None,
+            output: None,
+        };
+        spec.validate().map_err(AppError::InvalidInput)?;
+    }
+    if let Some(watermark) = &config.watermark {
+        watermark.validate().map_err(AppError::InvalidInput)?;
     }
     Ok(())
 }
@@ -394,8 +448,11 @@ fn draw_item(
     config: &CollageConfig,
     token: &CancellationToken,
 ) -> Result<(), AppError> {
-    let source =
-        image::open(crate::image_io::source::resolve(Path::new(&item.path))?)?.into_rgba8();
+    let source = if let Some(spec) = &item.render_spec {
+        apply_render_spec(Path::new(&item.path), spec)?.into_rgba8()
+    } else {
+        crate::image_io::load::decode_image(Path::new(&item.path))?.into_rgba8()
+    };
     check_cancelled(token)?;
     let (sw, sh) = source.dimensions();
     let fit = match item.transform.fit {
@@ -611,6 +668,90 @@ fn output_spec(path: &Path, quality: u8) -> Result<OutputSpec, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::SystemTime;
+
+    #[test]
+    fn cells_inherit_edits_and_border_wraps_the_finished_collage() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-collage-spec-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("source.png");
+        RgbaImage::from_fn(64, 32, |x, _| {
+            if x < 32 {
+                Rgba([255, 0, 0, 255])
+            } else {
+                Rgba([0, 0, 255, 255])
+            }
+        })
+        .save(&path)
+        .unwrap();
+        let source = path.to_string_lossy().into_owned();
+        let item: CollageItem = serde_json::from_value(serde_json::json!({
+            "path": source,
+            "renderSpec": {
+                "version": 1,
+                "source": { "path": source, "width": 64, "height": 32 },
+                "rotation": { "angle": 180, "flipH": false, "flipV": false },
+                "crop": { "aspect": "free", "rect": { "x": 0.0, "y": 0.0, "width": 0.5, "height": 1.0 }, "enabled": true }
+            },
+            "cell": { "row": 0, "column": 0 }
+        })).unwrap();
+        let mut config: CollageConfig = serde_json::from_value(serde_json::json!({
+            "outputPath": directory.join("output.png").to_string_lossy(),
+            "width": 64, "height": 32, "mode": "grid", "rows": 1, "columns": 1,
+            "gap": 0, "background": { "type": "color", "color": "#FFFFFF" },
+            "border": { "style": "solid", "width": 2, "unit": "px", "color": "#00FF00", "radius": 0, "colors": ["#00FF00"], "angle": 0, "caption": false }
+        })).unwrap();
+        let result = compose(
+            &[item.clone()],
+            &config,
+            &CancellationToken::new(),
+            Arc::new(|_, _| {}),
+        )
+        .unwrap();
+        assert_eq!(result.dimensions(), (68, 36));
+        assert_eq!(*result.get_pixel(0, 0), Rgba([0, 255, 0, 255]));
+        assert_eq!(*result.get_pixel(34, 18), Rgba([0, 0, 255, 255]));
+        assert_eq!(*result.get_pixel(2, 18), Rgba([0, 0, 255, 255]));
+
+        let mark_path = directory.join("mark.png");
+        RgbaImage::from_pixel(4, 4, Rgba([255, 255, 0, 255]))
+            .save(&mark_path)
+            .unwrap();
+        config.watermark = Some(
+            serde_json::from_value(serde_json::json!({
+                "type": "image", "content": "", "path": mark_path.to_string_lossy(),
+                "position": "topLeft", "offsetX": 0, "offsetY": 0, "opacity": 1,
+                "rotation": 0, "scale": 1, "tiled": false, "tileGap": 96
+            }))
+            .unwrap(),
+        );
+        let marked = compose(
+            &[item.clone()],
+            &config,
+            &CancellationToken::new(),
+            Arc::new(|_, _| {}),
+        )
+        .unwrap();
+        assert_eq!(*marked.get_pixel(0, 0), Rgba([255, 255, 0, 255]));
+        assert_eq!(*marked.get_pixel(5, 0), Rgba([0, 255, 0, 255]));
+
+        let mut invalid = item;
+        invalid.render_spec.as_mut().unwrap().source.path = "different.png".into();
+        assert!(matches!(
+            validate(&[invalid], &config),
+            Err(AppError::InvalidInput(_))
+        ));
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(mark_path).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
     #[test]
     fn large_canvas_is_limited_to_one_hundred_megapixels() {
         let (w, h, s) = guarded_size(20_000, 10_000);
@@ -646,6 +787,7 @@ mod tests {
         let items = (0..4)
             .map(|index| CollageItem {
                 path: source.to_string_lossy().into_owned(),
+                render_spec: None,
                 transform: ItemTransform::default(),
                 cell: CollageCell {
                     row: index / 2,
@@ -670,6 +812,8 @@ mod tests {
             background: Background::Color {
                 color: "#FFFFFF".into(),
             },
+            border: None,
+            watermark: None,
             quality: 92,
         };
         let started = Instant::now();
