@@ -4,6 +4,8 @@ import type { ExifData, ExifEdits } from "../../types/exif";
 
 const writeQueues = new Map<string, Promise<void>>();
 
+export type ExifWriteResult = { backupCleanupPath: string | null };
+
 export async function readExif(path: string): Promise<ExifData> {
   if (!isTauri()) {
     throw new AppError("unsupported", "EXIF is available in the desktop and mobile apps.");
@@ -16,7 +18,7 @@ export async function readExif(path: string): Promise<ExifData> {
   }
 }
 
-export function writeExif(path: string, edits: ExifEdits): Promise<void> {
+export function writeExif(path: string, edits: ExifEdits): Promise<ExifWriteResult> {
   const previous = writeQueues.get(path) ?? Promise.resolve();
   const operation = previous.catch(() => undefined).then(async () => {
     if (!isTauri()) {
@@ -24,14 +26,15 @@ export function writeExif(path: string, edits: ExifEdits): Promise<void> {
     }
 
     try {
-      await invoke<void>("exif_write", { path, edits });
+      return await invoke<ExifWriteResult>("exif_write", { path, edits });
     } catch (error) {
       throw normalizeError(error);
     }
   });
-  writeQueues.set(path, operation);
-  void operation.finally(() => {
-    if (writeQueues.get(path) === operation) writeQueues.delete(path);
+  const queued = operation.then(() => undefined);
+  writeQueues.set(path, queued);
+  void queued.finally(() => {
+    if (writeQueues.get(path) === queued) writeQueues.delete(path);
   }).catch(() => undefined);
   return operation;
 }

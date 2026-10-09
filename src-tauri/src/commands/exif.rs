@@ -94,6 +94,13 @@ pub struct ExifEdits {
     pub keywords: Option<String>,
 }
 
+#[derive(Debug, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExifWriteResult {
+    /// The update succeeded, but this original-file backup needs manual cleanup.
+    pub backup_cleanup_path: Option<String>,
+}
+
 static EXIF_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static ACTIVE_EXIF_WRITES: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
 
@@ -110,7 +117,7 @@ pub async fn exif_read(path: String) -> Result<ExifData, AppError> {
 /// Safely writes the supported EXIF fields without decoding image pixels.
 ///
 #[tauri::command]
-pub async fn exif_write(path: String, edits: ExifEdits) -> Result<(), AppError> {
+pub async fn exif_write(path: String, edits: ExifEdits) -> Result<ExifWriteResult, AppError> {
     tokio::task::spawn_blocking(move || {
         write_exif(Path::new(&path), edits).map_err(classify_write_error)
     })
@@ -118,12 +125,12 @@ pub async fn exif_write(path: String, edits: ExifEdits) -> Result<(), AppError> 
     .map_err(|error| AppError::InvalidInput(format!("EXIF writer failed: {error}")))?
 }
 
-fn write_exif(path: &Path, edits: ExifEdits) -> Result<(), AppError> {
+fn write_exif(path: &Path, edits: ExifEdits) -> Result<ExifWriteResult, AppError> {
     if crate::image_io::source::is_content_uri(path) {
         return Err(AppError::DocumentWriteUnsupported);
     }
     if edits.artist.is_none() && edits.copyright.is_none() && edits.keywords.is_none() {
-        return Ok(());
+        return Ok(ExifWriteResult::default());
     }
 
     let _write_guard = ExifWriteGuard::acquire(path)?;
@@ -256,36 +263,53 @@ fn edit_matches(requested: Option<&str>, written: Option<&str>) -> bool {
 fn replace_with_rollback(
     destination: &Path,
     staged: &mut SiblingTemporaryFile,
-) -> Result<(), AppError> {
+) -> Result<ExifWriteResult, AppError> {
+    replace_with_rollback_using(
+        destination,
+        staged,
+        crate::image_io::save::rename_no_replace,
+        |path| fs::remove_file(path),
+    )
+}
+
+fn replace_with_rollback_using(
+    destination: &Path,
+    staged: &mut SiblingTemporaryFile,
+    mut rename: impl FnMut(&Path, &Path) -> io::Result<()>,
+    remove_backup: impl FnOnce(&Path) -> io::Result<()>,
+) -> Result<ExifWriteResult, AppError> {
     let backup_path = unique_sibling_path(destination, "exif-backup");
-    fs::rename(destination, &backup_path)?;
+    rename(destination, &backup_path)?;
     let mut backup = SiblingTemporaryFile::from_existing(backup_path);
 
-    match fs::rename(staged.path(), destination) {
+    match rename(staged.path(), destination) {
         Ok(()) => {
             staged.disarm();
-            if let Err(error) = fs::remove_file(backup.path()) {
+            let cleanup = remove_backup(backup.path());
+            let backup_cleanup_path = cleanup.err().map(|error| {
                 eprintln!(
-                    "warning: unable to remove EXIF backup {}: {error}",
+                    "unable to remove EXIF backup {}: {error}",
                     backup.path().display()
                 );
-            } else {
-                backup.disarm();
-            }
-            Ok(())
+                backup.path().to_string_lossy().into_owned()
+            });
+            backup.disarm();
+            Ok(ExifWriteResult {
+                backup_cleanup_path,
+            })
         }
-        Err(commit_error) => match fs::rename(backup.path(), destination) {
+        Err(commit_error) => match rename(backup.path(), destination) {
             Ok(()) => {
                 backup.disarm();
                 Err(commit_error.into())
             }
             Err(rollback_error) => {
                 backup.disarm();
-                Err(io::Error::other(format!(
-                    "unable to publish EXIF update ({commit_error}); original retained at {} but rollback failed ({rollback_error})",
-                    backup.path().display()
-                ))
-                .into())
+                Err(AppError::ExifRecoveryRequired {
+                    backup_path: backup.path().to_string_lossy().into_owned(),
+                    commit_error: commit_error.to_string(),
+                    rollback_error: rollback_error.to_string(),
+                })
             }
         },
     }
@@ -628,7 +652,8 @@ mod tests {
 
     use super::{
         decimal, encode_xp_keywords, format_exposure_bias, gcd, orientation_name, read_exif,
-        write_exif, ExifData, ExifEdits, ExifWriteGuard,
+        replace_with_rollback_using, write_exif, ExifData, ExifEdits, ExifWriteGuard,
+        SiblingTemporaryFile,
     };
     use crate::error::AppError;
 
@@ -761,6 +786,85 @@ mod tests {
         ));
 
         fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn failed_exif_publication_restores_the_original() {
+        let directory = test_directory();
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("photo.jpg");
+        fs::write(&path, b"original").unwrap();
+        let mut staged = SiblingTemporaryFile::copy_of(&path, "exif-write").unwrap();
+        fs::write(staged.path(), b"updated").unwrap();
+        let mut calls = 0;
+        let result = replace_with_rollback_using(
+            &path,
+            &mut staged,
+            |from, to| {
+                calls += 1;
+                if calls == 2 {
+                    Err(std::io::Error::other("publish failed"))
+                } else {
+                    fs::rename(from, to)
+                }
+            },
+            |path| fs::remove_file(path),
+        );
+        assert!(result.is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"original");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn failed_exif_rollback_keeps_a_named_backup() {
+        let directory = test_directory();
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("photo.jpg");
+        fs::write(&path, b"original").unwrap();
+        let mut staged = SiblingTemporaryFile::copy_of(&path, "exif-write").unwrap();
+        let mut calls = 0;
+        let result = replace_with_rollback_using(
+            &path,
+            &mut staged,
+            |from, to| {
+                calls += 1;
+                if calls > 1 {
+                    Err(std::io::Error::other("rename failed"))
+                } else {
+                    fs::rename(from, to)
+                }
+            },
+            |path| fs::remove_file(path),
+        );
+        let Err(AppError::ExifRecoveryRequired { backup_path, .. }) = result else {
+            panic!("expected a recoverable EXIF error");
+        };
+        assert_eq!(fs::read(backup_path).unwrap(), b"original");
+        assert!(!path.exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn failed_exif_backup_cleanup_reports_success_with_warning() {
+        let directory = test_directory();
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("photo.jpg");
+        fs::write(&path, b"original").unwrap();
+        let mut staged = SiblingTemporaryFile::copy_of(&path, "exif-write").unwrap();
+        fs::write(staged.path(), b"updated").unwrap();
+        let result = replace_with_rollback_using(
+            &path,
+            &mut staged,
+            |from, to| fs::rename(from, to),
+            |_| Err(std::io::Error::other("cleanup failed")),
+        )
+        .unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"updated");
+        assert_eq!(
+            fs::read(result.backup_cleanup_path.unwrap()).unwrap(),
+            b"original"
+        );
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[cfg(windows)]

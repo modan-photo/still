@@ -356,7 +356,7 @@ fn link_capability_error(error: &std::io::Error) -> bool {
 }
 
 #[cfg(windows)]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+pub(crate) fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
     let wide = |path: &Path| -> std::io::Result<Vec<u16>> {
@@ -389,7 +389,7 @@ fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+pub(crate) fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     rustix::fs::renameat_with(
         rustix::fs::CWD,
         source,
@@ -401,7 +401,7 @@ fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+pub(crate) fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     // Preserve the existing hard-link capability on other desktop platforms.
     // Link creation atomically rejects a target that appeared concurrently.
     fs::hard_link(source, destination)?;

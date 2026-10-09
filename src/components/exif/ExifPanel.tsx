@@ -15,7 +15,7 @@ import { ExifEditableRow } from "./ExifEditableRow";
 import { ExifRow } from "./ExifRow";
 import { ExifSummary } from "./ExifSummary";
 
-type Notice = { message: string; error?: boolean } | null;
+type Notice = { message: string; error?: boolean; persistent?: boolean } | null;
 
 export function ExifPanel() {
   const currentPhotoId = useProjectStore((state) => state.currentPhotoId);
@@ -46,12 +46,18 @@ export function ExifPanel() {
     if (!currentPhotoId || !currentPath) return;
     const edits: ExifEdits = { [field]: value };
     try {
-      await writeExif(currentPath, edits);
+      const result = await writeExif(currentPath, edits);
       update({ [field]: value || null });
-      setNotice({ message: "Saved." });
+      setNotice(result.backupCleanupPath
+        ? { message: `Saved. The original backup could not be removed. Delete it after verifying the image: ${result.backupCleanupPath}`, persistent: true }
+        : { message: "Saved." });
     } catch (reason) {
       const failure = normalizeError(reason);
-      setNotice({ message: exifSaveErrorMessage(failure.code, failure.message), error: true });
+      setNotice({
+        message: exifSaveErrorMessage(failure.code, failure.message),
+        error: true,
+        persistent: failure.code === "exif_recovery_required",
+      });
       throw failure;
     }
   }, [currentPath, currentPhotoId, update]);
@@ -222,13 +228,14 @@ function ExifNotice({ notice, onClose }: { notice: Notice; onClose: () => void }
   return (
     <Snackbar
       open={Boolean(notice)}
-      autoHideDuration={motionTokens.duration.slow * 5}
+      autoHideDuration={notice?.persistent ? null : motionTokens.duration.slow * 5}
       anchorOrigin={{ vertical: "top", horizontal: "right" }}
       onClose={(_, reason) => reason !== "clickaway" && onClose()}
     >
       <SnackbarContent
         role={notice?.error ? "alert" : "status"}
         message={notice?.message ?? ""}
+        action={notice?.persistent ? <Button size="small" onClick={onClose}>Close</Button> : undefined}
         sx={(theme) => {
           const colors = theme.still.colors[theme.palette.mode];
           return {

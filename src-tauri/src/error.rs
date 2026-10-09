@@ -51,6 +51,13 @@ pub enum AppError {
         rollback_error: String,
     },
 
+    #[error("EXIF update could not be published ({commit_error}) or restored ({rollback_error}). Original retained at {backup_path}; keep this backup for recovery.")]
+    ExifRecoveryRequired {
+        backup_path: String,
+        commit_error: String,
+        rollback_error: String,
+    },
+
     #[error("task cancelled")]
     Cancelled,
 }
@@ -71,6 +78,7 @@ impl AppError {
             Self::DocumentOverwriteUnsupported => "document_overwrite_unsupported",
             Self::DocumentCleanupRequired { .. } => "document_cleanup_required",
             Self::ExportRecoveryRequired { .. } => "export_recovery_required",
+            Self::ExifRecoveryRequired { .. } => "exif_recovery_required",
             Self::Cancelled => "cancelled",
         }
     }
@@ -133,5 +141,20 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("content://provider/document/temp"));
+    }
+
+    #[test]
+    fn exif_recovery_error_exposes_the_backup_path() {
+        let recovery = serde_json::to_value(AppError::ExifRecoveryRequired {
+            backup_path: "C:/photos/.photo.still-exif-backup.jpg".into(),
+            commit_error: "publish failed".into(),
+            rollback_error: "restore failed".into(),
+        })
+        .unwrap();
+        assert_eq!(recovery["code"], "exif_recovery_required");
+        assert!(recovery["message"]
+            .as_str()
+            .unwrap()
+            .contains("C:/photos/.photo.still-exif-backup.jpg"));
     }
 }
