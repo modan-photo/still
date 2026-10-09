@@ -57,6 +57,7 @@ export function MainCanvas({
   const t = useTranslation();
   const photos = useProjectStore((state) => state.photos);
   const isCollageMode = useUIStore((state) => state.activeRightTab === 'collage');
+  const singleKeyShortcutsEnabled = useUIStore((state) => state.singleKeyShortcutsEnabled);
   const setGridPanelOpen = useUIStore((state) => state.setGridPanelOpen);
   const selectedId = useProjectStore((state) => state.currentPhotoId);
   const removePhotos = useProjectStore((state) => state.removePhotos);
@@ -160,7 +161,12 @@ export function MainCanvas({
               <Button size="small" disabled={!photo || exporting} onClick={onExport}>
                 {exporting ? t('exporting') : t('export')}
               </Button>
-              <Tooltip title={t('removeCurrentPhotoShortcut')} arrow>
+              <Tooltip
+                title={t(
+                  singleKeyShortcutsEnabled ? 'removeCurrentPhotoShortcut' : 'removeCurrentPhoto',
+                )}
+                arrow
+              >
                 <span>
                   <IconButton
                     aria-label={t('removeCurrentPhoto')}

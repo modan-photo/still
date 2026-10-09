@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect } from 'react';
 import { RIGHT_PANEL_TABS } from '../layout/rightPanelTabs';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
@@ -28,7 +28,7 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       if (target.closest('[role="dialog"]')) return;
 
       // Escape has a single shell-level responsibility: leave the photo grid.
-      if (event.key === "Escape" && useUIStore.getState().gridPanelOpen) {
+      if (event.key === 'Escape' && useUIStore.getState().gridPanelOpen) {
         event.preventDefault();
         useUIStore.getState().setGridPanelOpen(false);
         return;
@@ -37,11 +37,15 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       // `G` is available from passive controls such as the canvas, but not while
       // text is being entered. It is also unavailable in collage mode, where the
       // center canvas has a different meaning.
-      const textEntryActive = target.isContentEditable || Boolean(target.closest(
-        'input, textarea, select, [role="combobox"], [role="dialog"]',
-      ));
-      if (!textEntryActive && (event.ctrlKey || event.metaKey) && !event.altKey
-        && (event.key.toLowerCase() === 'z' || event.key.toLowerCase() === 'y')) {
+      const textEntryActive =
+        target.isContentEditable ||
+        Boolean(target.closest('input, textarea, select, [role="combobox"], [role="dialog"]'));
+      if (
+        !textEntryActive &&
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        (event.key.toLowerCase() === 'z' || event.key.toLowerCase() === 'y')
+      ) {
         const redo = event.key.toLowerCase() === 'y' || event.shiftKey;
         if (event.key.toLowerCase() === 'y' && event.shiftKey) return;
         event.preventDefault();
@@ -50,14 +54,15 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         return;
       }
       if (
-        !textEntryActive
-        && !event.ctrlKey
-        && !event.metaKey
-        && !event.altKey
-        && !event.shiftKey
-        && event.key.toLowerCase() === "g"
-        && useUIStore.getState().activeRightTab !== 'collage'
-        && useProjectStore.getState().photos.length >= 2
+        useUIStore.getState().singleKeyShortcutsEnabled &&
+        !textEntryActive &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'g' &&
+        useUIStore.getState().activeRightTab !== 'collage' &&
+        useProjectStore.getState().photos.length >= 2
       ) {
         event.preventDefault();
         useUIStore.getState().toggleGridPanel();
@@ -66,18 +71,32 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
 
       // From this point on, avoid stealing keys from any interactive component.
       // The earlier grid shortcut intentionally has a narrower exclusion list.
-      if (target.isContentEditable || target.closest(
-        'input, textarea, select, button, a, [role="slider"], [role="separator"], [role="combobox"], [role="menu"], [role="listbox"], [role="dialog"]',
-      )) return;
+      if (
+        target.isContentEditable ||
+        target.closest(
+          'input, textarea, select, button, a, [role="slider"], [role="separator"], [role="combobox"], [role="menu"], [role="listbox"], [role="dialog"]',
+        )
+      )
+        return;
 
       // Use Ctrl on Windows/Linux and Command on macOS for application commands.
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "o") {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'o'
+      ) {
         event.preventDefault();
         onImport();
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && /^[1-9]$/.test(event.key)
-        && Number(event.key) <= RIGHT_PANEL_TABS.length) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        /^[1-9]$/.test(event.key) &&
+        Number(event.key) <= RIGHT_PANEL_TABS.length
+      ) {
         // The compact/mobile inspector omits collage from this tab layout.
         if (window.matchMedia('(max-width: 767px)').matches) return;
         const tab = RIGHT_PANEL_TABS[Number(event.key) - 1];
@@ -92,10 +111,11 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       }
       // Remaining shortcuts are intentionally unmodified single-key actions.
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (!useUIStore.getState().singleKeyShortcutsEnabled) return;
 
       if (
-        (event.key === "Delete" || event.key === "Backspace")
-        && !useUIStore.getState().gridPanelOpen
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        !useUIStore.getState().gridPanelOpen
       ) {
         const project = useProjectStore.getState();
         const currentId = project.currentPhotoId;
@@ -109,14 +129,10 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
 
       // Tab only toggles the inspector when focus is explicitly within the canvas
       // shortcut scope; normal browser focus navigation remains intact elsewhere.
-      if (event.key === "Tab" && target.matches('[data-editor-shortcut-scope="canvas"]')) {
+      if (event.key === 'Tab' && target.matches('[data-editor-shortcut-scope="canvas"]')) {
         event.preventDefault();
-        console.log("[Editor shortcut] Toggle inspector");
         onTogglePanel();
-      } else if (/^[1-5]$/.test(event.key)) {
-        // Reserved for the future photo-rating implementation.
-        console.log(`[Editor shortcut] Rate photo: ${event.key} (placeholder)`);
-      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         // Navigation is bounded naturally: no state change occurs beyond either end.
         event.preventDefault();
         const { photos, currentPhotoId, selectPhoto } = useProjectStore.getState();
@@ -126,9 +142,9 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
     // Re-register when either caller callback changes and always release the global
     // listener during unmount to avoid duplicate shortcut execution.
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onTogglePanel, onImport]);
 }
