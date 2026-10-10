@@ -4,9 +4,11 @@ export type SingleKeyActions = Record<SingleKeyAction, boolean>;
 export const SINGLE_KEY_ACTIONS_KEY = 'still.shortcuts.single-key-actions';
 export const GRID_SHORTCUT_KEY = 'still.shortcuts.grid-key';
 export const PHOTO_NAVIGATION_KEYS_KEY = 'still.shortcuts.photo-navigation-keys';
+export const INSPECTOR_SHORTCUT_KEY = 'still.shortcuts.inspector-key';
 
 export type GridShortcutKey = 'g' | 'v';
 export type PhotoNavigationKeys = 'arrows' | 'jl';
+export type InspectorShortcutKey = 'Tab' | 'i';
 
 const DEFAULT_ACTIONS: SingleKeyActions = {
   grid: true,
@@ -57,6 +59,18 @@ export function readPhotoNavigationKeys(): PhotoNavigationKeys {
   } catch {
     return 'arrows';
   }
+}
+
+export function readInspectorShortcutKey(): InspectorShortcutKey {
+  try {
+    return localStorage.getItem(INSPECTOR_SHORTCUT_KEY) === 'i' ? 'i' : 'Tab';
+  } catch {
+    return 'Tab';
+  }
+}
+
+export function inspectorShortcutMatches(key: string, binding: InspectorShortcutKey): boolean {
+  return binding === 'Tab' ? key === 'Tab' : key.toLowerCase() === 'i';
 }
 
 export function gridShortcutMatches(key: string, binding: GridShortcutKey): boolean {

@@ -143,6 +143,22 @@ describe('in-memory inspector state', () => {
     });
   });
 
+  it('persists the canvas inspector key without restoring workspace state', async () => {
+    getItem.mockImplementation((key: string) =>
+      key === 'still.shortcuts.inspector-key' ? 'i' : null,
+    );
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState().inspectorShortcutKey).toBe('i');
+    useUIStore.getState().setInspectorShortcutKey('Tab');
+    expect(setItem).toHaveBeenCalledExactlyOnceWith('still.shortcuts.inspector-key', 'Tab');
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState()).toMatchObject({
+      inspectorShortcutKey: 'Tab',
+      activeRightTab: 'frame',
+      gridPanelOpen: false,
+    });
+  });
+
   it('persists window size independently of the session state', async () => {
     getItem.mockImplementation((key: string) =>
       key === 'still.window.size-preset' ? 'compact' : null,

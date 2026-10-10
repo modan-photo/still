@@ -48,6 +48,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setSingleKeyActionEnabled = useUIStore((state) => state.setSingleKeyActionEnabled);
   const gridShortcutKey = useUIStore((state) => state.gridShortcutKey);
   const setGridShortcutKey = useUIStore((state) => state.setGridShortcutKey);
+  const inspectorShortcutKey = useUIStore((state) => state.inspectorShortcutKey);
+  const setInspectorShortcutKey = useUIStore((state) => state.setInspectorShortcutKey);
   const photoNavigationKeys = useUIStore((state) => state.photoNavigationKeys);
   const setPhotoNavigationKeys = useUIStore((state) => state.setPhotoNavigationKeys);
   const language = useUIStore((state) => state.language);
@@ -253,6 +255,21 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                     >
                       <MenuItem value="arrows">← / →</MenuItem>
                       <MenuItem value="jl">J / L</MenuItem>
+                    </TextField>
+                  ) : shortcut.id === 'inspector' ? (
+                    <TextField
+                      select
+                      size="small"
+                      value={inspectorShortcutKey}
+                      disabled={!singleKeyShortcutsEnabled || !singleKeyActions.inspector}
+                      inputProps={{ 'aria-label': `${t(shortcut.label)} ${t('shortcutKeys')}` }}
+                      onChange={(event) =>
+                        setInspectorShortcutKey(event.target.value === 'i' ? 'i' : 'Tab')
+                      }
+                      sx={{ mt: 0.5, minWidth: 90 }}
+                    >
+                      <MenuItem value="Tab">Tab</MenuItem>
+                      <MenuItem value="i">I</MenuItem>
                     </TextField>
                   ) : (
                     <div className="font-mono text-secondary">{shortcut.keys}</div>

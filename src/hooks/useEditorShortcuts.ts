@@ -7,6 +7,7 @@ import { enterCollageMode } from '../services/collageMode';
 import { adjacentPhoto } from '../services/photoCollection';
 import {
   gridShortcutMatches,
+  inspectorShortcutMatches,
   photoNavigationDirection,
   singleKeyActionEnabled,
 } from '../services/shortcutPreferences';
@@ -139,10 +140,10 @@ export function useEditorShortcuts(onTogglePanel: () => void, onImport: () => vo
         return;
       }
 
-      // Tab only toggles the inspector when focus is explicitly within the canvas
-      // shortcut scope; normal browser focus navigation remains intact elsewhere.
+      // Only the configured key toggles the inspector within the canvas shortcut scope;
+      // choosing I leaves Tab available for normal focus navigation.
       if (
-        event.key === 'Tab' &&
+        inspectorShortcutMatches(event.key, useUIStore.getState().inspectorShortcutKey) &&
         singleKeyActions.inspector &&
         target.matches('[data-editor-shortcut-scope="canvas"]')
       ) {

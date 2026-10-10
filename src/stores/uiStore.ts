@@ -21,7 +21,10 @@ import {
   GRID_SHORTCUT_KEY,
   readPhotoNavigationKeys,
   PHOTO_NAVIGATION_KEYS_KEY,
+  readInspectorShortcutKey,
+  INSPECTOR_SHORTCUT_KEY,
   type GridShortcutKey,
+  type InspectorShortcutKey,
   type PhotoNavigationKeys,
   type SingleKeyAction,
   type SingleKeyActions,
@@ -34,6 +37,7 @@ export interface UIState {
   singleKeyShortcutsEnabled: boolean;
   singleKeyActions: SingleKeyActions;
   gridShortcutKey: GridShortcutKey;
+  inspectorShortcutKey: InspectorShortcutKey;
   photoNavigationKeys: PhotoNavigationKeys;
   language: 'en' | 'zh';
   windowSizePreset: WindowSizeMode;
@@ -48,6 +52,7 @@ export interface UIState {
   setSingleKeyShortcutsEnabled: (enabled: boolean) => void;
   setSingleKeyActionEnabled: (action: SingleKeyAction, enabled: boolean) => void;
   setGridShortcutKey: (key: GridShortcutKey) => void;
+  setInspectorShortcutKey: (key: InspectorShortcutKey) => void;
   setPhotoNavigationKeys: (keys: PhotoNavigationKeys) => void;
   setLanguage: (language: UIState['language']) => void;
   setWindowSizePreset: (preset: WindowSizeMode) => void;
@@ -79,6 +84,7 @@ export const useUIStore = createSessionStore<UIState>(
     singleKeyShortcutsEnabled: storedSingleKeyShortcutsEnabled(),
     singleKeyActions: readSingleKeyActions(),
     gridShortcutKey: readGridShortcutKey(),
+    inspectorShortcutKey: readInspectorShortcutKey(),
     photoNavigationKeys: readPhotoNavigationKeys(),
     language: storedLanguage(),
     windowSizePreset: readWindowSizePreset(),
@@ -109,6 +115,11 @@ export const useUIStore = createSessionStore<UIState>(
       if (typeof localStorage !== 'undefined')
         localStorage.setItem(GRID_SHORTCUT_KEY, gridShortcutKey);
       set({ gridShortcutKey });
+    },
+    setInspectorShortcutKey: (inspectorShortcutKey) => {
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(INSPECTOR_SHORTCUT_KEY, inspectorShortcutKey);
+      set({ inspectorShortcutKey });
     },
     setPhotoNavigationKeys: (photoNavigationKeys) => {
       if (typeof localStorage !== 'undefined')

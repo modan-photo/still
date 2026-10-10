@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   gridShortcutMatches,
+  inspectorShortcutMatches,
   photoNavigationDirection,
   readGridShortcutKey,
+  readInspectorShortcutKey,
   readPhotoNavigationKeys,
   readSingleKeyActions,
   singleKeyActionEnabled,
@@ -41,14 +43,20 @@ describe('editor single-key action preferences', () => {
       getItem: (key: string) =>
         key === 'still.shortcuts.grid-key'
           ? 'v'
-          : key === 'still.shortcuts.photo-navigation-keys'
-            ? 'jl'
-            : null,
+          : key === 'still.shortcuts.inspector-key'
+            ? 'i'
+            : key === 'still.shortcuts.photo-navigation-keys'
+              ? 'jl'
+              : null,
     });
     expect(readGridShortcutKey()).toBe('v');
+    expect(readInspectorShortcutKey()).toBe('i');
     expect(readPhotoNavigationKeys()).toBe('jl');
     expect(gridShortcutMatches('V', 'v')).toBe(true);
     expect(gridShortcutMatches('g', 'v')).toBe(false);
+    expect(inspectorShortcutMatches('I', 'i')).toBe(true);
+    expect(inspectorShortcutMatches('Tab', 'i')).toBe(false);
+    expect(inspectorShortcutMatches('Tab', 'Tab')).toBe(true);
     expect(photoNavigationDirection('J', 'jl')).toBe(-1);
     expect(photoNavigationDirection('l', 'jl')).toBe(1);
     expect(photoNavigationDirection('ArrowLeft', 'jl')).toBeNull();
@@ -59,6 +67,7 @@ describe('editor single-key action preferences', () => {
   it('falls back to the original keys for unsupported saved values', () => {
     vi.stubGlobal('localStorage', { getItem: () => 'invalid' });
     expect(readGridShortcutKey()).toBe('g');
+    expect(readInspectorShortcutKey()).toBe('Tab');
     expect(readPhotoNavigationKeys()).toBe('arrows');
   });
 });
