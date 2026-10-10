@@ -49,7 +49,9 @@ async function loadBundledFont(font: FontInfo): Promise<void> {
 
 const STORAGE_KEY = 'still.watermark-presets';
 const BACKUP_STORAGE_KEY = `${STORAGE_KEY}.bak`;
-export async function listWatermarkPresets(): Promise<WatermarkPreset[]> {
+export async function listWatermarkPresets(
+  onRecovered?: (backupKey: string) => void,
+): Promise<WatermarkPreset[]> {
   if (isTauri()) return invoke<WatermarkPreset[]>('watermark_presets_list');
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === null) return [];
@@ -65,6 +67,7 @@ export async function listWatermarkPresets(): Promise<WatermarkPreset[]> {
     backupKey = `${BACKUP_STORAGE_KEY}.${suffix}`;
   localStorage.setItem(backupKey, stored);
   localStorage.removeItem(STORAGE_KEY);
+  onRecovered?.(backupKey);
   return [];
 }
 export async function saveWatermarkPreset(preset: WatermarkPreset): Promise<WatermarkPreset[]> {

@@ -11,10 +11,12 @@ const BROWSER_BACKUP_STORAGE_KEY = `${BROWSER_STORAGE_KEY}.bak`;
 const EMPTY_PRESET_FILE: FramePresetFile = { version: 1, presets: [] };
 const FRAME_STYLES: readonly FrameStyle[] = ['solid', 'gradient', 'shadow', 'polaroid'];
 
-export async function loadFramePresets(): Promise<FramePreset[]> {
+export async function loadFramePresets(
+  onRecovered?: (backupKey: string) => void,
+): Promise<FramePreset[]> {
   const value: unknown = isTauri()
     ? await invoke<unknown>('frame_presets_load')
-    : readBrowserPresetFile();
+    : readBrowserPresetFile(onRecovered);
   return normalizePresetFile(value).presets;
 }
 
@@ -31,14 +33,15 @@ export async function saveFramePresets(presets: readonly FramePreset[]): Promise
   localStorage.setItem(BROWSER_STORAGE_KEY, JSON.stringify(file));
 }
 
-function readBrowserPresetFile(): unknown {
+function readBrowserPresetFile(onRecovered?: (backupKey: string) => void): unknown {
   const stored = localStorage.getItem(BROWSER_STORAGE_KEY);
   if (stored === null) return EMPTY_PRESET_FILE;
   let value: unknown;
   try {
     value = JSON.parse(stored) as unknown;
   } catch {
-    backupBrowserPresetFile(stored);
+    const backupKey = backupBrowserPresetFile(stored);
+    onRecovered?.(backupKey);
     return EMPTY_PRESET_FILE;
   }
   const normalized = normalizePresetFile(value);
@@ -48,18 +51,20 @@ function readBrowserPresetFile(): unknown {
     !Array.isArray(value.presets) ||
     normalized.presets.length !== value.presets.length
   ) {
-    backupBrowserPresetFile(stored);
+    const backupKey = backupBrowserPresetFile(stored);
+    onRecovered?.(backupKey);
     return EMPTY_PRESET_FILE;
   }
   return value;
 }
 
-function backupBrowserPresetFile(contents: string): void {
+function backupBrowserPresetFile(contents: string): string {
   let backupKey = BROWSER_BACKUP_STORAGE_KEY;
   for (let suffix = 2; localStorage.getItem(backupKey) !== null; suffix += 1)
     backupKey = `${BROWSER_BACKUP_STORAGE_KEY}.${suffix}`;
   localStorage.setItem(backupKey, contents);
   localStorage.removeItem(BROWSER_STORAGE_KEY);
+  return backupKey;
 }
 
 function normalizePresetFile(value: unknown): FramePresetFile {

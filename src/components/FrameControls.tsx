@@ -47,6 +47,7 @@ import { DEFAULT_BORDER, type BorderSpec } from '../types/renderSpec';
 import { framePresetToBorderSpec } from './FrameMiniPreview';
 import { FramePresetActions, type FramePresetActionTarget } from './FramePresetActions';
 import { FramePresetSelect } from './FramePresetSelect';
+import { PresetRecoveryNotice } from './PresetRecoveryNotice';
 import { makeUniqueFramePresetName, SaveFramePresetDialog } from './SaveFramePresetDialog';
 import { motionTokens } from '../theme/tokens';
 import { Icon } from './Icons';
@@ -78,6 +79,8 @@ export function FrameControls() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [recoveryBackupKey, setRecoveryBackupKey] = useState<string | null>(null);
+  const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
   const [presetActionTarget, setPresetActionTarget] = useState<FramePresetActionTarget | null>(
     null,
   );
@@ -100,7 +103,9 @@ export function FrameControls() {
 
   useEffect(() => {
     let disposed = false;
-    void loadFramePresets()
+    void loadFramePresets((backupKey) => {
+      if (!disposed) setRecoveryBackupKey(backupKey);
+    })
       .then((storedPresets) => {
         if (disposed) return;
         setUserPresets(storedPresets);
@@ -114,6 +119,8 @@ export function FrameControls() {
       })
       .catch((error: unknown) => {
         console.warn('Unable to restore frame presets', error);
+        if (!disposed)
+          setPresetLoadError(presetTransferErrorMessage(error, 'framePresetsLoadFailed'));
       });
     return () => {
       disposed = true;
@@ -270,12 +277,30 @@ export function FrameControls() {
 
   // Ctrl/Cmd+Shift+R reset shortcut disabled per requirements; reset is button-only.
 
+  const storageNotice = recoveryBackupKey ? (
+    <PresetRecoveryNotice
+      kind="frame"
+      backupKey={recoveryBackupKey}
+      onDismiss={() => setRecoveryBackupKey(null)}
+    />
+  ) : presetLoadError ? (
+    <p className="m-0 text-xs leading-5 text-danger" role="alert">
+      {presetLoadError}
+    </p>
+  ) : null;
+
   if (!selectedId || !photo) {
-    return <p className="m-0 text-xs leading-5 text-secondary">{t('frameChoosePhoto')}</p>;
+    return (
+      <div className="space-y-3">
+        {storageNotice}
+        <p className="m-0 text-xs leading-5 text-secondary">{t('frameChoosePhoto')}</p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
+      {storageNotice}
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <FramePresetSelect

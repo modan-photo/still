@@ -37,6 +37,7 @@ import { useUIStore } from '../stores/uiStore';
 import { errorMessage } from '../services/errorMessages';
 import { normalizeError } from '../services/tauri/image';
 import { selectWatermarkImage } from '../services/watermarkImageSelection';
+import { PresetRecoveryNotice } from './PresetRecoveryNotice';
 import {
   createPresetBundle,
   exportPresetText,
@@ -77,6 +78,8 @@ export function StampControls() {
   const [renameDraft, setRenameDraft] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<WatermarkPreset | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [recoveryBackupKey, setRecoveryBackupKey] = useState<string | null>(null);
+  const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
   const systemFontsEnabled = useUIStore((state) => state.systemFontsEnabled);
   useEffect(() => {
     void listWatermarkFonts(systemFontsEnabled)
@@ -95,7 +98,7 @@ export function StampControls() {
       .catch((error) => setMessage(errorMessage(normalizeError(error))));
   }, [systemFontsEnabled]); // Each source mode is cached for the app lifetime.
   useEffect(() => {
-    void listWatermarkPresets()
+    void listWatermarkPresets(setRecoveryBackupKey)
       .then((stored) => {
         setPresets(stored);
         if (
@@ -106,7 +109,7 @@ export function StampControls() {
           setDefaultWatermarkPresetId(null);
         }
       })
-      .catch((error) => setMessage(errorMessage(normalizeError(error))));
+      .catch((error) => setPresetLoadError(errorMessage(normalizeError(error))));
   }, []);
   const selectedFont = useMemo(
     () => fonts.find((font) => font.family === stamp.font?.family),
@@ -120,7 +123,25 @@ export function StampControls() {
   const changeFont = (patch: Partial<FontSpec>) =>
     change({ font: { ...DEFAULT_WATERMARK.font!, ...stamp.font, ...patch } });
 
-  if (!spec) return <p className="m-0 text-xs leading-5 text-secondary">{t('stampChoosePhoto')}</p>;
+  const storageNotice = recoveryBackupKey ? (
+    <PresetRecoveryNotice
+      kind="watermark"
+      backupKey={recoveryBackupKey}
+      onDismiss={() => setRecoveryBackupKey(null)}
+    />
+  ) : presetLoadError ? (
+    <p className="m-0 text-xs leading-5 text-danger" role="alert">
+      {presetLoadError}
+    </p>
+  ) : null;
+
+  if (!spec)
+    return (
+      <div className="space-y-3">
+        {storageNotice}
+        <p className="m-0 text-xs leading-5 text-secondary">{t('stampChoosePhoto')}</p>
+      </div>
+    );
 
   const chooseImage = async () => {
     try {
@@ -238,6 +259,7 @@ export function StampControls() {
 
   return (
     <div className="space-y-4">
+      {storageNotice}
       <label className="flex items-center justify-between text-xs font-medium text-secondary">
         {t('stampEnable')}
         <Switch

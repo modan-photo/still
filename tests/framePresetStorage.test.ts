@@ -39,10 +39,13 @@ describe('browser frame preset storage', () => {
 
   it('backs up an empty value and preserves earlier backups', async () => {
     const values = stubStorage('');
-    expect(await loadFramePresets()).toEqual([]);
+    const onRecovered = vi.fn();
+    expect(await loadFramePresets(onRecovered)).toEqual([]);
+    expect(onRecovered).toHaveBeenCalledWith(BACKUP_KEY);
     expect(values.get(BACKUP_KEY)).toBe('');
     values.set(STORAGE_KEY, '{broken');
-    expect(await loadFramePresets()).toEqual([]);
+    expect(await loadFramePresets(onRecovered)).toEqual([]);
+    expect(onRecovered).toHaveBeenLastCalledWith(`${BACKUP_KEY}.2`);
     expect(values.get(BACKUP_KEY)).toBe('');
     expect(values.get(`${BACKUP_KEY}.2`)).toBe('{broken');
   });
@@ -50,7 +53,9 @@ describe('browser frame preset storage', () => {
   it('retains the original and blocks save if backup fails', async () => {
     const original = '{broken';
     const values = stubStorage(original, true);
-    await expect(loadFramePresets()).rejects.toThrow('Storage is full');
+    const onRecovered = vi.fn();
+    await expect(loadFramePresets(onRecovered)).rejects.toThrow('Storage is full');
+    expect(onRecovered).not.toHaveBeenCalled();
     await expect(saveFramePresets([preset])).rejects.toThrow('Storage is full');
     expect(values.get(STORAGE_KEY)).toBe(original);
     expect(values.has(BACKUP_KEY)).toBe(false);
@@ -62,5 +67,12 @@ describe('browser frame preset storage', () => {
     await saveFramePresets([preset]);
     expect(values.get(BACKUP_KEY)).toBe(original);
     expect(JSON.parse(values.get(STORAGE_KEY) ?? '').presets).toEqual([preset]);
+  });
+
+  it('does not report recovery for valid presets', async () => {
+    stubStorage(JSON.stringify({ version: 1, presets: [preset] }));
+    const onRecovered = vi.fn();
+    expect(await loadFramePresets(onRecovered)).toEqual([preset]);
+    expect(onRecovered).not.toHaveBeenCalled();
   });
 });

@@ -346,6 +346,11 @@ const messages = {
     frameDefaultSet: '{name} is the default frame preset',
     frameDefaultCleared: 'Default frame preset cleared',
     framePresetsImported: 'Imported {count} frame presets',
+    framePresetsRecovered:
+      'Damaged frame presets were backed up in browser storage as {key}. The preset list was reset.',
+    stampPresetsRecovered:
+      'Damaged watermark presets were backed up in browser storage as {key}. The preset list was reset.',
+    framePresetsLoadFailed: 'Unable to load frame presets. Check storage and try again.',
     presetsImportFailed: 'Unable to import presets',
     importFramePresetsTitle: 'Import frame presets',
     importStampPresetsTitle: 'Import watermark presets',
@@ -830,6 +835,9 @@ const messages = {
     frameDefaultSet: '{name} 已设为默认边框预设',
     frameDefaultCleared: '已清除默认边框预设',
     framePresetsImported: '已导入 {count} 个边框预设',
+    framePresetsRecovered: '损坏的边框预设已备份到浏览器存储键 {key}，预设列表已重置。',
+    stampPresetsRecovered: '损坏的水印预设已备份到浏览器存储键 {key}，预设列表已重置。',
+    framePresetsLoadFailed: '无法加载边框预设，请检查存储后重试。',
     presetsImportFailed: '无法导入预设',
     importFramePresetsTitle: '导入边框预设',
     importStampPresetsTitle: '导入水印预设',

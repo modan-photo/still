@@ -28,7 +28,9 @@ function stubStorage(initial: string, failBackup = false) {
 describe('browser watermark preset storage', () => {
   it('backs up malformed JSON and lets the user save a new preset', async () => {
     const values = stubStorage('{broken');
-    expect(await listWatermarkPresets()).toEqual([]);
+    const onRecovered = vi.fn();
+    expect(await listWatermarkPresets(onRecovered)).toEqual([]);
+    expect(onRecovered).toHaveBeenCalledWith(BACKUP_KEY);
     expect(values.get(BACKUP_KEY)).toBe('{broken');
     expect(values.has(STORAGE_KEY)).toBe(false);
     expect(await saveWatermarkPreset(preset)).toEqual([preset]);
@@ -45,11 +47,14 @@ describe('browser watermark preset storage', () => {
   it('backs up invalid records or duplicate IDs rather than loading partial data', async () => {
     const invalid = JSON.stringify([preset, { ...preset, watermark: { type: 'text' } }]);
     const values = stubStorage(invalid);
-    expect(await listWatermarkPresets()).toEqual([]);
+    const onRecovered = vi.fn();
+    expect(await listWatermarkPresets(onRecovered)).toEqual([]);
+    expect(onRecovered).toHaveBeenCalledWith(BACKUP_KEY);
     expect(values.get(BACKUP_KEY)).toBe(invalid);
 
     values.set(STORAGE_KEY, JSON.stringify([preset, preset]));
-    expect(await listWatermarkPresets()).toEqual([]);
+    expect(await listWatermarkPresets(onRecovered)).toEqual([]);
+    expect(onRecovered).toHaveBeenLastCalledWith(`${BACKUP_KEY}.2`);
     expect(values.get(BACKUP_KEY)).toBe(invalid);
     expect(values.get(`${BACKUP_KEY}.2`)).toBe(JSON.stringify([preset, preset]));
   });
@@ -86,7 +91,9 @@ describe('browser watermark preset storage', () => {
   it('preserves the original if backup fails and blocks an unsafe replacement', async () => {
     const original = '{broken';
     const values = stubStorage(original, true);
-    await expect(listWatermarkPresets()).rejects.toThrow('Storage is full');
+    const onRecovered = vi.fn();
+    await expect(listWatermarkPresets(onRecovered)).rejects.toThrow('Storage is full');
+    expect(onRecovered).not.toHaveBeenCalled();
     await expect(replaceWatermarkPresets([preset])).rejects.toThrow('Storage is full');
     expect(values.get(STORAGE_KEY)).toBe(original);
     expect(values.has(BACKUP_KEY)).toBe(false);
