@@ -61,6 +61,18 @@ describe('preset JSON transfer', () => {
     );
   });
 
+  it('rejects more than 500 presets before writing or importing a bundle', () => {
+    const many = Array.from({ length: 501 }, (_, index) => ({ ...preset, id: `preset-${index}` }));
+    expect(() => createPresetBundle('watermark', many, null)).toThrow('500');
+    const contents = JSON.stringify({
+      version: 1,
+      kind: 'watermark',
+      defaultPresetId: null,
+      presets: many,
+    });
+    expect(() => parsePresetBundle(contents, 'watermark', isWatermarkPreset)).toThrow('500');
+  });
+
   it('rejects malformed gradient and shadow frame parameters before saving', () => {
     const frame = {
       id: 'user-gradient',
@@ -165,6 +177,42 @@ describe('preset JSON transfer', () => {
       isWatermarkPreset,
     );
     expect(parsed.presets[0].watermark.path).toBe('C:/photos/stamp.png');
+  });
+
+  it('rejects malformed optional image watermark font and path fields', () => {
+    const image = {
+      ...preset,
+      watermark: { ...DEFAULT_WATERMARK, type: 'image' as const, path: 'C:/photos/stamp.png' },
+    };
+    expect(isWatermarkPreset(image)).toBe(true);
+    const invalid = [
+      {
+        ...image,
+        watermark: { ...image.watermark, font: { ...DEFAULT_WATERMARK.font, path: 42 } },
+      },
+      {
+        ...image,
+        watermark: {
+          ...image.watermark,
+          font: {
+            ...DEFAULT_WATERMARK.font,
+            shadow: { color: '#000', blur: 'bad', offsetX: 0, offsetY: 0 },
+          },
+        },
+      },
+      { ...preset, watermark: { ...DEFAULT_WATERMARK, path: 42 } },
+    ];
+    for (const item of invalid) {
+      const contents = JSON.stringify({
+        version: 1,
+        kind: 'watermark',
+        defaultPresetId: null,
+        presets: [item],
+      });
+      expect(() => parsePresetBundle(contents, 'watermark', isWatermarkPreset)).toThrow(
+        'valid watermark',
+      );
+    }
   });
 
   it('shows localized native errors and retains recovery details', () => {

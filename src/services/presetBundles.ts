@@ -8,6 +8,7 @@ import { useUIStore } from '../stores/uiStore';
 import { errorMessage } from './errorMessages';
 
 const MAX_BUNDLE_BYTES = 2 * 1024 * 1024;
+const MAX_BUNDLE_PRESETS = 500;
 export type PresetKind = 'frame' | 'watermark';
 export class PresetBundleError extends Error {
   constructor(
@@ -51,6 +52,8 @@ export function createPresetBundle<T extends { id: string }>(
   presets: readonly T[],
   defaultPresetId: string | null,
 ): string {
+  if (presets.length > MAX_BUNDLE_PRESETS)
+    throw new PresetBundleError('presetFileTooMany', 'Preset file exceeds 500 entries.');
   const ids = presets.map((preset) => preset.id);
   if (new Set(ids).size !== ids.length || ids.some((id) => typeof id !== 'string' || !id.trim()))
     throw new PresetBundleError('presetFileInvalidIds', 'Preset IDs must be unique and nonempty.');
@@ -84,7 +87,6 @@ export function parsePresetBundle<T extends { id: string }>(
     value.version !== 1 ||
     value.kind !== kind ||
     !Array.isArray(value.presets) ||
-    value.presets.length > 500 ||
     !value.presets.every(valid) ||
     (value.defaultPresetId !== null && typeof value.defaultPresetId !== 'string')
   ) {
@@ -93,6 +95,8 @@ export function parsePresetBundle<T extends { id: string }>(
       `This is not a valid ${kind} preset file.`,
     );
   }
+  if (value.presets.length > MAX_BUNDLE_PRESETS)
+    throw new PresetBundleError('presetFileTooMany', 'Preset file exceeds 500 entries.');
   const ids = value.presets.map((preset: T) => preset.id);
   if (
     ids.some((id) => !id.trim()) ||
@@ -294,8 +298,10 @@ export function isWatermarkPreset(value: unknown): value is WatermarkPreset {
   if (
     (stamp.type !== 'text' && stamp.type !== 'image') ||
     typeof stamp.content !== 'string' ||
+    (stamp.path !== undefined && typeof stamp.path !== 'string') ||
     !anchors.includes(String(stamp.position)) ||
-    typeof stamp.tiled !== 'boolean'
+    typeof stamp.tiled !== 'boolean' ||
+    (stamp.font !== undefined && !isWatermarkFont(stamp.font))
   )
     return false;
   for (const [field, min, max] of [
@@ -320,11 +326,16 @@ export function isWatermarkPreset(value: unknown): value is WatermarkPreset {
   )
     return false;
   if (stamp.type === 'image') return typeof stamp.path === 'string' && Boolean(stamp.path.trim());
-  if (!stamp.content.trim() || !isRecord(stamp.font)) return false;
-  const font = stamp.font;
+  return Boolean(stamp.content.trim()) && isWatermarkFont(stamp.font);
+}
+
+function isWatermarkFont(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const font = value;
   return (
     typeof font.family === 'string' &&
     Boolean(font.family.trim()) &&
+    (font.path === undefined || typeof font.path === 'string') &&
     typeof font.size === 'number' &&
     font.size >= 1 &&
     font.size <= 2000 &&
