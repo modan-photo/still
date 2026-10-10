@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -135,9 +136,13 @@ fn read_preset_file(path: &Path) -> Result<FramePresetFile, AppError> {
 fn backup_invalid_preset_file(path: &Path) -> Result<(), AppError> {
     let mut backup_name = path.as_os_str().to_os_string();
     backup_name.push(".bak");
-    let backup_path = PathBuf::from(backup_name);
-    if backup_path.exists() {
-        fs::remove_file(&backup_path)?;
+    let mut backup_path = PathBuf::from(&backup_name);
+    let mut suffix = 2;
+    while backup_path.exists() {
+        let mut numbered_name = backup_name.clone();
+        numbered_name.push(format!(".{suffix}"));
+        backup_path = PathBuf::from(numbered_name);
+        suffix += 1;
     }
     fs::rename(path, backup_path)?;
     Ok(())
@@ -150,7 +155,13 @@ fn validate_preset_file(file: &FramePresetFile) -> Result<(), AppError> {
             file.version
         )));
     }
+    let mut ids = HashSet::new();
     for preset in &file.presets {
+        if !ids.insert(&preset.id) {
+            return Err(AppError::InvalidInput(
+                "frame presets need unique IDs".into(),
+            ));
+        }
         if preset.builtin || !preset.id.starts_with("user-") || preset.name.trim().is_empty() {
             return Err(AppError::InvalidInput(
                 "frame preset storage may contain only named user presets".into(),
@@ -212,6 +223,33 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_ids_cannot_be_written_to_user_storage() {
+        let file: FramePresetFile = serde_json::from_value(serde_json::json!({
+            "version": 1,
+            "presets": [
+                {
+                    "id": "user-duplicate",
+                    "name": "First",
+                    "style": "solid",
+                    "params": { "width": 40, "unit": "px", "color": "#FFFFFF", "radius": 0 },
+                    "builtin": false,
+                    "createdAt": 1
+                },
+                {
+                    "id": "user-duplicate",
+                    "name": "Second",
+                    "style": "solid",
+                    "params": { "width": 20, "unit": "px", "color": "#000000", "radius": 0 },
+                    "builtin": false,
+                    "createdAt": 2
+                }
+            ]
+        }))
+        .expect("deserialize preset file");
+        assert!(validate_preset_file(&file).is_err());
+    }
+
+    #[test]
     fn invalid_file_is_backed_up_and_replaced_with_defaults() {
         let directory = std::env::temp_dir().join(format!(
             "still-frame-preset-test-{}-{}",
@@ -233,6 +271,39 @@ mod tests {
         assert_eq!(
             fs::read_to_string(directory.join("frame-presets.json.bak")).expect("read backup"),
             "{not valid json"
+        );
+        fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn invalid_file_preserves_an_existing_backup() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-frame-preset-backup-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).expect("create test directory");
+        let path = directory.join("frame-presets.json");
+        fs::write(&path, b"{new invalid json").expect("write invalid preset file");
+        fs::write(directory.join("frame-presets.json.bak"), b"previous backup")
+            .expect("write existing backup");
+
+        let loaded = read_preset_file(&path).expect("recover invalid preset file");
+
+        assert!(loaded.presets.is_empty());
+        assert!(!path.exists());
+        assert_eq!(
+            fs::read_to_string(directory.join("frame-presets.json.bak"))
+                .expect("read existing backup"),
+            "previous backup"
+        );
+        assert_eq!(
+            fs::read_to_string(directory.join("frame-presets.json.bak.2"))
+                .expect("read new backup"),
+            "{new invalid json"
         );
         fs::remove_dir_all(directory).expect("remove test directory");
     }

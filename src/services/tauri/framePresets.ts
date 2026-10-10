@@ -25,7 +25,7 @@ export async function saveFramePresets(
   onRecovered?: (backupKey: string) => void,
 ): Promise<void> {
   const file = normalizePresetFile({ version: 1, presets });
-  if (file.presets.length !== presets.length) {
+  if (file.presets.length !== presets.length || !hasUniqueIds(file.presets)) {
     throw new Error('Only valid user frame presets can be persisted.');
   }
   if (isTauri()) {
@@ -52,7 +52,8 @@ function readBrowserPresetFile(onRecovered?: (backupKey: string) => void): unkno
     !isRecord(value) ||
     value.version !== 1 ||
     !Array.isArray(value.presets) ||
-    normalized.presets.length !== value.presets.length
+    normalized.presets.length !== value.presets.length ||
+    !hasUniqueIds(normalized.presets)
   ) {
     const backupKey = backupBrowserPresetFile(stored);
     onRecovered?.(backupKey);
@@ -78,6 +79,10 @@ function normalizePresetFile(value: unknown): FramePresetFile {
     version: 1,
     presets: value.presets.filter(isUserFramePreset).map((preset) => structuredClone(preset)),
   };
+}
+
+function hasUniqueIds(presets: readonly FramePreset[]): boolean {
+  return new Set(presets.map((preset) => preset.id)).size === presets.length;
 }
 
 function isUserFramePreset(value: unknown): value is FramePreset {

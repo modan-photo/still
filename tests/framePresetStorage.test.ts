@@ -86,4 +86,15 @@ describe('browser frame preset storage', () => {
     expect(await loadFramePresets(onRecovered)).toEqual([preset]);
     expect(onRecovered).not.toHaveBeenCalled();
   });
+
+  it('backs up stored duplicate IDs and rejects duplicate writes', async () => {
+    const original = JSON.stringify({ version: 1, presets: [preset, preset] });
+    const values = stubStorage(original);
+    const onRecovered = vi.fn();
+    expect(await loadFramePresets(onRecovered)).toEqual([]);
+    expect(values.get(BACKUP_KEY)).toBe(original);
+    expect(onRecovered).toHaveBeenCalledExactlyOnceWith(BACKUP_KEY);
+    await expect(saveFramePresets([preset, preset])).rejects.toThrow('valid user frame presets');
+    expect(values.has(STORAGE_KEY)).toBe(false);
+  });
 });
