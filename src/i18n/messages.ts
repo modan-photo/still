@@ -18,6 +18,9 @@ const messages = {
     rememberWindowPosition: 'Remember window position',
     rememberWindowPositionDescription:
       'Restore this window on the same screen when available. If the screen changes, keep the window visible.',
+    rememberWindowMaximized: 'Remember maximized state',
+    rememberWindowMaximizedDescription:
+      'Reopen the desktop window maximized if it was maximized when you closed Still.',
     windowSizeError: 'Could not change the window size. Try again.',
     systemFonts: 'Use system fonts',
     systemFontsDescription:
@@ -499,6 +502,8 @@ const messages = {
     windowSizeCustom: '记住上次尺寸',
     rememberWindowPosition: '记住窗口位置',
     rememberWindowPositionDescription: '尽量在原显示器恢复窗口；显示器变化时保持窗口可见。',
+    rememberWindowMaximized: '记住窗口最大化状态',
+    rememberWindowMaximizedDescription: '若关闭 Still 时窗口处于最大化，下次启动时恢复最大化。',
     windowSizeError: '无法更改窗口尺寸，请重试。',
     systemFonts: '使用系统字体',
     systemFontsDescription: '允许使用设备上安装的水印字体。关闭后预设更易在不同设备间保持一致。',

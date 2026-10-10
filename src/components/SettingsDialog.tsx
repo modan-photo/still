@@ -19,6 +19,7 @@ import {
 } from '../services/windowPreferences';
 import type { SingleKeyAction } from '../services/shortcutPreferences';
 import { captureWindowPosition } from '../services/windowPositionPreferences';
+import { captureWindowMaximized } from '../services/windowMaximizationPreferences';
 import { Icon } from './Icons';
 
 type SettingsDialogProps = { open: boolean; onClose: () => void };
@@ -55,6 +56,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setWindowSizePreset = useUIStore((state) => state.setWindowSizePreset);
   const rememberWindowPosition = useUIStore((state) => state.rememberWindowPosition);
   const setRememberWindowPosition = useUIStore((state) => state.setRememberWindowPosition);
+  const rememberWindowMaximized = useUIStore((state) => state.rememberWindowMaximized);
+  const setRememberWindowMaximized = useUIStore((state) => state.setRememberWindowMaximized);
   const [windowSizeError, setWindowSizeError] = useState(false);
   const [windowSizePending, setWindowSizePending] = useState(false);
 
@@ -78,6 +81,15 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     if (enabled) {
       void captureWindowPosition().catch((error) =>
         console.warn('Unable to capture the window position', error),
+      );
+    }
+  };
+
+  const changeRememberWindowMaximized = (enabled: boolean) => {
+    setRememberWindowMaximized(enabled);
+    if (enabled) {
+      void captureWindowMaximized().catch((error) =>
+        console.warn('Unable to capture the window maximization state', error),
       );
     }
   };
@@ -156,6 +168,21 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 inputProps={{ 'aria-label': t('rememberWindowPosition') }}
                 checked={rememberWindowPosition}
                 onChange={(event) => changeRememberWindowPosition(event.target.checked)}
+              />
+            </div>
+            <div className="mt-3 flex items-start justify-between gap-5 border-t border-subtle pt-3">
+              <div>
+                <h4 className="m-0 text-xs font-semibold text-primary">
+                  {t('rememberWindowMaximized')}
+                </h4>
+                <p className="mb-0 mt-1 text-xs leading-5 text-secondary">
+                  {t('rememberWindowMaximizedDescription')}
+                </p>
+              </div>
+              <Switch
+                inputProps={{ 'aria-label': t('rememberWindowMaximized') }}
+                checked={rememberWindowMaximized}
+                onChange={(event) => changeRememberWindowMaximized(event.target.checked)}
               />
             </div>
           </section>

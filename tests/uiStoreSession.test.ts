@@ -184,6 +184,19 @@ describe('in-memory inspector state', () => {
     });
   });
 
+  it('keeps maximization opt-in separate from the photo session', async () => {
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState().rememberWindowMaximized).toBe(false);
+    useUIStore.getState().setRememberWindowMaximized(true);
+    expect(setItem).toHaveBeenCalledExactlyOnceWith('still.window.remember-maximized', 'true');
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState()).toMatchObject({
+      rememberWindowMaximized: true,
+      activeRightTab: 'frame',
+      gridPanelOpen: false,
+    });
+  });
+
   it('shares photo sort within the session and resets it without storing it', async () => {
     const { useUIStore } = await import('../src/stores/uiStore');
     useUIStore.getState().setPhotoSort('name-desc');

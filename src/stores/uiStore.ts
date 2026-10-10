@@ -11,6 +11,10 @@ import {
   REMEMBER_WINDOW_POSITION_KEY,
 } from '../services/windowPositionPreferences';
 import {
+  readRememberWindowMaximized,
+  REMEMBER_WINDOW_MAXIMIZED_KEY,
+} from '../services/windowMaximizationPreferences';
+import {
   readSingleKeyActions,
   SINGLE_KEY_ACTIONS_KEY,
   readGridShortcutKey,
@@ -34,6 +38,7 @@ export interface UIState {
   language: 'en' | 'zh';
   windowSizePreset: WindowSizeMode;
   rememberWindowPosition: boolean;
+  rememberWindowMaximized: boolean;
   photoSort: PhotoSort;
   activeRightTab: RightPanelTabId;
   gridPanelOpen: boolean;
@@ -47,6 +52,7 @@ export interface UIState {
   setLanguage: (language: UIState['language']) => void;
   setWindowSizePreset: (preset: WindowSizeMode) => void;
   setRememberWindowPosition: (enabled: boolean) => void;
+  setRememberWindowMaximized: (enabled: boolean) => void;
   setPhotoSort: (sort: PhotoSort) => void;
   setActiveRightTab: (tab: UIState['activeRightTab']) => void;
   setGridPanelOpen: (open: boolean) => void;
@@ -77,6 +83,7 @@ export const useUIStore = createSessionStore<UIState>(
     language: storedLanguage(),
     windowSizePreset: readWindowSizePreset(),
     rememberWindowPosition: readRememberWindowPosition(),
+    rememberWindowMaximized: readRememberWindowMaximized(),
     photoSort: 'import',
     activeRightTab: DEFAULT_RIGHT_PANEL_TAB,
     gridPanelOpen: false,
@@ -121,6 +128,11 @@ export const useUIStore = createSessionStore<UIState>(
       if (typeof localStorage !== 'undefined')
         localStorage.setItem(REMEMBER_WINDOW_POSITION_KEY, String(rememberWindowPosition));
       set({ rememberWindowPosition });
+    },
+    setRememberWindowMaximized: (rememberWindowMaximized) => {
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(REMEMBER_WINDOW_MAXIMIZED_KEY, String(rememberWindowMaximized));
+      set({ rememberWindowMaximized });
     },
     setPhotoSort: (photoSort) => set({ photoSort }),
     setActiveRightTab: (activeRightTab) => set({ activeRightTab }),

@@ -16,6 +16,10 @@ import {
   installWindowPositionTracking,
   restoreWindowPosition,
 } from './services/windowPositionPreferences';
+import {
+  installWindowMaximizationTracking,
+  restoreWindowMaximized,
+} from './services/windowMaximizationPreferences';
 import { useUIStore } from './stores/uiStore';
 import './theme/global.css';
 
@@ -49,6 +53,7 @@ let disposed = false;
 let removeCloseHandler: (() => void) | undefined;
 let removeWindowSizeTracking: (() => Promise<void>) | undefined;
 let removeWindowPositionTracking: (() => Promise<void>) | undefined;
+let removeWindowMaximizationTracking: (() => Promise<void>) | undefined;
 let reactRoot: ReactRoot | undefined = import.meta.hot?.data.reactRoot;
 
 void initializeWorkspace().then(async () => {
@@ -64,6 +69,11 @@ void initializeWorkspace().then(async () => {
     console.warn('Unable to restore the window position preference', error);
   }
   try {
+    await restoreWindowMaximized();
+  } catch (error) {
+    console.warn('Unable to restore the window maximization preference', error);
+  }
+  try {
     removeWindowSizeTracking = await installWindowSizeTracking();
   } catch (error) {
     console.warn('Unable to track window size changes', error);
@@ -73,13 +83,22 @@ void initializeWorkspace().then(async () => {
   } catch (error) {
     console.warn('Unable to track window position changes', error);
   }
+  try {
+    removeWindowMaximizationTracking = await installWindowMaximizationTracking();
+  } catch (error) {
+    console.warn('Unable to track window maximization changes', error);
+  }
   const root = (reactRoot ??= ReactDOM.createRoot(document.getElementById('root') as HTMLElement));
   let stopped = false;
   try {
     removeCloseHandler = await installWorkspaceCloseHandler(async () => {
       stopped = true;
       root.unmount();
-      await Promise.all([removeWindowSizeTracking?.(), removeWindowPositionTracking?.()]);
+      await Promise.all([
+        removeWindowSizeTracking?.(),
+        removeWindowPositionTracking?.(),
+        removeWindowMaximizationTracking?.(),
+      ]);
     });
   } catch (error) {
     console.warn('Unable to register the workspace close handler', error);
@@ -88,6 +107,7 @@ void initializeWorkspace().then(async () => {
     removeCloseHandler?.();
     void removeWindowSizeTracking?.();
     void removeWindowPositionTracking?.();
+    void removeWindowMaximizationTracking?.();
     return;
   }
   if (stopped) return;
@@ -105,6 +125,7 @@ if (import.meta.hot) {
     removeCloseHandler?.();
     void removeWindowSizeTracking?.();
     void removeWindowPositionTracking?.();
+    void removeWindowMaximizationTracking?.();
     data.reactRoot = reactRoot;
   });
 }
