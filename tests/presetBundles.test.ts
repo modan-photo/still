@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_WATERMARK } from '../src/types/renderSpec';
 import {
   createPresetBundle,
+  isFramePreset,
   isWatermarkPreset,
   mergeImportedPresets,
   parsePresetBundle,
@@ -30,15 +31,82 @@ describe('preset JSON transfer', () => {
   });
 
   it('rejects duplicate IDs and a missing default', () => {
-    const contents = createPresetBundle('watermark', [preset, preset], preset.id);
+    const contents = JSON.stringify({
+      version: 1,
+      kind: 'watermark',
+      defaultPresetId: preset.id,
+      presets: [preset, preset],
+    });
     expect(() => parsePresetBundle(contents, 'watermark', isWatermarkPreset)).toThrow('unique');
     expect(() =>
       parsePresetBundle(
-        createPresetBundle('watermark', [preset], 'missing'),
+        JSON.stringify({
+          version: 1,
+          kind: 'watermark',
+          defaultPresetId: 'missing',
+          presets: [preset],
+        }),
         'watermark',
         isWatermarkPreset,
       ),
     ).toThrow('default');
+  });
+
+  it('exports only a default that exists in the bundle and rejects duplicate IDs', () => {
+    const contents = createPresetBundle('watermark', [preset], 'stale-default');
+    expect(parsePresetBundle(contents, 'watermark', isWatermarkPreset).defaultPresetId).toBeNull();
+    expect(() => createPresetBundle('watermark', [preset, preset], preset.id)).toThrow('unique');
+    expect(() => createPresetBundle('watermark', [{ ...preset, id: '' }], null)).toThrow(
+      'nonempty',
+    );
+  });
+
+  it('rejects malformed gradient and shadow frame parameters before saving', () => {
+    const frame = {
+      id: 'user-gradient',
+      name: 'Gradient',
+      style: 'gradient',
+      builtin: false,
+      createdAt: 1,
+      params: {
+        width: 20,
+        unit: 'px',
+        color: '#ffffff',
+        radius: 0,
+        gradient: { angle: 45, stops: [{ offset: 0, color: '#ffffff' }] },
+        shadow: { spread: 1, blur: 2, offsetY: 3, color: '#000000' },
+      },
+    };
+    expect(isFramePreset(frame)).toBe(true);
+    expect(
+      parsePresetBundle(createPresetBundle('frame', [frame], frame.id), 'frame', isFramePreset)
+        .defaultPresetId,
+    ).toBe(frame.id);
+    const invalid = [
+      {
+        ...frame,
+        params: {
+          ...frame.params,
+          gradient: { angle: 45, stops: [{ offset: 'bad', color: '#ffffff' }] },
+        },
+      },
+      {
+        ...frame,
+        params: {
+          ...frame.params,
+          shadow: { spread: 1, blur: Number.NaN, offsetY: 3, color: '#000000' },
+        },
+      },
+    ];
+    for (const item of invalid) {
+      const contents = JSON.stringify({
+        version: 1,
+        kind: 'frame',
+        defaultPresetId: null,
+        presets: [item],
+      });
+      expect(() => parsePresetBundle(contents, 'frame', isFramePreset)).toThrow('valid frame');
+    }
   });
 
   it('returns stable, translatable errors for invalid preset files', () => {
@@ -46,7 +114,12 @@ describe('preset JSON transfer', () => {
       { contents: '{', kind: 'watermark' as const, key: 'presetFileInvalidJson' },
       { contents: '{}', kind: 'frame' as const, key: 'framePresetFileInvalid' },
       {
-        contents: createPresetBundle('watermark', [preset, preset], preset.id),
+        contents: JSON.stringify({
+          version: 1,
+          kind: 'watermark',
+          defaultPresetId: preset.id,
+          presets: [preset, preset],
+        }),
         kind: 'watermark' as const,
         key: 'presetFileInvalidIds',
       },

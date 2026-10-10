@@ -51,7 +51,19 @@ export function createPresetBundle<T extends { id: string }>(
   presets: readonly T[],
   defaultPresetId: string | null,
 ): string {
-  return JSON.stringify({ version: 1, kind, defaultPresetId, presets }, null, 2);
+  const ids = presets.map((preset) => preset.id);
+  if (new Set(ids).size !== ids.length || ids.some((id) => typeof id !== 'string' || !id.trim()))
+    throw new PresetBundleError('presetFileInvalidIds', 'Preset IDs must be unique and nonempty.');
+  return JSON.stringify(
+    {
+      version: 1,
+      kind,
+      defaultPresetId: defaultPresetId && ids.includes(defaultPresetId) ? defaultPresetId : null,
+      presets,
+    },
+    null,
+    2,
+  );
 }
 
 export function parsePresetBundle<T extends { id: string }>(
@@ -83,12 +95,13 @@ export function parsePresetBundle<T extends { id: string }>(
   }
   const ids = value.presets.map((preset: T) => preset.id);
   if (
+    ids.some((id) => !id.trim()) ||
     new Set(ids).size !== ids.length ||
-    (value.defaultPresetId && !ids.includes(value.defaultPresetId))
+    (value.defaultPresetId !== null && !ids.includes(value.defaultPresetId))
   ) {
     throw new PresetBundleError(
       'presetFileInvalidIds',
-      'Preset IDs must be unique and the default must exist in this file.',
+      'Preset IDs must be nonempty and unique, and the default must exist in this file.',
     );
   }
   return value as PresetBundle<T>;
@@ -214,6 +227,7 @@ export function isFramePreset(value: unknown): value is FramePreset {
   if (
     !isRecord(value) ||
     typeof value.id !== 'string' ||
+    !value.id.trim() ||
     typeof value.name !== 'string' ||
     !value.name.trim() ||
     value.builtin !== false ||
@@ -227,7 +241,31 @@ export function isFramePreset(value: unknown): value is FramePreset {
     Number.isFinite(params.width) &&
     ['px', 'percent'].includes(String(params.unit)) &&
     typeof params.color === 'string' &&
-    Number.isFinite(params.radius)
+    Number.isFinite(params.radius) &&
+    (params.gradient === undefined || isFrameGradient(params.gradient)) &&
+    (params.shadow === undefined || isFrameShadow(params.shadow))
+  );
+}
+
+function isFrameGradient(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Number.isFinite(value.angle) &&
+    Array.isArray(value.stops) &&
+    value.stops.every(
+      (stop: unknown) =>
+        isRecord(stop) && Number.isFinite(stop.offset) && typeof stop.color === 'string',
+    )
+  );
+}
+
+function isFrameShadow(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Number.isFinite(value.spread) &&
+    Number.isFinite(value.blur) &&
+    Number.isFinite(value.offsetY) &&
+    typeof value.color === 'string'
   );
 }
 
@@ -235,6 +273,7 @@ export function isWatermarkPreset(value: unknown): value is WatermarkPreset {
   if (
     !isRecord(value) ||
     typeof value.id !== 'string' ||
+    !value.id.trim() ||
     typeof value.name !== 'string' ||
     !value.name.trim() ||
     !isRecord(value.watermark)

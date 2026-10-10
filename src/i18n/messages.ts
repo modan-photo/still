@@ -355,7 +355,8 @@ const messages = {
     presetFileInvalidEncoding: 'Preset file must be UTF-8 JSON.',
     framePresetFileInvalid: 'This is not a valid frame preset file.',
     stampPresetFileInvalid: 'This is not a valid watermark preset file.',
-    presetFileInvalidIds: 'Preset IDs must be unique and the default must exist in this file.',
+    presetFileInvalidIds:
+      'Preset IDs must be nonempty and unique, and the default must exist in this file.',
     presetNameEmpty: 'Preset names cannot be empty.',
     framePresetsExported: 'Frame presets exported',
     presetsExportFailed: 'Unable to export presets',
@@ -837,7 +838,7 @@ const messages = {
     presetFileInvalidEncoding: '预设文件必须是 UTF-8 编码的 JSON。',
     framePresetFileInvalid: '这不是有效的边框预设文件。',
     stampPresetFileInvalid: '这不是有效的水印预设文件。',
-    presetFileInvalidIds: '预设 ID 必须唯一，默认预设也必须存在于文件中。',
+    presetFileInvalidIds: '预设 ID 不能为空且必须唯一，默认预设也必须存在于文件中。',
     presetNameEmpty: '预设名称不能为空。',
     framePresetsExported: '边框预设已导出',
     presetsExportFailed: '无法导出预设',
