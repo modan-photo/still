@@ -92,7 +92,7 @@ export function StampControls() {
           if (fallback) changeFont({ family: fallback.family, path: fallback.path });
         }
       })
-      .catch((error) => setMessage(String(error)));
+      .catch((error) => setMessage(errorMessage(normalizeError(error))));
   }, [systemFontsEnabled]); // Each source mode is cached for the app lifetime.
   useEffect(() => {
     void listWatermarkPresets()
@@ -106,7 +106,7 @@ export function StampControls() {
           setDefaultWatermarkPresetId(null);
         }
       })
-      .catch((error) => setMessage(String(error)));
+      .catch((error) => setMessage(errorMessage(normalizeError(error))));
   }, []);
   const selectedFont = useMemo(
     () => fonts.find((font) => font.family === stamp.font?.family),
@@ -149,7 +149,7 @@ export function StampControls() {
       setPresetName('');
       setMessage(t('stampPresetSaved'));
     } catch (error) {
-      setMessage(String(error));
+      setMessage(errorMessage(normalizeError(error)));
     }
   };
 
@@ -181,7 +181,7 @@ export function StampControls() {
       setRenameTarget(null);
       setMessage(t('presetRenamed'));
     } catch (error) {
-      setMessage(String(error));
+      setMessage(errorMessage(normalizeError(error)));
     }
   };
 
@@ -196,7 +196,7 @@ export function StampControls() {
       setDeleteTarget(null);
       setMessage(t('presetDeleted'));
     } catch (error) {
-      setMessage(String(error));
+      setMessage(errorMessage(normalizeError(error)));
     }
   };
 
