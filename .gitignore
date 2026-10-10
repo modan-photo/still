@@ -33,4 +33,5 @@ keystore.properties
 # Customed config
 src-tauri/icons
 docs/*
+/docs/
 verification-output/
