@@ -69,6 +69,17 @@ describe('browser frame preset storage', () => {
     expect(JSON.parse(values.get(STORAGE_KEY) ?? '').presets).toEqual([preset]);
   });
 
+  it('reports a backup discovered while saving after a successful load', async () => {
+    const values = stubStorage(JSON.stringify({ version: 1, presets: [preset] }));
+    expect(await loadFramePresets()).toEqual([preset]);
+    values.set(STORAGE_KEY, '{broken later');
+    const onRecovered = vi.fn();
+    await saveFramePresets([preset], onRecovered);
+    expect(values.get(BACKUP_KEY)).toBe('{broken later');
+    expect(onRecovered).toHaveBeenCalledExactlyOnceWith(BACKUP_KEY);
+    expect(JSON.parse(values.get(STORAGE_KEY) ?? '').presets).toEqual([preset]);
+  });
+
   it('does not report recovery for valid presets', async () => {
     stubStorage(JSON.stringify({ version: 1, presets: [preset] }));
     const onRecovered = vi.fn();

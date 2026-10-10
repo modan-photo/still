@@ -105,4 +105,14 @@ describe('browser watermark preset storage', () => {
     await expect(saveWatermarkPreset({ ...preset, name: '' })).rejects.toThrow('valid');
     expect(JSON.parse(values.get(STORAGE_KEY) ?? '')).toEqual([preset]);
   });
+
+  it('reports a backup discovered during a later replacement', async () => {
+    const values = stubStorage(JSON.stringify([preset]));
+    expect(await listWatermarkPresets()).toEqual([preset]);
+    values.set(STORAGE_KEY, '{broken later');
+    const onRecovered = vi.fn();
+    expect(await replaceWatermarkPresets([preset], onRecovered)).toEqual([preset]);
+    expect(values.get(BACKUP_KEY)).toBe('{broken later');
+    expect(onRecovered).toHaveBeenCalledExactlyOnceWith(BACKUP_KEY);
+  });
 });

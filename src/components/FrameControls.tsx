@@ -154,7 +154,7 @@ export function FrameControls() {
       createdAt: Date.now(),
     };
     const nextUserPresets = [...userPresets, preset];
-    await saveFramePresets(nextUserPresets);
+    await saveFramePresets(nextUserPresets, setRecoveryBackupKey);
     setUserPresets(nextUserPresets);
     setCurrentFramePresetId(preset.id);
     setNotice(t('savedToMyPresets'));
@@ -174,7 +174,7 @@ export function FrameControls() {
       preset.id === updatedPreset.id ? updatedPreset : preset,
     );
     try {
-      await saveFramePresets(nextUserPresets);
+      await saveFramePresets(nextUserPresets, setRecoveryBackupKey);
       setUserPresets(nextUserPresets);
       setNotice(t('presetUpdated'));
     } catch {
@@ -189,7 +189,7 @@ export function FrameControls() {
     const nextUserPresets = userPresets.map((entry) =>
       entry.id === preset.id ? { ...entry, name } : entry,
     );
-    await saveFramePresets(nextUserPresets);
+    await saveFramePresets(nextUserPresets, setRecoveryBackupKey);
     setUserPresets(nextUserPresets);
     setNotice(t('presetRenamed'));
   };
@@ -206,7 +206,7 @@ export function FrameControls() {
       createdAt: Date.now(),
     };
     const nextUserPresets = [...userPresets, copy];
-    await saveFramePresets(nextUserPresets);
+    await saveFramePresets(nextUserPresets, setRecoveryBackupKey);
     setUserPresets(nextUserPresets);
     setNotice(t('presetDuplicated'));
   };
@@ -214,7 +214,7 @@ export function FrameControls() {
   const deleteUserPreset = async (preset: FramePreset) => {
     if (preset.builtin) return;
     const nextUserPresets = userPresets.filter((entry) => entry.id !== preset.id);
-    await saveFramePresets(nextUserPresets);
+    await saveFramePresets(nextUserPresets, setRecoveryBackupKey);
     setUserPresets(nextUserPresets);
     if (defaultFramePresetId === preset.id) {
       setDefaultPresetId('frame', null);
@@ -248,7 +248,7 @@ export function FrameControls() {
         bundle.defaultPresetId,
         'frame',
       );
-      await saveFramePresets(merged.presets);
+      await saveFramePresets(merged.presets, setRecoveryBackupKey);
       setUserPresets(merged.presets);
       if (!defaultFramePresetId && merged.importedDefaultId) {
         setDefaultPresetId('frame', merged.importedDefaultId);

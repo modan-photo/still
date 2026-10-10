@@ -166,7 +166,7 @@ export function StampControls() {
       watermark: structuredClone(stamp),
     };
     try {
-      setPresets(await saveWatermarkPreset(preset));
+      setPresets(await saveWatermarkPreset(preset, setRecoveryBackupKey));
       setPresetName('');
       setMessage(t('stampPresetSaved'));
     } catch (error) {
@@ -197,6 +197,7 @@ export function StampControls() {
       setPresets(
         await replaceWatermarkPresets(
           presets.map((item) => (item.id === renameTarget.id ? { ...item, name } : item)),
+          setRecoveryBackupKey,
         ),
       );
       setRenameTarget(null);
@@ -209,7 +210,7 @@ export function StampControls() {
   const removePreset = async () => {
     if (!deleteTarget) return;
     try {
-      setPresets(await deleteWatermarkPreset(deleteTarget.id));
+      setPresets(await deleteWatermarkPreset(deleteTarget.id, setRecoveryBackupKey));
       if (defaultWatermarkPresetId === deleteTarget.id) {
         setDefaultPresetId('watermark', null);
         setDefaultWatermarkPresetId(null);
@@ -232,7 +233,7 @@ export function StampControls() {
         bundle.defaultPresetId,
         'watermark',
       );
-      setPresets(await replaceWatermarkPresets(merged.presets));
+      setPresets(await replaceWatermarkPresets(merged.presets, setRecoveryBackupKey));
       if (!defaultWatermarkPresetId && merged.importedDefaultId) {
         setDefaultPresetId('watermark', merged.importedDefaultId);
         setDefaultWatermarkPresetId(merged.importedDefaultId);

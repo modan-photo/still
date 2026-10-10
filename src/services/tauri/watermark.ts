@@ -70,10 +70,13 @@ export async function listWatermarkPresets(
   onRecovered?.(backupKey);
   return [];
 }
-export async function saveWatermarkPreset(preset: WatermarkPreset): Promise<WatermarkPreset[]> {
+export async function saveWatermarkPreset(
+  preset: WatermarkPreset,
+  onRecovered?: (backupKey: string) => void,
+): Promise<WatermarkPreset[]> {
   if (!isWatermarkPreset(preset)) throw new Error('Only valid watermark presets can be persisted.');
   if (isTauri()) return invoke<WatermarkPreset[]>('watermark_preset_save', { preset });
-  const presets = await listWatermarkPresets();
+  const presets = await listWatermarkPresets(onRecovered);
   const index = presets.findIndex((entry) => entry.id === preset.id);
   if (index >= 0) presets[index] = preset;
   else presets.push(preset);
@@ -81,19 +84,23 @@ export async function saveWatermarkPreset(preset: WatermarkPreset): Promise<Wate
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
   return presets;
 }
-export async function deleteWatermarkPreset(id: string): Promise<WatermarkPreset[]> {
+export async function deleteWatermarkPreset(
+  id: string,
+  onRecovered?: (backupKey: string) => void,
+): Promise<WatermarkPreset[]> {
   if (isTauri()) return invoke<WatermarkPreset[]>('watermark_preset_delete', { id });
-  const presets = (await listWatermarkPresets()).filter((entry) => entry.id !== id);
+  const presets = (await listWatermarkPresets(onRecovered)).filter((entry) => entry.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
   return presets;
 }
 
 export async function replaceWatermarkPresets(
   presets: WatermarkPreset[],
+  onRecovered?: (backupKey: string) => void,
 ): Promise<WatermarkPreset[]> {
   assertValidWatermarkPresetList(presets);
   if (isTauri()) return invoke<WatermarkPreset[]>('watermark_presets_replace', { presets });
-  await listWatermarkPresets();
+  await listWatermarkPresets(onRecovered);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
   return presets;
 }

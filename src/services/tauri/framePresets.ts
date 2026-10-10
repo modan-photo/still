@@ -20,7 +20,10 @@ export async function loadFramePresets(
   return normalizePresetFile(value).presets;
 }
 
-export async function saveFramePresets(presets: readonly FramePreset[]): Promise<void> {
+export async function saveFramePresets(
+  presets: readonly FramePreset[],
+  onRecovered?: (backupKey: string) => void,
+): Promise<void> {
   const file = normalizePresetFile({ version: 1, presets });
   if (file.presets.length !== presets.length) {
     throw new Error('Only valid user frame presets can be persisted.');
@@ -29,7 +32,7 @@ export async function saveFramePresets(presets: readonly FramePreset[]): Promise
     await invoke('frame_presets_save', { file });
     return;
   }
-  readBrowserPresetFile();
+  readBrowserPresetFile(onRecovered);
   localStorage.setItem(BROWSER_STORAGE_KEY, JSON.stringify(file));
 }
 
