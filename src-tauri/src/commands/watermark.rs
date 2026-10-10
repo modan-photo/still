@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::OnceLock,
@@ -76,15 +77,7 @@ pub fn watermark_preset_save(
     app: AppHandle,
     preset: WatermarkPreset,
 ) -> Result<Vec<WatermarkPreset>, AppError> {
-    if preset.id.trim().is_empty() || preset.name.trim().is_empty() {
-        return Err(AppError::InvalidInput(
-            "preset id and name must not be empty".into(),
-        ));
-    }
-    preset
-        .watermark
-        .validate()
-        .map_err(AppError::InvalidInput)?;
+    validate_presets(std::slice::from_ref(&preset))?;
     let path = preset_path(&app)?;
     let mut presets = read_presets(&path)?;
     if let Some(existing) = presets.iter_mut().find(|entry| entry.id == preset.id) {
@@ -101,18 +94,7 @@ pub fn watermark_presets_replace(
     app: AppHandle,
     presets: Vec<WatermarkPreset>,
 ) -> Result<Vec<WatermarkPreset>, AppError> {
-    let mut ids = std::collections::HashSet::new();
-    for preset in &presets {
-        if preset.id.trim().is_empty() || preset.name.trim().is_empty() || !ids.insert(&preset.id) {
-            return Err(AppError::InvalidInput(
-                "watermark presets need unique IDs and nonempty names".into(),
-            ));
-        }
-        preset
-            .watermark
-            .validate()
-            .map_err(AppError::InvalidInput)?;
-    }
+    validate_presets(&presets)?;
     write_presets(&preset_path(&app)?, &presets)?;
     Ok(presets)
 }
@@ -140,18 +122,44 @@ fn preset_path(app: &AppHandle) -> Result<PathBuf, AppError> {
 
 fn read_presets(path: &Path) -> Result<Vec<WatermarkPreset>, AppError> {
     match fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
-            AppError::InvalidInput(format!("invalid watermark-presets.json: {error}"))
-        }),
+        Ok(bytes) => {
+            let presets: Vec<WatermarkPreset> =
+                serde_json::from_slice(&bytes).map_err(|error| {
+                    AppError::InvalidInput(format!("invalid watermark-presets.json: {error}"))
+                })?;
+            validate_presets(&presets).map_err(|error| {
+                AppError::InvalidInput(format!("invalid watermark-presets.json: {error}"))
+            })?;
+            Ok(presets)
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(error.into()),
     }
 }
 
 fn write_presets(path: &Path, presets: &[WatermarkPreset]) -> Result<(), AppError> {
+    validate_presets(presets)?;
+    // Replace must not overwrite an unreadable or semantically invalid source file.
+    read_presets(path)?;
     let bytes = serde_json::to_vec_pretty(presets)
         .map_err(|error| AppError::InvalidInput(error.to_string()))?;
     fs::write(path, bytes)?;
+    Ok(())
+}
+
+fn validate_presets(presets: &[WatermarkPreset]) -> Result<(), AppError> {
+    let mut ids = HashSet::new();
+    for preset in presets {
+        if preset.id.trim().is_empty() || preset.name.trim().is_empty() || !ids.insert(&preset.id) {
+            return Err(AppError::InvalidInput(
+                "watermark presets need unique IDs and nonempty names".into(),
+            ));
+        }
+        preset
+            .watermark
+            .validate()
+            .map_err(AppError::InvalidInput)?;
+    }
     Ok(())
 }
 
@@ -227,4 +235,64 @@ fn read_font_family(path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image_preset() -> WatermarkPreset {
+        serde_json::from_value(serde_json::json!({
+            "id": "travel",
+            "name": "Travel",
+            "watermark": {
+                "type": "image",
+                "content": "",
+                "path": "stamp.png",
+                "position": "center",
+                "offsetX": 0,
+                "offsetY": 0,
+                "opacity": 1,
+                "rotation": 0,
+                "scale": 1
+            }
+        }))
+        .expect("deserialize image preset")
+    }
+
+    #[test]
+    fn validation_rejects_duplicate_ids_and_invalid_watermark_values() {
+        let preset = image_preset();
+        assert!(validate_presets(&[preset.clone(), preset.clone()]).is_err());
+        let mut invalid = preset;
+        invalid.watermark.path = None;
+        assert!(validate_presets(&[invalid]).is_err());
+    }
+
+    #[test]
+    fn write_preserves_a_corrupt_existing_file() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-watermark-preset-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).expect("create test directory");
+        let path = directory.join("watermark-presets.json");
+        let original = b"{invalid json";
+        fs::write(&path, original).expect("write corrupt preset file");
+
+        assert!(write_presets(&path, &[image_preset()]).is_err());
+        assert_eq!(fs::read(&path).expect("read corrupt preset file"), original);
+
+        let duplicate = serde_json::to_vec(&[image_preset(), image_preset()])
+            .expect("serialize duplicate presets");
+        fs::write(&path, &duplicate).expect("write duplicate presets");
+        assert!(read_presets(&path).is_err());
+        assert!(write_presets(&path, &[image_preset()]).is_err());
+        assert_eq!(fs::read(&path).expect("read duplicate presets"), duplicate);
+        fs::remove_dir_all(directory).expect("remove test directory");
+    }
 }
