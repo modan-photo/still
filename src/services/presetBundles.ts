@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { platform } from '@tauri-apps/plugin-os';
 import type { FramePreset } from '../types/frame';
 import type { WatermarkPreset } from './tauri/watermark';
 
@@ -86,11 +87,17 @@ export function setDefaultPresetId(kind: PresetKind, id: string | null): void {
 
 export async function importPresetText(kind: PresetKind): Promise<string | null> {
   if (isTauri()) {
-    const path = await open({
-      multiple: false,
-      title: `Import ${kind} presets`,
-      filters: [{ name: 'Still presets', extensions: ['json'] }],
-    });
+    let path: string | null;
+    try {
+      path = await open({
+        multiple: false,
+        title: `Import ${kind} presets`,
+        filters: [{ name: 'Still presets', extensions: ['json'] }],
+      });
+    } catch (error) {
+      if (platform() === 'android' && isAndroidPickerCancelled(error)) return null;
+      throw error;
+    }
     return typeof path === 'string' ? invoke<string>('preset_bundle_read', { path }) : null;
   }
   return new Promise((resolve, reject) => {
@@ -119,10 +126,16 @@ export async function exportPresetText(kind: PresetKind, contents: string): Prom
     throw new Error('Preset file exceeds 2 MiB.');
   const filename = `still-${kind}-presets.json`;
   if (isTauri()) {
-    const path = await save({
-      defaultPath: filename,
-      filters: [{ name: 'Still presets', extensions: ['json'] }],
-    });
+    let path: string | null;
+    try {
+      path = await save({
+        defaultPath: filename,
+        filters: [{ name: 'Still presets', extensions: ['json'] }],
+      });
+    } catch (error) {
+      if (platform() === 'android' && isAndroidPickerCancelled(error)) return false;
+      throw error;
+    }
     if (!path) return false;
     await invoke('preset_bundle_write', { path, contents });
     return true;
@@ -134,6 +147,10 @@ export async function exportPresetText(kind: PresetKind, contents: string): Prom
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
   return true;
+}
+
+function isAndroidPickerCancelled(error: unknown): boolean {
+  return String(error).includes('File picker cancelled');
 }
 
 export function isFramePreset(value: unknown): value is FramePreset {
