@@ -15,6 +15,9 @@ const messages = {
     windowSizeCompact: 'Compact (900 × 620)',
     windowSizeSpacious: 'Spacious (1360 × 900)',
     windowSizeCustom: 'Remember last size',
+    rememberWindowPosition: 'Remember window position',
+    rememberWindowPositionDescription:
+      'Restore this window on the same screen when available. If the screen changes, keep the window visible.',
     windowSizeError: 'Could not change the window size. Try again.',
     systemFonts: 'Use system fonts',
     systemFontsDescription:
@@ -494,6 +497,8 @@ const messages = {
     windowSizeCompact: '紧凑（900 × 620）',
     windowSizeSpacious: '宽敞（1360 × 900）',
     windowSizeCustom: '记住上次尺寸',
+    rememberWindowPosition: '记住窗口位置',
+    rememberWindowPositionDescription: '尽量在原显示器恢复窗口；显示器变化时保持窗口可见。',
     windowSizeError: '无法更改窗口尺寸，请重试。',
     systemFonts: '使用系统字体',
     systemFontsDescription: '允许使用设备上安装的水印字体。关闭后预设更易在不同设备间保持一致。',

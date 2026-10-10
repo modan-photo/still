@@ -7,6 +7,10 @@ import {
 } from '../services/windowPreferences';
 import type { PhotoSort } from '../services/photoCollection';
 import {
+  readRememberWindowPosition,
+  REMEMBER_WINDOW_POSITION_KEY,
+} from '../services/windowPositionPreferences';
+import {
   readSingleKeyActions,
   SINGLE_KEY_ACTIONS_KEY,
   readGridShortcutKey,
@@ -29,6 +33,7 @@ export interface UIState {
   photoNavigationKeys: PhotoNavigationKeys;
   language: 'en' | 'zh';
   windowSizePreset: WindowSizeMode;
+  rememberWindowPosition: boolean;
   photoSort: PhotoSort;
   activeRightTab: RightPanelTabId;
   gridPanelOpen: boolean;
@@ -41,6 +46,7 @@ export interface UIState {
   setPhotoNavigationKeys: (keys: PhotoNavigationKeys) => void;
   setLanguage: (language: UIState['language']) => void;
   setWindowSizePreset: (preset: WindowSizeMode) => void;
+  setRememberWindowPosition: (enabled: boolean) => void;
   setPhotoSort: (sort: PhotoSort) => void;
   setActiveRightTab: (tab: UIState['activeRightTab']) => void;
   setGridPanelOpen: (open: boolean) => void;
@@ -70,6 +76,7 @@ export const useUIStore = createSessionStore<UIState>(
     photoNavigationKeys: readPhotoNavigationKeys(),
     language: storedLanguage(),
     windowSizePreset: readWindowSizePreset(),
+    rememberWindowPosition: readRememberWindowPosition(),
     photoSort: 'import',
     activeRightTab: DEFAULT_RIGHT_PANEL_TAB,
     gridPanelOpen: false,
@@ -109,6 +116,11 @@ export const useUIStore = createSessionStore<UIState>(
       if (typeof localStorage !== 'undefined')
         localStorage.setItem(WINDOW_SIZE_KEY, windowSizePreset);
       set({ windowSizePreset });
+    },
+    setRememberWindowPosition: (rememberWindowPosition) => {
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(REMEMBER_WINDOW_POSITION_KEY, String(rememberWindowPosition));
+      set({ rememberWindowPosition });
     },
     setPhotoSort: (photoSort) => set({ photoSort }),
     setActiveRightTab: (activeRightTab) => set({ activeRightTab }),

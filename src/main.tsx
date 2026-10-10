@@ -12,6 +12,10 @@ import { CropEditProvider } from './hooks/useCropEdit';
 import { initializeWorkspace } from './services/workspaceInitialization';
 import { installWorkspaceCloseHandler } from './services/workspaceShutdown';
 import { installWindowSizeTracking, restoreWindowSizePreset } from './services/windowPreferences';
+import {
+  installWindowPositionTracking,
+  restoreWindowPosition,
+} from './services/windowPositionPreferences';
 import { useUIStore } from './stores/uiStore';
 import './theme/global.css';
 
@@ -44,6 +48,7 @@ function Root() {
 let disposed = false;
 let removeCloseHandler: (() => void) | undefined;
 let removeWindowSizeTracking: (() => Promise<void>) | undefined;
+let removeWindowPositionTracking: (() => Promise<void>) | undefined;
 let reactRoot: ReactRoot | undefined = import.meta.hot?.data.reactRoot;
 
 void initializeWorkspace().then(async () => {
@@ -54,18 +59,27 @@ void initializeWorkspace().then(async () => {
     console.warn('Unable to restore the window size preference', error);
   }
   try {
+    await restoreWindowPosition();
+  } catch (error) {
+    console.warn('Unable to restore the window position preference', error);
+  }
+  try {
     removeWindowSizeTracking = await installWindowSizeTracking();
   } catch (error) {
     console.warn('Unable to track window size changes', error);
   }
+  try {
+    removeWindowPositionTracking = await installWindowPositionTracking();
+  } catch (error) {
+    console.warn('Unable to track window position changes', error);
+  }
   const root = (reactRoot ??= ReactDOM.createRoot(document.getElementById('root') as HTMLElement));
   let stopped = false;
   try {
-    removeCloseHandler = await installWorkspaceCloseHandler(() => {
+    removeCloseHandler = await installWorkspaceCloseHandler(async () => {
       stopped = true;
-      const flushWindowSize = removeWindowSizeTracking?.();
       root.unmount();
-      return flushWindowSize;
+      await Promise.all([removeWindowSizeTracking?.(), removeWindowPositionTracking?.()]);
     });
   } catch (error) {
     console.warn('Unable to register the workspace close handler', error);
@@ -73,6 +87,7 @@ void initializeWorkspace().then(async () => {
   if (disposed) {
     removeCloseHandler?.();
     void removeWindowSizeTracking?.();
+    void removeWindowPositionTracking?.();
     return;
   }
   if (stopped) return;
@@ -89,6 +104,7 @@ if (import.meta.hot) {
     disposed = true;
     removeCloseHandler?.();
     void removeWindowSizeTracking?.();
+    void removeWindowPositionTracking?.();
     data.reactRoot = reactRoot;
   });
 }

@@ -168,6 +168,22 @@ describe('in-memory inspector state', () => {
     expect(useUIStore.getState().windowSizePreset).toBe('custom');
   });
 
+  it('persists window position opt-in without persisting workspace state', async () => {
+    getItem.mockImplementation((key: string) =>
+      key === 'still.window.remember-position' ? 'true' : null,
+    );
+    const { useUIStore } = await import('../src/stores/uiStore');
+    expect(useUIStore.getState().rememberWindowPosition).toBe(true);
+    useUIStore.getState().setRememberWindowPosition(false);
+    expect(setItem).toHaveBeenCalledExactlyOnceWith('still.window.remember-position', 'false');
+    useUIStore.getState().resetSession();
+    expect(useUIStore.getState()).toMatchObject({
+      rememberWindowPosition: false,
+      activeRightTab: 'frame',
+      gridPanelOpen: false,
+    });
+  });
+
   it('shares photo sort within the session and resets it without storing it', async () => {
     const { useUIStore } = await import('../src/stores/uiStore');
     useUIStore.getState().setPhotoSort('name-desc');

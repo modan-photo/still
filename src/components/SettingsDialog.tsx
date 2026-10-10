@@ -18,6 +18,7 @@ import {
   type WindowSizeMode,
 } from '../services/windowPreferences';
 import type { SingleKeyAction } from '../services/shortcutPreferences';
+import { captureWindowPosition } from '../services/windowPositionPreferences';
 import { Icon } from './Icons';
 
 type SettingsDialogProps = { open: boolean; onClose: () => void };
@@ -52,6 +53,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setLanguage = useUIStore((state) => state.setLanguage);
   const windowSizePreset = useUIStore((state) => state.windowSizePreset);
   const setWindowSizePreset = useUIStore((state) => state.setWindowSizePreset);
+  const rememberWindowPosition = useUIStore((state) => state.rememberWindowPosition);
+  const setRememberWindowPosition = useUIStore((state) => state.setRememberWindowPosition);
   const [windowSizeError, setWindowSizeError] = useState(false);
   const [windowSizePending, setWindowSizePending] = useState(false);
 
@@ -67,6 +70,15 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       setWindowSizeError(true);
     } finally {
       setWindowSizePending(false);
+    }
+  };
+
+  const changeRememberWindowPosition = (enabled: boolean) => {
+    setRememberWindowPosition(enabled);
+    if (enabled) {
+      void captureWindowPosition().catch((error) =>
+        console.warn('Unable to capture the window position', error),
+      );
     }
   };
 
@@ -131,6 +143,21 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               <MenuItem value="spacious">{t('windowSizeSpacious')}</MenuItem>
               <MenuItem value="custom">{t('windowSizeCustom')}</MenuItem>
             </TextField>
+            <div className="mt-3 flex items-start justify-between gap-5 border-t border-subtle pt-3">
+              <div>
+                <h4 className="m-0 text-xs font-semibold text-primary">
+                  {t('rememberWindowPosition')}
+                </h4>
+                <p className="mb-0 mt-1 text-xs leading-5 text-secondary">
+                  {t('rememberWindowPositionDescription')}
+                </p>
+              </div>
+              <Switch
+                inputProps={{ 'aria-label': t('rememberWindowPosition') }}
+                checked={rememberWindowPosition}
+                onChange={(event) => changeRememberWindowPosition(event.target.checked)}
+              />
+            </div>
           </section>
         )}
         <section
