@@ -5,6 +5,7 @@ import type { FramePreset } from '../types/frame';
 import type { WatermarkPreset } from './tauri/watermark';
 import { translate, type MessageKey } from '../i18n/messages';
 import { useUIStore } from '../stores/uiStore';
+import { errorMessage } from './errorMessages';
 
 const MAX_BUNDLE_BYTES = 2 * 1024 * 1024;
 export type PresetKind = 'frame' | 'watermark';
@@ -27,6 +28,17 @@ export function presetBundleErrorKey(error: unknown): MessageKey | null {
   }
   return null;
 }
+
+export function presetTransferErrorMessage(error: unknown, fallback: MessageKey): string {
+  const key = presetBundleErrorKey(error);
+  if (key) return translate(useUIStore.getState().language, key);
+  if (isRecord(error) && typeof error.code === 'string' && typeof error.message === 'string')
+    return errorMessage({ code: error.code, message: error.message });
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return translate(useUIStore.getState().language, fallback);
+}
+
 export type PresetBundle<T> = {
   version: 1;
   kind: PresetKind;

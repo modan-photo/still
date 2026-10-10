@@ -45,7 +45,7 @@ import {
   isWatermarkPreset,
   mergeImportedPresets,
   parsePresetBundle,
-  presetBundleErrorKey,
+  presetTransferErrorMessage,
   setDefaultPresetId,
 } from '../services/presetBundles';
 
@@ -223,8 +223,7 @@ export function StampControls() {
             : ''),
       );
     } catch (error) {
-      const key = presetBundleErrorKey(error);
-      setMessage(key ? t(key) : error instanceof Error ? error.message : t('presetsImportFailed'));
+      setMessage(presetTransferErrorMessage(error, 'presetsImportFailed'));
     }
   };
 
@@ -233,8 +232,7 @@ export function StampControls() {
       const contents = createPresetBundle('watermark', presets, defaultWatermarkPresetId);
       if (await exportPresetText('watermark', contents)) setMessage(t('stampPresetsExported'));
     } catch (error) {
-      const key = presetBundleErrorKey(error);
-      setMessage(key ? t(key) : error instanceof Error ? error.message : t('presetsExportFailed'));
+      setMessage(presetTransferErrorMessage(error, 'presetsExportFailed'));
     }
   };
 

@@ -6,8 +6,10 @@ import {
   mergeImportedPresets,
   parsePresetBundle,
   presetBundleErrorKey,
+  presetTransferErrorMessage,
 } from '../src/services/presetBundles';
 import { translate } from '../src/i18n/messages';
+import { useUIStore } from '../src/stores/uiStore';
 
 const preset = { id: 'source', name: 'Travel', watermark: DEFAULT_WATERMARK };
 
@@ -90,5 +92,45 @@ describe('preset JSON transfer', () => {
       isWatermarkPreset,
     );
     expect(parsed.presets[0].watermark.path).toBe('C:/photos/stamp.png');
+  });
+
+  it('shows localized native errors and retains recovery details', () => {
+    const previous = useUIStore.getState().language;
+    try {
+      useUIStore.getState().setLanguage('zh');
+      expect(
+        presetTransferErrorMessage(
+          { code: 'invalid_input', message: 'invalid input: preset bundle exceeds 2 MiB' },
+          'presetsImportFailed',
+        ),
+      ).toBe(translate('zh', 'presetFileTooLarge'));
+      expect(
+        presetTransferErrorMessage(
+          {
+            code: 'document_cleanup_required',
+            message: 'Remove content://provider/failed manually',
+          },
+          'presetsExportFailed',
+        ),
+      ).toContain('content://provider/failed');
+      expect(
+        presetTransferErrorMessage(
+          { code: 'invalid_input', message: 'invalid input: preset path must end in .json' },
+          'presetsImportFailed',
+        ),
+      ).toContain('preset path must end in .json');
+      expect(presetTransferErrorMessage(null, 'presetsImportFailed')).toBe(
+        translate('zh', 'presetsImportFailed'),
+      );
+      useUIStore.getState().setLanguage('en');
+      expect(
+        presetTransferErrorMessage(
+          { code: 'invalid_input', message: 'invalid input: preset bundle exceeds 2 MiB' },
+          'presetsImportFailed',
+        ),
+      ).toBe(translate('en', 'presetFileTooLarge'));
+    } finally {
+      useUIStore.getState().setLanguage(previous);
+    }
   });
 });
