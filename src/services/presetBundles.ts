@@ -3,9 +3,30 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { platform } from '@tauri-apps/plugin-os';
 import type { FramePreset } from '../types/frame';
 import type { WatermarkPreset } from './tauri/watermark';
+import { translate, type MessageKey } from '../i18n/messages';
+import { useUIStore } from '../stores/uiStore';
 
 const MAX_BUNDLE_BYTES = 2 * 1024 * 1024;
 export type PresetKind = 'frame' | 'watermark';
+export class PresetBundleError extends Error {
+  constructor(
+    readonly key: MessageKey,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PresetBundleError';
+  }
+}
+
+export function presetBundleErrorKey(error: unknown): MessageKey | null {
+  if (error instanceof PresetBundleError) return error.key;
+  if (isRecord(error) && error.code === 'invalid_input') {
+    if (error.message === 'invalid input: preset bundle exceeds 2 MiB') return 'presetFileTooLarge';
+    if (error.message === 'invalid input: preset bundle must be UTF-8 JSON')
+      return 'presetFileInvalidEncoding';
+  }
+  return null;
+}
 export type PresetBundle<T> = {
   version: 1;
   kind: PresetKind;
@@ -27,8 +48,13 @@ export function parsePresetBundle<T extends { id: string }>(
   valid: (value: unknown) => value is T,
 ): PresetBundle<T> {
   if (new TextEncoder().encode(contents).length > MAX_BUNDLE_BYTES)
-    throw new Error('Preset file exceeds 2 MiB.');
-  const value: unknown = JSON.parse(contents);
+    throw new PresetBundleError('presetFileTooLarge', 'Preset file exceeds 2 MiB.');
+  let value: unknown;
+  try {
+    value = JSON.parse(contents);
+  } catch {
+    throw new PresetBundleError('presetFileInvalidJson', 'Preset file is not valid JSON.');
+  }
   if (
     !isRecord(value) ||
     value.version !== 1 ||
@@ -38,14 +64,20 @@ export function parsePresetBundle<T extends { id: string }>(
     !value.presets.every(valid) ||
     (value.defaultPresetId !== null && typeof value.defaultPresetId !== 'string')
   ) {
-    throw new Error(`This is not a valid ${kind} preset file.`);
+    throw new PresetBundleError(
+      kind === 'frame' ? 'framePresetFileInvalid' : 'stampPresetFileInvalid',
+      `This is not a valid ${kind} preset file.`,
+    );
   }
   const ids = value.presets.map((preset: T) => preset.id);
   if (
     new Set(ids).size !== ids.length ||
     (value.defaultPresetId && !ids.includes(value.defaultPresetId))
   ) {
-    throw new Error('Preset IDs must be unique and the default must exist in this file.');
+    throw new PresetBundleError(
+      'presetFileInvalidIds',
+      'Preset IDs must be unique and the default must exist in this file.',
+    );
   }
   return value as PresetBundle<T>;
 }
@@ -61,7 +93,7 @@ export function mergeImportedPresets<T extends { id: string; name: string }>(
   const added = imported.map((preset) => {
     const id = `${kind === 'frame' ? 'user-' : ''}${crypto.randomUUID()}`;
     let name = preset.name.trim();
-    if (!name) throw new Error('Preset names cannot be empty.');
+    if (!name) throw new PresetBundleError('presetNameEmpty', 'Preset names cannot be empty.');
     const base = name;
     for (let index = 2; names.has(name.toLocaleLowerCase()); index += 1)
       name = `${base} (${index})`;
@@ -91,8 +123,16 @@ export async function importPresetText(kind: PresetKind): Promise<string | null>
     try {
       path = await open({
         multiple: false,
-        title: `Import ${kind} presets`,
-        filters: [{ name: 'Still presets', extensions: ['json'] }],
+        title: translate(
+          useUIStore.getState().language,
+          kind === 'frame' ? 'importFramePresetsTitle' : 'importStampPresetsTitle',
+        ),
+        filters: [
+          {
+            name: translate(useUIStore.getState().language, 'presetFileFilter'),
+            extensions: ['json'],
+          },
+        ],
       });
     } catch (error) {
       if (platform() === 'android' && isAndroidPickerCancelled(error)) return null;
@@ -111,7 +151,7 @@ export async function importPresetText(kind: PresetKind): Promise<string | null>
         return;
       }
       if (file.size > MAX_BUNDLE_BYTES) {
-        reject(new Error('Preset file exceeds 2 MiB.'));
+        reject(new PresetBundleError('presetFileTooLarge', 'Preset file exceeds 2 MiB.'));
         return;
       }
       void file.text().then(resolve, reject);
@@ -123,14 +163,19 @@ export async function importPresetText(kind: PresetKind): Promise<string | null>
 
 export async function exportPresetText(kind: PresetKind, contents: string): Promise<boolean> {
   if (new TextEncoder().encode(contents).length > MAX_BUNDLE_BYTES)
-    throw new Error('Preset file exceeds 2 MiB.');
+    throw new PresetBundleError('presetFileTooLarge', 'Preset file exceeds 2 MiB.');
   const filename = `still-${kind}-presets.json`;
   if (isTauri()) {
     let path: string | null;
     try {
       path = await save({
         defaultPath: filename,
-        filters: [{ name: 'Still presets', extensions: ['json'] }],
+        filters: [
+          {
+            name: translate(useUIStore.getState().language, 'presetFileFilter'),
+            extensions: ['json'],
+          },
+        ],
       });
     } catch (error) {
       if (platform() === 'android' && isAndroidPickerCancelled(error)) return false;

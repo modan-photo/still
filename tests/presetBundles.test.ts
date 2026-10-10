@@ -5,7 +5,9 @@ import {
   isWatermarkPreset,
   mergeImportedPresets,
   parsePresetBundle,
+  presetBundleErrorKey,
 } from '../src/services/presetBundles';
+import { translate } from '../src/i18n/messages';
 
 const preset = { id: 'source', name: 'Travel', watermark: DEFAULT_WATERMARK };
 
@@ -35,6 +37,46 @@ describe('preset JSON transfer', () => {
         isWatermarkPreset,
       ),
     ).toThrow('default');
+  });
+
+  it('returns stable, translatable errors for invalid preset files', () => {
+    const cases = [
+      { contents: '{', kind: 'watermark' as const, key: 'presetFileInvalidJson' },
+      { contents: '{}', kind: 'frame' as const, key: 'framePresetFileInvalid' },
+      {
+        contents: createPresetBundle('watermark', [preset, preset], preset.id),
+        kind: 'watermark' as const,
+        key: 'presetFileInvalidIds',
+      },
+      {
+        contents: ' '.repeat(2 * 1024 * 1024 + 1),
+        kind: 'frame' as const,
+        key: 'presetFileTooLarge',
+      },
+    ] as const;
+    for (const { contents, kind, key } of cases) {
+      try {
+        parsePresetBundle(contents, kind, isWatermarkPreset);
+        throw new Error('Expected invalid preset file to fail');
+      } catch (error) {
+        expect(presetBundleErrorKey(error)).toBe(key);
+        expect(translate('zh', key)).not.toBe(translate('en', key));
+      }
+    }
+    expect(presetBundleErrorKey(new Error('disk failure'))).toBeNull();
+    expect(
+      presetBundleErrorKey({
+        code: 'invalid_input',
+        message: 'invalid input: preset bundle exceeds 2 MiB',
+      }),
+    ).toBe('presetFileTooLarge');
+    expect(
+      presetBundleErrorKey({
+        code: 'invalid_input',
+        message: 'invalid input: preset bundle must be UTF-8 JSON',
+      }),
+    ).toBe('presetFileInvalidEncoding');
+    expect(presetBundleErrorKey({ code: 'invalid_input', message: 'another detail' })).toBeNull();
   });
 
   it('preserves an image watermark path as a reference', () => {

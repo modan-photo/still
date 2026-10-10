@@ -38,6 +38,7 @@ import {
   isFramePreset,
   mergeImportedPresets,
   parsePresetBundle,
+  presetBundleErrorKey,
   setDefaultPresetId,
 } from '../services/presetBundles';
 import { useProjectStore } from '../stores/projectStore';
@@ -248,7 +249,8 @@ export function FrameControls() {
       }
       setNotice(t('framePresetsImported', { count: bundle.presets.length }));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : t('presetsImportFailed'));
+      const key = presetBundleErrorKey(error);
+      setNotice(key ? t(key) : error instanceof Error ? error.message : t('presetsImportFailed'));
     }
   };
 
@@ -257,7 +259,8 @@ export function FrameControls() {
       const contents = createPresetBundle('frame', userPresets, defaultFramePresetId);
       if (await exportPresetText('frame', contents)) setNotice(t('framePresetsExported'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : t('presetsExportFailed'));
+      const key = presetBundleErrorKey(error);
+      setNotice(key ? t(key) : error instanceof Error ? error.message : t('presetsExportFailed'));
     }
   };
 
