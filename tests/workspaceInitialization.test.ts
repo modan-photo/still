@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { invoke, isTauri, platform } = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(), platform: vi.fn() }));
+const { invoke, isTauri, platform } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  isTauri: vi.fn(),
+  platform: vi.fn(),
+}));
 vi.mock('@tauri-apps/api/core', () => ({ invoke, isTauri }));
 vi.mock('@tauri-apps/plugin-os', () => ({ platform }));
 
@@ -17,14 +21,19 @@ beforeEach(() => {
   setItem = vi.fn((key: string, value: string) => entries.set(key, value));
   removeItem = vi.fn((key: string) => entries.delete(key));
   vi.stubGlobal('localStorage', {
-    get length() { return entries.size; },
+    get length() {
+      return entries.size;
+    },
     key: (index: number) => [...entries.keys()][index] ?? null,
     getItem: (key: string) => entries.get(key) ?? null,
     setItem,
     removeItem,
   });
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('workspace startup migration', () => {
   it('cancels orphaned Android tasks before initializing a recreated WebView', async () => {
@@ -32,31 +41,40 @@ describe('workspace startup migration', () => {
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
     await initializeWorkspace();
     expect(invoke.mock.calls).toEqual([
-      ['task_cancel_all'], ['cleanup_legacy_session_files'], ['migrate_preferences_if_needed'],
+      ['task_cancel_all'],
+      ['cleanup_legacy_session_files'],
+      ['migrate_preferences_if_needed'],
     ]);
   });
 
   it('still starts Android after orphan cancellation fails', async () => {
     platform.mockReturnValue('android');
-    invoke.mockImplementation((command: string) => command === 'task_cancel_all'
-      ? Promise.reject(new Error('registry unavailable'))
-      : Promise.resolve());
+    invoke.mockImplementation((command: string) =>
+      command === 'task_cancel_all'
+        ? Promise.reject(new Error('registry unavailable'))
+        : Promise.resolve(),
+    );
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
     await initializeWorkspace();
     expect(invoke.mock.calls).toEqual([
-      ['task_cancel_all'], ['cleanup_legacy_session_files'], ['migrate_preferences_if_needed'],
+      ['task_cancel_all'],
+      ['cleanup_legacy_session_files'],
+      ['migrate_preferences_if_needed'],
     ]);
     expect(warning).toHaveBeenCalledTimes(1);
   });
 
   it('still starts when the OS plugin cannot identify the platform', async () => {
-    platform.mockImplementation(() => { throw new Error('OS plugin unavailable'); });
+    platform.mockImplementation(() => {
+      throw new Error('OS plugin unavailable');
+    });
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
     await initializeWorkspace();
     expect(invoke.mock.calls).toEqual([
-      ['cleanup_legacy_session_files'], ['migrate_preferences_if_needed'],
+      ['cleanup_legacy_session_files'],
+      ['migrate_preferences_if_needed'],
     ]);
     expect(warning).toHaveBeenCalledTimes(1);
   });
@@ -68,20 +86,26 @@ describe('workspace startup migration', () => {
     await first;
     await initializeWorkspace();
     expect(invoke.mock.calls).toEqual([
-      ['cleanup_legacy_session_files'], ['migrate_preferences_if_needed'],
+      ['cleanup_legacy_session_files'],
+      ['migrate_preferences_if_needed'],
     ]);
   });
 
   it('waits for cleanup and migration before startup resolves', async () => {
     let completeCleanup!: () => void;
     let completeMigration!: () => void;
-    invoke.mockImplementation((command: string) => new Promise<void>((resolve) => {
-      if (command === 'cleanup_legacy_session_files') completeCleanup = resolve;
-      else completeMigration = resolve;
-    }));
+    invoke.mockImplementation(
+      (command: string) =>
+        new Promise<void>((resolve) => {
+          if (command === 'cleanup_legacy_session_files') completeCleanup = resolve;
+          else completeMigration = resolve;
+        }),
+    );
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
     let initialized = false;
-    const pending = initializeWorkspace().then(() => { initialized = true; });
+    const pending = initializeWorkspace().then(() => {
+      initialized = true;
+    });
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(initialized).toBe(false);
     completeCleanup();
@@ -94,14 +118,33 @@ describe('workspace startup migration', () => {
   });
 
   it('removes legacy UI fields while preserving preferences and resource storage', async () => {
-    entries.set('still.ui-state', JSON.stringify({
-      activeRightTab: 'collage', lastFramePresetId: 'old', lastWatermarkPresetId: 'old',
-      lastUsedSpec: {}, lastAppliedSpec: {}, photoList: ['photo.jpg'], lastImportPath: 'imports',
-      rightPanelCollapsed: true, gridPanelOpen: true, isCollageMode: true,
-      photos: [{}], renderSpecs: [{}], collageDraft: {}, undoStack: [],
-      currentPhotoId: 'old', selectedId: 'old', selectedIds: ['old'], inspectorOpen: false,
-      theme: 'dark', language: 'en', window: { width: 1100 }, futurePreference: true,
-    }));
+    entries.set(
+      'still.ui-state',
+      JSON.stringify({
+        activeRightTab: 'collage',
+        lastFramePresetId: 'old',
+        lastWatermarkPresetId: 'old',
+        lastUsedSpec: {},
+        lastAppliedSpec: {},
+        photoList: ['photo.jpg'],
+        lastImportPath: 'imports',
+        rightPanelCollapsed: true,
+        gridPanelOpen: true,
+        isCollageMode: true,
+        photos: [{}],
+        renderSpecs: [{}],
+        collageDraft: {},
+        undoStack: [],
+        currentPhotoId: 'old',
+        selectedId: 'old',
+        selectedIds: ['old'],
+        inspectorOpen: false,
+        theme: 'dark',
+        language: 'en',
+        window: { width: 1100 },
+        futurePreference: true,
+      }),
+    );
     const resourceEntries = [
       ['still-theme', 'dark'],
       ['still.use-system-fonts', 'true'],
@@ -115,14 +158,21 @@ describe('workspace startup migration', () => {
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
     await initializeWorkspace();
     expect(JSON.parse(entries.get('still.ui-state')!)).toEqual({
-      version: 2, theme: 'dark', language: 'en', window: { width: 1100 }, futurePreference: true,
+      version: 2,
+      theme: 'dark',
+      language: 'en',
+      window: { width: 1100 },
+      futurePreference: true,
     });
     for (const [key, value] of resourceEntries) expect(entries.get(key)).toBe(value);
     expect(removeItem.mock.calls).toEqual([['still.crop.v1:first'], ['still.crop.v1:second']]);
   });
 
   it('is idempotent after migration and still cleans old fields in version two', async () => {
-    entries.set('still.ui-state', JSON.stringify({ version: 2, lastFramePresetId: 'old', theme: 'dark' }));
+    entries.set(
+      'still.ui-state',
+      JSON.stringify({ version: 2, lastFramePresetId: 'old', theme: 'dark' }),
+    );
     const { migratePreferencesIfNeeded } = await import('../src/services/workspaceInitialization');
     await migratePreferencesIfNeeded();
     await migratePreferencesIfNeeded();
@@ -153,7 +203,7 @@ describe('workspace startup migration', () => {
     entries.set('still.crop.v1:first', 'legacy');
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
-    await expect(initializeWorkspace()).resolves.toBeUndefined();
+    await expect(initializeWorkspace()).resolves.toBeNull();
     expect(invoke).toHaveBeenCalledTimes(2);
     expect(warning).toHaveBeenCalledTimes(2);
     expect(entries.has('still.crop.v1:first')).toBe(false);
@@ -162,10 +212,27 @@ describe('workspace startup migration', () => {
   it('continues photo-record cleanup when UI-state migration cannot write', async () => {
     entries.set('still.ui-state', '{"activeRightTab":"collage"}');
     entries.set('still.crop.v1:first', 'legacy');
-    setItem.mockImplementation(() => { throw new Error('storage denied'); });
+    setItem.mockImplementation(() => {
+      throw new Error('storage denied');
+    });
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
-    await expect(initializeWorkspace()).resolves.toBeUndefined();
+    await expect(initializeWorkspace()).resolves.toBeNull();
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(entries.has('still.crop.v1:first')).toBe(false);
+  });
+
+  it('passes a preference recovery message to the editor after startup cleanup', async () => {
+    const message = 'Original retained at C:\\settings\\preferences.json.still-backup-1';
+    invoke.mockImplementation((command: string) =>
+      command === 'migrate_preferences_if_needed'
+        ? Promise.reject({ code: 'preference_recovery_required', message })
+        : Promise.resolve(),
+    );
+    entries.set('still.crop.v1:first', 'legacy');
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { initializeWorkspace } = await import('../src/services/workspaceInitialization');
+    await expect(initializeWorkspace()).resolves.toBe(message);
     expect(warning).toHaveBeenCalledTimes(1);
     expect(entries.has('still.crop.v1:first')).toBe(false);
   });

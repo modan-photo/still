@@ -22,6 +22,8 @@ const messages = {
     rememberWindowMaximizedDescription:
       'Reopen the desktop window maximized if it was maximized when you closed Still.',
     windowSizeError: 'Could not change the window size. Try again.',
+    preferenceRecoveryNotice:
+      'Settings need manual recovery. Keep this backup before changing settings:',
     systemFonts: 'Use system fonts',
     systemFontsDescription:
       'Allow stamp fonts installed on this device. Keep this off for portable presets and identical rendering across computers.',
@@ -522,6 +524,7 @@ const messages = {
     rememberWindowMaximized: '记住窗口最大化状态',
     rememberWindowMaximizedDescription: '若关闭 Still 时窗口处于最大化，下次启动时恢复最大化。',
     windowSizeError: '无法更改窗口尺寸，请重试。',
+    preferenceRecoveryNotice: '设置需要手动恢复。再次修改设置前，请保留以下备份：',
     systemFonts: '使用系统字体',
     systemFontsDescription: '允许使用设备上安装的水印字体。关闭后预设更易在不同设备间保持一致。',
     systemFontsEnabled: '系统字体已启用，本次会话会枚举并缓存字体列表。',

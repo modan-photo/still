@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import type { Root as ReactRoot } from 'react-dom/client';
-import { CssBaseline, GlobalStyles } from '@mui/material';
+import { Alert, CssBaseline, GlobalStyles } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { useMemo } from 'react';
 import App from './App';
@@ -21,9 +21,10 @@ import {
   restoreWindowMaximized,
 } from './services/windowMaximizationPreferences';
 import { useUIStore } from './stores/uiStore';
+import { translate } from './i18n/messages';
 import './theme/global.css';
 
-function Root() {
+function Root({ preferenceRecovery }: { preferenceRecovery: string | null }) {
   const themeController = useTheme();
   const language = useUIStore((state) => state.language);
   React.useEffect(() => {
@@ -42,6 +43,24 @@ function Root() {
           ':root': getCssVariables(themeController.resolvedTheme),
         }}
       />
+      {preferenceRecovery && (
+        <Alert
+          severity="error"
+          sx={{
+            position: 'fixed',
+            zIndex: (theme) => theme.zIndex.snackbar,
+            top: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'min(90vw, 720px)',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          <strong>{translate(language, 'preferenceRecoveryNotice')}</strong>
+          <br />
+          {preferenceRecovery}
+        </Alert>
+      )}
       <CropEditProvider>
         <App theme={themeController} />
       </CropEditProvider>
@@ -56,7 +75,7 @@ let removeWindowPositionTracking: (() => Promise<void>) | undefined;
 let removeWindowMaximizationTracking: (() => Promise<void>) | undefined;
 let reactRoot: ReactRoot | undefined = import.meta.hot?.data.reactRoot;
 
-void initializeWorkspace().then(async () => {
+void initializeWorkspace().then(async (preferenceRecovery) => {
   if (disposed) return;
   try {
     await restoreWindowSizePreset();
@@ -113,7 +132,7 @@ void initializeWorkspace().then(async () => {
   if (stopped) return;
   root.render(
     <React.StrictMode>
-      <Root />
+      <Root preferenceRecovery={preferenceRecovery} />
     </React.StrictMode>,
   );
 });

@@ -2,10 +2,24 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
 
 const SESSION_FIELDS = [
-  'lastFramePresetId', 'lastWatermarkPresetId', 'lastUsedSpec', 'lastAppliedSpec',
-  'photoList', 'lastImportPath', 'activeRightTab', 'rightPanelCollapsed',
-  'inspectorOpen', 'gridPanelOpen', 'isCollageMode', 'photos', 'renderSpecs',
-  'collageDraft', 'undoStack', 'currentPhotoId', 'selectedId', 'selectedIds',
+  'lastFramePresetId',
+  'lastWatermarkPresetId',
+  'lastUsedSpec',
+  'lastAppliedSpec',
+  'photoList',
+  'lastImportPath',
+  'activeRightTab',
+  'rightPanelCollapsed',
+  'inspectorOpen',
+  'gridPanelOpen',
+  'isCollageMode',
+  'photos',
+  'renderSpecs',
+  'collageDraft',
+  'undoStack',
+  'currentPhotoId',
+  'selectedId',
+  'selectedIds',
 ] as const;
 
 function migrateLegacyBrowserState() {
@@ -50,18 +64,30 @@ function migrateLegacyBrowserState() {
   }
 }
 
-export async function migratePreferencesIfNeeded(): Promise<void> {
+export async function migratePreferencesIfNeeded(): Promise<string | null> {
+  let recoveryMessage: string | null = null;
   if (isTauri()) {
     try {
       await invoke('migrate_preferences_if_needed');
     } catch (error) {
       console.warn('Unable to migrate legacy preference files', error);
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'preference_recovery_required' &&
+        'message' in error &&
+        typeof error.message === 'string'
+      ) {
+        recoveryMessage = error.message;
+      }
     }
   }
   migrateLegacyBrowserState();
+  return recoveryMessage;
 }
 
-async function initialize(): Promise<void> {
+async function initialize(): Promise<string | null> {
   if (isTauri()) {
     try {
       if (platform() === 'android') {
@@ -78,18 +104,21 @@ async function initialize(): Promise<void> {
       console.warn('Unable to clean legacy session files', error);
     }
   }
-  await migratePreferencesIfNeeded();
+  return migratePreferencesIfNeeded();
 }
 
-let initialization: Promise<void> | undefined = import.meta.hot?.data.workspaceInitialization;
+let initialization: Promise<string | null> | undefined = import.meta.hot?.data
+  .workspaceInitialization;
 
 /** Run before mounting the editor, once per window lifetime. */
-export function initializeWorkspace(): Promise<void> {
+export function initializeWorkspace(): Promise<string | null> {
   initialization ??= initialize();
   return initialization;
 }
 
 if (import.meta.hot) {
   import.meta.hot.accept();
-  import.meta.hot.dispose((data) => { data.workspaceInitialization = initialization; });
+  import.meta.hot.dispose((data) => {
+    data.workspaceInitialization = initialization;
+  });
 }
