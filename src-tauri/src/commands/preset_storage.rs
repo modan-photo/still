@@ -9,18 +9,42 @@ use crate::{error::AppError, image_io::save::rename_no_replace};
 
 static FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+#[derive(Clone, Copy)]
+enum FilePurpose {
+    Preset,
+    Preference,
+}
+
 pub(super) fn write_bytes_atomic(destination: &Path, bytes: &[u8]) -> Result<(), AppError> {
+    write_bytes_for(destination, bytes, FilePurpose::Preset)
+}
+
+pub(super) fn write_preferences_atomic(destination: &Path, bytes: &[u8]) -> Result<(), AppError> {
+    write_bytes_for(destination, bytes, FilePurpose::Preference)
+}
+
+fn write_bytes_for(destination: &Path, bytes: &[u8], purpose: FilePurpose) -> Result<(), AppError> {
     let (mut staged, mut file) = StagedFile::create(destination)?;
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
-    publish_with_rollback(&mut staged, destination, rename_no_replace)
+    publish_with_rollback_for(&mut staged, destination, rename_no_replace, purpose)
 }
 
+#[cfg(test)]
 fn publish_with_rollback(
     staged: &mut StagedFile,
     destination: &Path,
     mut rename: impl FnMut(&Path, &Path) -> io::Result<()>,
+) -> Result<(), AppError> {
+    publish_with_rollback_for(staged, destination, &mut rename, FilePurpose::Preset)
+}
+
+fn publish_with_rollback_for(
+    staged: &mut StagedFile,
+    destination: &Path,
+    mut rename: impl FnMut(&Path, &Path) -> io::Result<()>,
+    purpose: FilePurpose,
 ) -> Result<(), AppError> {
     if !destination.exists() {
         rename(staged.path(), destination)?;
@@ -28,9 +52,10 @@ fn publish_with_rollback(
         return Ok(());
     }
     if !destination.is_file() {
-        return Err(AppError::InvalidInput(
-            "preset destination is not a file".into(),
-        ));
+        return Err(AppError::InvalidInput(format!(
+            "{} destination is not a file",
+            purpose.label()
+        )));
     }
 
     let backup = sibling_path(destination, "backup");
@@ -40,7 +65,8 @@ fn publish_with_rollback(
             staged.disarm();
             if let Err(error) = fs::remove_file(&backup) {
                 eprintln!(
-                    "unable to remove preset backup {}: {error}",
+                    "unable to remove {} backup {}: {error}",
+                    purpose.label(),
                     backup.display()
                 );
             }
@@ -48,12 +74,41 @@ fn publish_with_rollback(
         }
         Err(commit_error) => match rename(&backup, destination) {
             Ok(()) => Err(commit_error.into()),
-            Err(rollback_error) => Err(AppError::PresetRecoveryRequired {
-                backup_path: backup.to_string_lossy().into_owned(),
-                commit_error: commit_error.to_string(),
-                rollback_error: rollback_error.to_string(),
-            }),
+            Err(rollback_error) => Err(purpose.recovery_error(
+                backup.to_string_lossy().into_owned(),
+                commit_error.to_string(),
+                rollback_error.to_string(),
+            )),
         },
+    }
+}
+
+impl FilePurpose {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Preset => "preset",
+            Self::Preference => "preference",
+        }
+    }
+
+    fn recovery_error(
+        self,
+        backup_path: String,
+        commit_error: String,
+        rollback_error: String,
+    ) -> AppError {
+        match self {
+            Self::Preset => AppError::PresetRecoveryRequired {
+                backup_path,
+                commit_error,
+                rollback_error,
+            },
+            Self::Preference => AppError::PreferenceRecoveryRequired {
+                backup_path,
+                commit_error,
+                rollback_error,
+            },
+        }
     }
 }
 
@@ -207,6 +262,45 @@ mod tests {
         assert!(!destination.exists());
         assert_eq!(fs::read(backup_path).expect("read backup"), b"old presets");
         assert_eq!(fs::read_dir(&directory).expect("list directory").count(), 1);
+        fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn preference_rollback_failure_identifies_the_preference_backup() {
+        let directory = test_directory();
+        let destination = directory.join("preferences.json");
+        fs::write(&destination, b"old preferences").expect("write original");
+        let (mut staged, file) = StagedFile::create(&destination).expect("stage preferences");
+        drop(file);
+        let mut calls = 0;
+
+        let result = publish_with_rollback_for(
+            &mut staged,
+            &destination,
+            |from, to| {
+                calls += 1;
+                if calls == 1 {
+                    rename_no_replace(from, to)
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "rename failed",
+                    ))
+                }
+            },
+            FilePurpose::Preference,
+        );
+
+        let error = result.expect_err("preference migration must need recovery");
+        assert_eq!(error.code(), "preference_recovery_required");
+        let AppError::PreferenceRecoveryRequired { backup_path, .. } = error else {
+            panic!("expected preference recovery path");
+        };
+        assert_eq!(
+            fs::read(&backup_path).expect("read backup"),
+            b"old preferences"
+        );
+        drop(staged);
         fs::remove_dir_all(directory).expect("remove test directory");
     }
 }

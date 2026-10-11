@@ -88,7 +88,7 @@ fn migrate_file(path: &Path, recover_invalid: bool) -> Result<(), AppError> {
     fields.insert("version".into(), Value::from(2));
     let bytes = serde_json::to_vec_pretty(&fields)
         .map_err(|error| AppError::InvalidInput(error.to_string()))?;
-    super::preset_storage::write_bytes_atomic(path, &bytes)?;
+    super::preset_storage::write_preferences_atomic(path, &bytes)?;
     eprintln!("Migrated preference file to version 2: {}", path.display());
     Ok(())
 }

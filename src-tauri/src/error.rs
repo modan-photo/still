@@ -58,6 +58,13 @@ pub enum AppError {
         rollback_error: String,
     },
 
+    #[error("Preference migration failed ({commit_error}) and rollback failed ({rollback_error}). Original retained at {backup_path}; keep this backup for recovery.")]
+    PreferenceRecoveryRequired {
+        backup_path: String,
+        commit_error: String,
+        rollback_error: String,
+    },
+
     #[error("EXIF update could not be published ({commit_error}) or restored ({rollback_error}). Original retained at {backup_path}; keep this backup for recovery.")]
     ExifRecoveryRequired {
         backup_path: String,
@@ -92,6 +99,7 @@ impl AppError {
             Self::DocumentCleanupRequired { .. } => "document_cleanup_required",
             Self::ExportRecoveryRequired { .. } => "export_recovery_required",
             Self::PresetRecoveryRequired { .. } => "preset_recovery_required",
+            Self::PreferenceRecoveryRequired { .. } => "preference_recovery_required",
             Self::ExifRecoveryRequired { .. } => "exif_recovery_required",
             Self::ExifBatchFailed { .. } => "exif_batch_failed",
             Self::ExifBatchRecoveryRequired { .. } => "exif_batch_recovery_required",
