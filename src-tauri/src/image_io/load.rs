@@ -119,9 +119,9 @@ fn format_name(format: ImageFormat) -> &'static str {
 mod tests {
     use std::{fs, time::SystemTime};
 
-    use image::{Rgba, RgbaImage};
+    use image::{DynamicImage, ImageFormat, RgbImage, Rgba, RgbaImage};
 
-    use super::inspect_image;
+    use super::{decode_image, inspect_image};
 
     #[test]
     fn inspects_png_without_decoding_the_full_image() {
@@ -144,6 +144,39 @@ mod tests {
         assert_eq!(info.format, "png");
         assert_eq!(info.orientation, 1);
 
+        fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn advertised_still_formats_can_be_inspected_and_decoded() {
+        let directory = std::env::temp_dir().join(format!(
+            "still-formats-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("clock after epoch")
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).expect("create test directory");
+        let sample = DynamicImage::ImageRgb8(RgbImage::from_pixel(7, 3, image::Rgb([20, 40, 60])));
+        for (extension, format, name) in [
+            ("jpg", ImageFormat::Jpeg, "jpeg"),
+            ("png", ImageFormat::Png, "png"),
+            ("webp", ImageFormat::WebP, "webp"),
+            ("gif", ImageFormat::Gif, "gif"),
+            ("bmp", ImageFormat::Bmp, "bmp"),
+            ("tiff", ImageFormat::Tiff, "tiff"),
+        ] {
+            let path = directory.join(format!("sample.{extension}"));
+            sample
+                .save_with_format(&path, format)
+                .expect("write supported format");
+            let info = inspect_image(&path).expect("inspect supported format");
+            assert_eq!(info.format, name, "{extension}");
+            assert_eq!((info.width, info.height), (7, 3), "{extension}");
+            let decoded = decode_image(&path).expect("decode supported format");
+            assert_eq!((decoded.width(), decoded.height()), (7, 3), "{extension}");
+        }
         fs::remove_dir_all(directory).expect("remove test directory");
     }
 }
