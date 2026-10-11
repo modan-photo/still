@@ -16,7 +16,6 @@ pub fn run() {
             commands::image::image_load,
             commands::image::image_list_directory,
             commands::image::cache_invalidate,
-            commands::image::image_export,
             commands::export::image_export_batch,
             commands::image::thumb_get,
             commands::collage::collage_compose,

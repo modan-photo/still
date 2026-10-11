@@ -3,12 +3,7 @@ use crate::{
     error::AppError,
     image_io::{
         load::inspect_image,
-        save::{copy_image_atomic, save_image_atomic},
         thumb::{cache_hash, get_or_create_cached, CacheKind, CachedImage},
-    },
-    render::{
-        pipeline::apply_render_spec,
-        spec::{OutputFormat, OutputSpec, RenderSpec},
     },
 };
 use serde::Serialize;
@@ -188,95 +183,11 @@ pub async fn thumb_get(
     .await
 }
 
-#[tauri::command]
-pub async fn image_export(
-    window: Window,
-    state: State<'_, TaskManager>,
-    task_id: String,
-    spec: RenderSpec,
-    out_path: String,
-) -> Result<(), AppError> {
-    task::run(
-        window,
-        state.inner().clone(),
-        task_id,
-        "image_export",
-        move |token, report| {
-            spec.validate().map_err(AppError::InvalidInput)?;
-            if spec.adjustments.is_some() {
-                return Err(AppError::Unsupported(
-                    "adjustment effects are not implemented yet".into(),
-                ));
-            }
-            let source = PathBuf::from(&spec.source.path);
-            let destination = PathBuf::from(out_path);
-            crate::image_io::save::require_filesystem_destination(&destination)?;
-            if spec.output.is_some() || spec.border.is_some() {
-                let output = spec
-                    .output
-                    .clone()
-                    .or_else(|| infer_output(&destination))
-                    .ok_or_else(|| {
-                        AppError::InvalidInput(
-                            "edited exports need a .jpg, .jpeg, .png, or .webp destination".into(),
-                        )
-                    })?;
-                if !(1..=100).contains(&output.quality) {
-                    return Err(AppError::InvalidInput("quality must be 1..100".into()));
-                }
-                report("decode", 10);
-                let image = apply_render_spec(&source, &spec)?;
-                task::check(&token)?;
-                report("encode", 60);
-                save_image_atomic(&image, &destination, &output, &token)?;
-            } else {
-                report("copy", 10);
-                copy_image_atomic(&source, &destination, &token)?;
-            }
-            Ok(())
-        },
-    )
-    .await
-}
-
-fn infer_output(destination: &std::path::Path) -> Option<OutputSpec> {
-    let format = match destination
-        .extension()?
-        .to_str()?
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "jpg" | "jpeg" => OutputFormat::Jpeg,
-        "png" => OutputFormat::Png,
-        "webp" => OutputFormat::Webp,
-        _ => return None,
-    };
-    Some(OutputSpec {
-        format,
-        quality: 92,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use std::{fs, path::Path, time::SystemTime};
 
-    use crate::render::spec::OutputFormat;
-
-    use super::{infer_output, invalidate_cache_files, supported_image_path};
-
-    #[test]
-    fn edited_export_infers_format_from_destination() {
-        assert_eq!(
-            infer_output(Path::new("photo.JPG")).map(|output| output.format),
-            Some(OutputFormat::Jpeg)
-        );
-        assert_eq!(
-            infer_output(Path::new("photo.png")).map(|output| output.format),
-            Some(OutputFormat::Png)
-        );
-        assert!(infer_output(Path::new("photo.raw")).is_none());
-    }
+    use super::{invalidate_cache_files, supported_image_path};
 
     #[test]
     fn directory_import_recognizes_supported_extensions() {

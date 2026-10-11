@@ -2,7 +2,6 @@ import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useTaskStore } from '../../stores/taskStore';
 import type { CachedImage, CacheKind, ImageMeta, TaskProgress } from '../../types/image';
-import type { RenderSpec } from '../../types/renderSpec';
 import type { BatchExportReport, ExportItem, ExportOptions } from '../../types/export';
 import { errorMessage } from '../errorMessages';
 
@@ -95,8 +94,6 @@ export const loadImage = (path: string, taskId = crypto.randomUUID()) =>
   run<ImageMeta>('image_load', { path }, taskId);
 export const getCachedImage = (path: string, kind: CacheKind, taskId = crypto.randomUUID()) =>
   run<CachedImage>('thumb_get', { path, kind }, taskId);
-export const exportImage = (spec: RenderSpec, outPath: string, taskId = crypto.randomUUID()) =>
-  run<void>('image_export', { spec: structuredClone(spec), outPath }, taskId);
 export const exportImageBatch = (
   items: ExportItem[],
   opts: ExportOptions,
