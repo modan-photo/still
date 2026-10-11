@@ -174,10 +174,6 @@ mod tests {
         assert_eq!(info.path, Path::new(uri));
         assert_eq!((info.width, info.height), (3, 2));
         assert_eq!(resolve(Path::new(uri)).unwrap(), backing);
-        let token = CancellationToken::new();
-        let copied = root.join("export.png");
-        super::super::save::copy_image_atomic(Path::new(uri), &copied, &token).unwrap();
-        assert_eq!(fs::read(&copied).unwrap(), fs::read(&backing).unwrap());
         assert_eq!(
             super::super::load::decode_image(Path::new(uri))
                 .unwrap()
@@ -188,7 +184,6 @@ mod tests {
             super::super::thumb::cache_hash(Path::new(uri)).unwrap(),
             super::super::thumb::cache_hash(&backing).unwrap()
         );
-        fs::remove_file(copied).unwrap();
         SOURCES.get().unwrap().lock().unwrap().remove(uri);
         assert!(!backing.exists());
         fs::remove_dir(root).unwrap();

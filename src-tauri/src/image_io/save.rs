@@ -279,21 +279,6 @@ impl Write for CancellableWriter {
     }
 }
 
-/// Byte-preserving export when no edits or encoding options were requested.
-pub fn copy_image_atomic(
-    source: &Path,
-    destination: &Path,
-    token: &CancellationToken,
-) -> Result<(), AppError> {
-    ensure_not_cancelled(token)?;
-    require_filesystem_destination(destination)?;
-    let mut temporary = TemporaryOutput::new(destination);
-    copy_to_staging(source, &mut temporary, token)?;
-    publish_new(temporary.path(), destination, token)?;
-    temporary.disarm();
-    Ok(())
-}
-
 fn copy_to_staging(
     source: &Path,
     temporary: &mut TemporaryOutput,
@@ -472,15 +457,6 @@ mod tests {
     fn document_destinations_are_rejected_before_reading_or_writing_files() {
         let destination = std::path::Path::new("content://provider/document/42");
         let token = tokio_util::sync::CancellationToken::new();
-        let copy = super::copy_image_atomic(
-            std::path::Path::new("missing-source.png"),
-            destination,
-            &token,
-        );
-        assert!(matches!(
-            copy,
-            Err(crate::error::AppError::DocumentExportUnsupported)
-        ));
         let encoded = super::save_image_atomic(
             &image::DynamicImage::new_rgb8(1, 1),
             destination,
@@ -777,31 +753,6 @@ mod tests {
         }
         assert!(!destination.exists());
         assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
-        fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn empty_spec_copy_preserves_bytes_and_never_overwrites() {
-        let directory = std::env::temp_dir().join(format!(
-            "still-copy-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&directory).unwrap();
-        let source = directory.join("source.jpg");
-        let target = directory.join("target.jpg");
-        let bytes = vec![123u8; 600_000];
-        fs::write(&source, &bytes).unwrap();
-        let token = CancellationToken::new();
-        super::copy_image_atomic(&source, &target, &token).unwrap();
-        assert_eq!(fs::read(&target).unwrap(), bytes);
-        fs::write(&source, b"changed").unwrap();
-        assert!(super::copy_image_atomic(&source, &target, &token).is_err());
-        assert_eq!(fs::read(&target).unwrap(), bytes);
-        assert_eq!(fs::read_dir(&directory).unwrap().count(), 2);
         fs::remove_dir_all(directory).unwrap();
     }
 
