@@ -88,7 +88,7 @@ fn migrate_file(path: &Path, recover_invalid: bool) -> Result<(), AppError> {
     fields.insert("version".into(), Value::from(2));
     let bytes = serde_json::to_vec_pretty(&fields)
         .map_err(|error| AppError::InvalidInput(error.to_string()))?;
-    fs::write(path, bytes)?;
+    super::preset_storage::write_bytes_atomic(path, &bytes)?;
     eprintln!("Migrated preference file to version 2: {}", path.display());
     Ok(())
 }
@@ -160,6 +160,7 @@ mod tests {
             assert_eq!(fs::read(&path).unwrap(), b"retained fixture");
             fs::remove_file(path).unwrap();
         }
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
         fs::remove_dir(directory).unwrap();
     }
 
