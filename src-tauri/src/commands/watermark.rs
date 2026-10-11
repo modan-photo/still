@@ -143,8 +143,7 @@ fn write_presets(path: &Path, presets: &[WatermarkPreset]) -> Result<(), AppErro
     read_presets(path)?;
     let bytes = serde_json::to_vec_pretty(presets)
         .map_err(|error| AppError::InvalidInput(error.to_string()))?;
-    fs::write(path, bytes)?;
-    Ok(())
+    super::preset_storage::write_bytes_atomic(path, &bytes)
 }
 
 fn validate_presets(presets: &[WatermarkPreset]) -> Result<(), AppError> {

@@ -99,8 +99,7 @@ pub fn frame_presets_save(app: AppHandle, file: FramePresetFile) -> Result<(), A
     let path = frame_preset_path(&app)?;
     let bytes = serde_json::to_vec_pretty(&file)
         .map_err(|error| AppError::InvalidInput(error.to_string()))?;
-    fs::write(path, bytes)?;
-    Ok(())
+    super::preset_storage::write_bytes_atomic(&path, &bytes)
 }
 
 fn frame_preset_path(app: &AppHandle) -> Result<PathBuf, AppError> {

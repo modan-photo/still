@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from '../i18n/messages';
+import { presetTransferErrorMessage } from '../services/presetBundles';
 import type { FramePreset, FrameStyle } from '../types/frame';
 import { FrameMiniPreview } from './FrameMiniPreview';
 
@@ -55,8 +56,8 @@ export function SaveFramePresetDialog({
     try {
       await onSave(trimmedName);
       onClose();
-    } catch {
-      setError(t('presetSaveFailed'));
+    } catch (error) {
+      setError(presetTransferErrorMessage(error, 'presetSaveFailed'));
       setSaving(false);
     }
   };

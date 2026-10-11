@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from '../i18n/messages';
+import { presetTransferErrorMessage } from '../services/presetBundles';
 import type { FramePreset } from '../types/frame';
 import type { FramePresetActionPosition } from './FramePresetSelect';
 
@@ -62,7 +63,9 @@ export function FramePresetActions({
     if (!target) return;
     const preset = target.preset;
     onCloseMenu();
-    void onDuplicate(preset).catch(() => onError(t('presetDuplicateFailed')));
+    void onDuplicate(preset).catch((error) =>
+      onError(presetTransferErrorMessage(error, 'presetDuplicateFailed')),
+    );
   };
   const beginDelete = () => {
     if (!target) return;
@@ -78,8 +81,8 @@ export function FramePresetActions({
     try {
       await onRename(renamePreset, name);
       setRenamePreset(null);
-    } catch {
-      setDialogError(t('presetRenameFailed'));
+    } catch (error) {
+      setDialogError(presetTransferErrorMessage(error, 'presetRenameFailed'));
     } finally {
       setBusy(false);
     }
@@ -91,8 +94,8 @@ export function FramePresetActions({
     try {
       await onDelete(deletePreset);
       setDeletePreset(null);
-    } catch {
-      setDialogError(t('presetDeleteFailed'));
+    } catch (error) {
+      setDialogError(presetTransferErrorMessage(error, 'presetDeleteFailed'));
     } finally {
       setBusy(false);
     }

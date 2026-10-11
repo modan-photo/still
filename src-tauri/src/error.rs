@@ -51,6 +51,13 @@ pub enum AppError {
         rollback_error: String,
     },
 
+    #[error("Preset write failed ({commit_error}) and rollback failed ({rollback_error}). Original retained at {backup_path}; keep this backup for recovery.")]
+    PresetRecoveryRequired {
+        backup_path: String,
+        commit_error: String,
+        rollback_error: String,
+    },
+
     #[error("EXIF update could not be published ({commit_error}) or restored ({rollback_error}). Original retained at {backup_path}; keep this backup for recovery.")]
     ExifRecoveryRequired {
         backup_path: String,
@@ -84,6 +91,7 @@ impl AppError {
             Self::DocumentOverwriteUnsupported => "document_overwrite_unsupported",
             Self::DocumentCleanupRequired { .. } => "document_cleanup_required",
             Self::ExportRecoveryRequired { .. } => "export_recovery_required",
+            Self::PresetRecoveryRequired { .. } => "preset_recovery_required",
             Self::ExifRecoveryRequired { .. } => "exif_recovery_required",
             Self::ExifBatchFailed { .. } => "exif_batch_failed",
             Self::ExifBatchRecoveryRequired { .. } => "exif_batch_recovery_required",
@@ -164,5 +172,20 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("C:/photos/.photo.still-exif-backup.jpg"));
+    }
+
+    #[test]
+    fn preset_recovery_error_exposes_the_backup_path() {
+        let recovery = serde_json::to_value(AppError::PresetRecoveryRequired {
+            backup_path: "C:/still/watermark-presets.json.still-backup".into(),
+            commit_error: "publish failed".into(),
+            rollback_error: "restore failed".into(),
+        })
+        .unwrap();
+        assert_eq!(recovery["code"], "preset_recovery_required");
+        assert!(recovery["message"]
+            .as_str()
+            .unwrap()
+            .contains("C:/still/watermark-presets.json.still-backup"));
     }
 }

@@ -236,6 +236,15 @@ describe('preset JSON transfer', () => {
       ).toContain('content://provider/failed');
       expect(
         presetTransferErrorMessage(
+          {
+            code: 'preset_recovery_required',
+            message: 'Original retained at C:/still/presets.still-backup',
+          },
+          'presetSaveFailed',
+        ),
+      ).toContain('C:/still/presets.still-backup');
+      expect(
+        presetTransferErrorMessage(
           { code: 'invalid_input', message: 'invalid input: preset path must end in .json' },
           'presetsImportFailed',
         ),

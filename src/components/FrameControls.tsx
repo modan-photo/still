@@ -177,8 +177,8 @@ export function FrameControls() {
       await saveFramePresets(nextUserPresets, setRecoveryBackupKey);
       setUserPresets(nextUserPresets);
       setNotice(t('presetUpdated'));
-    } catch {
-      setNotice(t('presetUpdateFailed'));
+    } catch (error) {
+      setNotice(presetTransferErrorMessage(error, 'presetUpdateFailed'));
     }
   };
 
